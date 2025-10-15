@@ -96,11 +96,11 @@ def _fit_lmm_and_wald_omnibus(sub_runs: pd.DataFrame) -> Tuple[float, float, flo
         return (np.nan, np.nan, np.nan, 0, None)
     n_subj = int(sub_runs["subject_id"].nunique())
     model = smf.mixedlm("theta ~ C(condition)", data=sub_runs, groups=sub_runs["subject_id"], re_formula="1")
-    result = model.fit(reml=True, method="lbfgs", maxiter=200, disp=False)
+    result = model.fit(reml=True, method=["lbfgs", "bfgs", "nm"], maxiter=200, disp=False)
     # Identify fixed effect columns for condition terms
     fe_names = list(result.fe_params.index)
-    cond_cols = [i for i, name in enumerate(fe_names) if name.startswith("C(condition)[T.")]
-    if len(cond_cols) == 0:
+    cond_names = [name for name in fe_names if name.startswith("C(condition)[T.")]
+    if len(cond_names) == 0:
         # No variation in condition or only baseline present
         return (np.nan, np.nan, np.nan, n_subj, result)
     beta = result.fe_params.loc[cond_names]
@@ -127,8 +127,9 @@ def _lmm_pairwise_contrasts(result, conditions: Sequence[str]) -> List[Tuple[str
     Returns list of (cond_a, cond_b, estimate, se, p_value).
     """
     fe = result.fe_params
-    cov = result.cov_params()
     names = list(fe.index)
+    cov_all = result.cov_params()
+    cov = cov_all.loc[names, names]
 
     # Helper to build fixed-effects row vector for a given condition value under treatment coding
     def row_for_condition(cond: str) -> np.ndarray:
@@ -211,14 +212,13 @@ def run_group_analysis(
     anova_df = pd.DataFrame([r.__dict__ for r in omni_rows])
 
     # FDR across channels (omnibus)
+    anova_df["q_value"] = np.nan
+    anova_df["reject_fdr"] = False
     valid_mask = anova_df["p_value"].notna()
     if valid_mask.any():
         reject, qvals = fdrcorrection(anova_df.loc[valid_mask, "p_value"].to_numpy(), alpha=alpha)
         anova_df.loc[valid_mask, "q_value"] = qvals
         anova_df.loc[valid_mask, "reject_fdr"] = reject
-    else:
-        anova_df["q_value"] = np.nan
-        anova_df["reject_fdr"] = False
 
     # Post-hoc within significant channels
     posthoc_records: List[PosthocResult] = []
