@@ -200,17 +200,6 @@ def run_group_analysis(
 
     anova_df = pd.DataFrame([r.__dict__ for r in omni_rows])
 
-    # Compute partial eta-squared as an effect size where possible
-    def _eta_p2(row: pd.Series) -> float:
-        f = float(row["f_value"]) if pd.notna(row["f_value"]) else np.nan
-        df_num = float(row["df_num"]) if pd.notna(row["df_num"]) else np.nan
-        df_den = float(row["df_den"]) if pd.notna(row["df_den"]) else np.nan
-        if not np.isfinite(f) or not np.isfinite(df_num) or not np.isfinite(df_den):
-            return np.nan
-        denom = f * df_num + df_den
-        return (f * df_num) / denom if denom > 0 else np.nan
-    anova_df["eta_p2"] = anova_df.apply(_eta_p2, axis=1)
-
     # FDR across channels (omnibus)
     valid_mask = anova_df["p_value"].notna()
     if valid_mask.any():
@@ -308,6 +297,32 @@ def main() -> None:
         conditions=args.conditions,
         min_subjects=args.min_subjects,
     )
+
+    reject_col = anova_df["reject_fdr"] if "reject_fdr" in anova_df.columns else pd.Series(False, index=anova_df.index)
+    sig_main = anova_df[(reject_col == True) & (anova_df["p_value"].notna())]  # noqa: E712
+    if not sig_main.empty:
+        print("Significant omnibus effects (FDR-corrected):")
+        for row in sig_main.itertuples():
+            chi2 = f"{row.chi2:.3f}" if pd.notna(row.chi2) else "nan"
+            p_val = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
+            q_val = f"{row.q_value:.3g}" if pd.notna(row.q_value) else "nan"
+            print(f"  {row.channel} (n={row.n_subjects}, chi2={chi2}, p={p_val}, q={q_val})")
+    else:
+        print("No significant omnibus effects after FDR correction.")
+
+    sig_posthoc = posthoc_df[(posthoc_df["p_value"].notna()) & (posthoc_df["p_value"] < args.alpha)]
+    if not sig_posthoc.empty:
+        print(f"Significant post-hoc contrasts (uncorrected p < {args.alpha:g}):")
+        for row in sig_posthoc.itertuples():
+            t_val = f"{row.t_value:.3f}" if pd.notna(row.t_value) else "nan"
+            p_val = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
+            print(
+                f"  {row.channel}: {row.condition_b} vs {row.condition_a} "
+                f"(n={row.n_subjects}, z={t_val}, p={p_val})"
+            )
+    else:
+        print(f"No post-hoc contrasts met p < {args.alpha:g}.")
+
     print(f"Main-effects saved: {args.input.parent / f'group_{args.chroma}_main_effects.csv'}")
     if not posthoc_df.empty:
         print(f"Post-hocs saved: {args.input.parent / f'group_{args.chroma}_posthoc_pairs.csv'}")
