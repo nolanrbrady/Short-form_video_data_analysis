@@ -18,8 +18,6 @@ Stats choices (following docstring guidance)
 Assumptions and notes
 - Uses aggregated subject-level betas (weighted across runs) as the dependent variable.
 - Subjects with any missing condition for a given channel are dropped from that channel's test.
-- AnovaRM assumes sphericity; for maximum rigor, consider complementing with a
-  mixed-effects model as a sensitivity analysis (not implemented here to honor the docstring).
 
 Author: Nolan Brady
 """
@@ -105,14 +103,21 @@ def _fit_lmm_and_wald_omnibus(sub_runs: pd.DataFrame) -> Tuple[float, float, flo
     if len(cond_cols) == 0:
         # No variation in condition or only baseline present
         return (np.nan, np.nan, np.nan, n_subj, result)
-    import numpy as _np
-    R = _np.zeros((len(cond_cols), len(fe_names)))
-    for r, idx in enumerate(cond_cols):
-        R[r, idx] = 1.0
-    w = result.wald_test(R)
-    chi2 = float(w.statistic)
-    df = float(w.df_num)
-    pval = float(w.pvalue)
+    beta = result.fe_params.loc[cond_names]
+    cov = result.cov_params().loc[cond_names, cond_names]
+    if cov.isnull().any().any() or beta.isnull().any():
+        raise ValueError("Encountered NaNs when extracting fixed-effect covariance for condition terms.")
+    beta_vec = beta.to_numpy(dtype=float)
+    cov_mat = cov.to_numpy(dtype=float)
+    try:
+        inv_cov = np.linalg.inv(cov_mat)
+    except np.linalg.LinAlgError:
+        raise np.linalg.LinAlgError("Covariance matrix for condition fixed effects is singular.")
+    chi2 = float(beta_vec.T @ inv_cov @ beta_vec)
+    df = float(len(cond_names))
+    if not np.isfinite(chi2):
+        raise ValueError("Computed non-finite Wald statistic for condition effects.")
+    pval = float(1 - scistats.chi2.cdf(chi2, df))
     return (chi2, pval, df, n_subj, result)
 
 
@@ -165,10 +170,12 @@ def run_group_analysis(
     Saves CSV outputs alongside the input file under `combined_runs_path.parent`.
     """
     df = pd.read_csv(combined_runs_path)
-    # Normalize column names
-    for col in ("chroma", "condition", "ch_name", "subject_id"):
-        if col not in df.columns:
-            raise ValueError(f"Expected column '{col}' in {combined_long_path}")
+    # Normalize column names and validate expected schema
+    required_cols = ("chroma", "condition", "ch_name", "subject_id", "run")
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        missing_fmt = ", ".join(missing_cols)
+        raise ValueError(f"Expected column(s) {missing_fmt} in {combined_runs_path}")
     df["chroma"] = df["chroma"].str.lower()
 
     # Filter chroma and conditions
@@ -193,7 +200,10 @@ def run_group_analysis(
                 OmnibusResult(channel=ch, chroma=chroma, n_subjects=n_subj, df=np.nan, chi2=np.nan, p_value=np.nan)
             )
             continue
-        chi2, p_val, df_dof, _, _res = _fit_lmm_and_wald_omnibus(sub_runs)
+        try:
+            chi2, p_val, df_dof, _, _res = _fit_lmm_and_wald_omnibus(sub_runs)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to fit omnibus LMM for channel '{ch}' (chroma={chroma}): {exc}") from exc
         omni_rows.append(
             OmnibusResult(channel=ch, chroma=chroma, n_subjects=n_subj, df=df_dof, chi2=chi2, p_value=p_val)
         )
@@ -215,7 +225,10 @@ def run_group_analysis(
     sig_channels = anova_df[(anova_df["reject_fdr"] == True) & (anova_df["p_value"].notna())]["channel"].tolist()  # noqa: E712
     for ch in sig_channels:
         sub_runs = _prepare_runs_for_channel(df, channel=ch, chroma=chroma, conditions=conditions)
-        _, _, _, n_subj, res = _fit_lmm_and_wald_omnibus(sub_runs)
+        try:
+            _, _, _, n_subj, res = _fit_lmm_and_wald_omnibus(sub_runs)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to compute post-hoc contrasts for channel '{ch}' (chroma={chroma}): {exc}") from exc
         if res is None:
             continue
         pairs = _lmm_pairwise_contrasts(res, conditions=conditions)
