@@ -8,12 +8,12 @@ Workflow
   1) Fit an LMM on run-level betas: `theta ~ C(condition)` with random intercept for subject.
   2) Test the main effect of condition via a joint Wald test of all condition coefficients.
   3) Correct omnibus p-values across channels using FDR.
-  4) For channels passing omnibus FDR, run uncorrected LMM pairwise contrasts for condition differences.
+  4) For channels passing omnibus FDR, run LMM pairwise contrasts for condition differences with Holm correction.
 
 Stats choices (following docstring guidance)
 - Omnibus: LMM joint Wald test of condition fixed effects using `statsmodels.formula.api.mixedlm`.
 - Multiple comparisons: Benjamini–Hochberg FDR across channels for the omnibus tests.
-- Post-hoc: LMM-based pairwise Wald contrasts (uncorrected, gated by omnibus).
+- Post-hoc: LMM-based pairwise Wald contrasts (Holm-corrected, gated by omnibus).
 
 Assumptions and notes
 - Uses aggregated subject-level betas (weighted across runs) as the dependent variable.
@@ -34,7 +34,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats as scistats
 import statsmodels.formula.api as smf
-from statsmodels.stats.multitest import fdrcorrection
+from statsmodels.stats.multitest import fdrcorrection, multipletests
 
 
 # -----------------------
@@ -42,7 +42,7 @@ from statsmodels.stats.multitest import fdrcorrection
 # -----------------------
 
 DEFAULT_COMBINED_PATH = Path("./glm_results/combined_glm_long_runs.csv")
-DEFAULT_CHROMA = "hbo"  # typical primary analyte
+DEFAULT_CHROMA = "hbr"  # Can be "hbo" or "hbr"
 DEFAULT_ALPHA = 0.05
 MIN_SUBJECTS_PER_CHANNEL = 6  # drop channels with fewer than this many complete subjects
 
@@ -67,6 +67,7 @@ class PosthocResult:
     condition_b: str
     t_value: float
     p_value: float
+    holm_p_value: float | None
     q_value: float | None
     cohen_dz: float
 
@@ -103,6 +104,7 @@ def _fit_lmm_and_wald_omnibus(sub_runs: pd.DataFrame) -> Tuple[float, float, flo
     if len(cond_names) == 0:
         # No variation in condition or only baseline present
         return (np.nan, np.nan, np.nan, n_subj, result)
+    
     beta = result.fe_params.loc[cond_names]
     cov = result.cov_params().loc[cond_names, cond_names]
     if cov.isnull().any().any() or beta.isnull().any():
@@ -232,7 +234,16 @@ def run_group_analysis(
         if res is None:
             continue
         pairs = _lmm_pairwise_contrasts(res, conditions=conditions)
-        for (a, b, est, se, pval) in pairs:
+        holm_pvals: List[float | None] = [None] * len(pairs)
+        if pairs:
+            finite_idx = [idx for idx, (_, _, _, _, pval) in enumerate(pairs) if pd.notna(pval)]
+            if finite_idx:
+                raw_p = [pairs[idx][4] for idx in finite_idx]
+                _, holm_adj, _, _ = multipletests(raw_p, alpha=alpha, method="holm")
+                for dest, adj in zip(finite_idx, holm_adj):
+                    holm_pvals[dest] = float(adj)
+
+        for idx, (a, b, est, se, pval) in enumerate(pairs):
             # For LMM contrasts, report z-stat implied by estimate/SE and leave q_value as None
             z = est / se if se > 0 else np.nan
             posthoc_records.append(
@@ -244,6 +255,7 @@ def run_group_analysis(
                     condition_b=b,
                     t_value=z,
                     p_value=pval,
+                    holm_p_value=holm_pvals[idx],
                     q_value=None,
                     cohen_dz=np.nan,
                 )
@@ -323,18 +335,21 @@ def main() -> None:
     else:
         print("No significant omnibus effects after FDR correction.")
 
-    sig_posthoc = posthoc_df[(posthoc_df["p_value"].notna()) & (posthoc_df["p_value"] < args.alpha)]
+    sig_posthoc = posthoc_df[
+        (posthoc_df["holm_p_value"].notna()) & (posthoc_df["holm_p_value"] < args.alpha)
+    ] if not posthoc_df.empty and "holm_p_value" in posthoc_df.columns else pd.DataFrame()
     if not sig_posthoc.empty:
-        print(f"Significant post-hoc contrasts (uncorrected p < {args.alpha:g}):")
+        print(f"Significant post-hoc contrasts (Holm-adjusted p < {args.alpha:g}):")
         for row in sig_posthoc.itertuples():
             t_val = f"{row.t_value:.3f}" if pd.notna(row.t_value) else "nan"
-            p_val = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
+            raw_p = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
+            holm_p = f"{row.holm_p_value:.3g}" if pd.notna(row.holm_p_value) else "nan"
             print(
                 f"  {row.channel}: {row.condition_b} vs {row.condition_a} "
-                f"(n={row.n_subjects}, z={t_val}, p={p_val})"
+                f"(n={row.n_subjects}, z={t_val}, p={raw_p}, holm_p={holm_p})"
             )
     else:
-        print(f"No post-hoc contrasts met p < {args.alpha:g}.")
+        print(f"No post-hoc contrasts met Holm-adjusted p < {args.alpha:g}.")
 
     print(f"Main-effects saved: {args.input.parent / f'group_{args.chroma}_main_effects.csv'}")
     if not posthoc_df.empty:
