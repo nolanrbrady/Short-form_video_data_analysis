@@ -71,7 +71,7 @@ HRF_MODEL: str = "spm + derivative"                    # 'spm', 'spm + derivativ
 DRIFT_MODEL: str = "cosine"               # cosine drift regression
 # High-pass cutoff for the GLM drift model. Should be lower than task-related frequencies.
 # Rule of thumb: 1 / (2 * (task_duration + inter_stimulus_interval)).
-# For 120s blocks, a safe value is e.g., 1/250s = 0.004 Hz. The previous 0.016Hz is too high.
+# For 120s blocks, a safe value is e.g., 1/250s = 0.004 Hz.
 HIGH_PASS_HZ_DESIGN: float = 0.0033        # choose ~ 1/(2 * max inter-trial interval); tune per experiment
 NOISE_MODEL: str = "ar1"                  # Nilearn AR(1) noise model
 INCLUDE_SHORT_CHANNEL_REGRESSORS: bool = False  # add mean short HbO/HbR to design if present
