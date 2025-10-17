@@ -42,9 +42,10 @@ from statsmodels.stats.multitest import fdrcorrection, multipletests
 # -----------------------
 
 DEFAULT_COMBINED_PATH = Path("./glm_results/combined_glm_long_runs.csv")
-DEFAULT_CHROMA = "hbr"  # Can be "hbo" or "hbr"
+DEFAULT_CHROMA = "hbo"  # Can be "hbo" or "hbr"
 DEFAULT_ALPHA = 0.05
 MIN_SUBJECTS_PER_CHANNEL = 6  # drop channels with fewer than this many complete subjects
+BETA_VALUE_SCALER = 1
 
 
 @dataclass
@@ -97,7 +98,7 @@ def _fit_lmm_and_wald_omnibus(sub_runs: pd.DataFrame) -> Tuple[float, float, flo
         return (np.nan, np.nan, np.nan, 0, None)
     n_subj = int(sub_runs["subject_id"].nunique())
     model = smf.mixedlm("theta ~ C(condition)", data=sub_runs, groups=sub_runs["subject_id"], re_formula="1")
-    result = model.fit(reml=True, method=["lbfgs", "bfgs", "nm"], maxiter=200, disp=False)
+    result = model.fit(reml=True, method=["lbfgs", "bfgs", "powell"], maxiter=200, disp=False)
     # Identify fixed effect columns for condition terms
     fe_names = list(result.fe_params.index)
     cond_names = [name for name in fe_names if name.startswith("C(condition)[T.")]
@@ -173,6 +174,8 @@ def run_group_analysis(
     Saves CSV outputs alongside the input file under `combined_runs_path.parent`.
     """
     df = pd.read_csv(combined_runs_path)
+    df['theta'] = df['theta'] * BETA_VALUE_SCALER
+
     # Normalize column names and validate expected schema
     required_cols = ("chroma", "condition", "ch_name", "subject_id", "run")
     missing_cols = [col for col in required_cols if col not in df.columns]
