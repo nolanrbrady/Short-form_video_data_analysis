@@ -6,10 +6,10 @@ Stage 1 (global effects)
 - Average condition means across channels for each subject.
 - Test the three within-subject contrasts (Format, Content, Interaction) with
   one-sample t-tests across subjects.
-- Adjust the three p-values using Holm's method (family-wise alpha).
+- Adjust the three p-values using the Benjamini-Hochberg method (FDR).
 
 Stage 2 (channel localisation)
-- Only for Stage-1 contrasts that survive Holm correction.
+- Only for Stage-1 contrasts that survive FDR correction.
 - Re-test the same contrasts per channel (paired within-subject; one-sample t).
 - Apply Benjamini-Hochberg FDR across channels at alpha' = alpha * (R / m),
   following Benjamini-Bogomolov selective FDR control.
@@ -61,7 +61,7 @@ class StageOneResult:
     t_value: float
     mean_difference: float
     p_value: float
-    holm_p_value: float | None = None
+    q_value: float | None = None
     reject: bool = False
     cohen_dz: float | None = None
 
@@ -289,9 +289,9 @@ def _run_stage_one(
     finite_idx = [idx for idx, rec in enumerate(records) if np.isfinite(rec.p_value)]
     if finite_idx:
         raw_p = [records[idx].p_value for idx in finite_idx]
-        reject, holm_adj, _, _ = multipletests(raw_p, alpha=alpha, method="holm")
-        for dest, adj_p, rej in zip(finite_idx, holm_adj, reject):
-            records[dest].holm_p_value = float(adj_p)
+        reject, q_vals, _, _ = multipletests(raw_p, alpha=alpha, method="fdr_bh")
+        for dest, q_val, rej in zip(finite_idx, q_vals, reject):
+            records[dest].q_value = float(q_val)
             records[dest].reject = bool(rej)
 
     return records
@@ -450,9 +450,9 @@ def run_group_analysis(
         condition_to_content=condition_to_content,
     )
     effect_labels = {
-        "format": "Format",
+        "format": "Length",
         "content": "Content",
-        "interaction": "Format:Content",
+        "interaction": "Length:Content",
     }
     contrast_definitions = _make_contrast_definitions(format_levels, content_levels)
 
@@ -518,7 +518,7 @@ def parse_args() -> argparse.Namespace:
         "--alpha",
         type=float,
         default=DEFAULT_ALPHA,
-        help="Family-wise alpha for Holm correction (Stage 1). Stage-2 alpha' follows Benjamini-Bogomolov.",
+        help="Alpha for Benjamini-Hochberg FDR correction (Stage 1). Stage-2 alpha' follows Benjamini-Bogomolov.",
     )
     parser.add_argument(
         "--conditions",
@@ -553,18 +553,18 @@ def main() -> None:
     if stage1_df.empty:
         print("Stage 1: No effects were evaluated.")
     else:
-        print("Stage 1: Global within-subject contrasts (Holm correction)")
+        print("Stage 1: Global within-subject contrasts (Benjamini-Hochberg FDR)")
         for row in stage1_df.itertuples():
             t_val = f"{row.t_value:.3f}" if pd.notna(row.t_value) else "nan"
             df_val = f"{row.df:.1f}" if pd.notna(row.df) else "nan"
             mean_diff = f"{row.mean_difference:.3f}" if pd.notna(row.mean_difference) else "nan"
             p_val = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
-            holm_p = f"{row.holm_p_value:.3g}" if pd.notna(row.holm_p_value) else "nan"
+            q_val = f"{row.q_value:.3g}" if pd.notna(row.q_value) else "nan"
             dz = f"{row.cohen_dz:.3f}" if pd.notna(row.cohen_dz) else "nan"
             mark = "*" if bool(row.reject) else ""
             print(
                 f"  {row.effect}{mark}: n={row.n_subjects}, t={t_val} (df={df_val}), "
-                f"mean_diff={mean_diff}, p={p_val}, holm_p={holm_p}, dz={dz}"
+                f"mean_diff={mean_diff}, p={p_val}, q={q_val}, dz={dz}"
             )
 
     selected_effects = stage1_df[stage1_df["reject"] == True]["effect_key"].tolist() if not stage1_df.empty else []  # noqa: E712

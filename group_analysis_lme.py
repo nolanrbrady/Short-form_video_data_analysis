@@ -8,7 +8,7 @@ Workflow
   1) Fit an LMM on run-level betas: `theta ~ C(condition)` with random intercept for subject.
   2) Test the main effect of condition via a joint Wald test of all condition coefficients.
   3) Correct omnibus p-values across channels using FDR.
-  4) For channels passing omnibus FDR, run LMM pairwise contrasts for condition differences with Holm correction.
+  4) For channels passing omnibus FDR, run LMM pairwise contrasts for condition differences with Benjamini-Hochberg FDR correction.
 
 Stats choices (following docstring guidance)
 - Omnibus: LMM joint Wald test of condition fixed effects using `statsmodels.formula.api.mixedlm`.
@@ -68,7 +68,6 @@ class PosthocResult:
     condition_b: str
     t_value: float
     p_value: float
-    holm_p_value: float | None
     q_value: float | None
     cohen_dz: float
 
@@ -237,17 +236,17 @@ def run_group_analysis(
         if res is None:
             continue
         pairs = _lmm_pairwise_contrasts(res, conditions=conditions)
-        holm_pvals: List[float | None] = [None] * len(pairs)
+        q_values: List[float | None] = [None] * len(pairs)
         if pairs:
             finite_idx = [idx for idx, (_, _, _, _, pval) in enumerate(pairs) if pd.notna(pval)]
             if finite_idx:
                 raw_p = [pairs[idx][4] for idx in finite_idx]
-                _, holm_adj, _, _ = multipletests(raw_p, alpha=alpha, method="holm")
-                for dest, adj in zip(finite_idx, holm_adj):
-                    holm_pvals[dest] = float(adj)
+                reject, qvals, _, _ = multipletests(raw_p, alpha=alpha, method="fdr_bh")
+                for dest, q_val in zip(finite_idx, qvals):
+                    q_values[dest] = float(q_val)
 
         for idx, (a, b, est, se, pval) in enumerate(pairs):
-            # For LMM contrasts, report z-stat implied by estimate/SE and leave q_value as None
+            # For LMM contrasts, report z-stat implied by estimate/SE
             z = est / se if se > 0 else np.nan
             posthoc_records.append(
                 PosthocResult(
@@ -258,8 +257,7 @@ def run_group_analysis(
                     condition_b=b,
                     t_value=z,
                     p_value=pval,
-                    holm_p_value=holm_pvals[idx],
-                    q_value=None,
+                    q_value=q_values[idx],
                     cohen_dz=np.nan,
                 )
             )
@@ -294,7 +292,7 @@ def parse_args() -> argparse.Namespace:
         "--alpha",
         type=float,
         default=DEFAULT_ALPHA,
-        help="Family-wise alpha for FDR procedures.",
+        help="Alpha level for FDR procedures.",
     )
     parser.add_argument(
         "--conditions",
@@ -339,20 +337,20 @@ def main() -> None:
         print("No significant omnibus effects after FDR correction.")
 
     sig_posthoc = posthoc_df[
-        (posthoc_df["holm_p_value"].notna()) & (posthoc_df["holm_p_value"] < args.alpha)
-    ] if not posthoc_df.empty and "holm_p_value" in posthoc_df.columns else pd.DataFrame()
+        (posthoc_df["q_value"].notna()) & (posthoc_df["q_value"] < args.alpha)
+    ] if not posthoc_df.empty and "q_value" in posthoc_df.columns else pd.DataFrame()
     if not sig_posthoc.empty:
-        print(f"Significant post-hoc contrasts (Holm-adjusted p < {args.alpha:g}):")
+        print(f"Significant post-hoc contrasts (FDR-adjusted q < {args.alpha:g}):")
         for row in sig_posthoc.itertuples():
             t_val = f"{row.t_value:.3f}" if pd.notna(row.t_value) else "nan"
             raw_p = f"{row.p_value:.3g}" if pd.notna(row.p_value) else "nan"
-            holm_p = f"{row.holm_p_value:.3g}" if pd.notna(row.holm_p_value) else "nan"
+            q_val = f"{row.q_value:.3g}" if pd.notna(row.q_value) else "nan"
             print(
                 f"  {row.channel}: {row.condition_b} vs {row.condition_a} "
-                f"(n={row.n_subjects}, z={t_val}, p={raw_p}, holm_p={holm_p})"
+                f"(n={row.n_subjects}, z={t_val}, p={raw_p}, q={q_val})"
             )
     else:
-        print(f"No post-hoc contrasts met Holm-adjusted p < {args.alpha:g}.")
+        print(f"No post-hoc contrasts met FDR-adjusted q < {args.alpha:g}.")
 
     print(f"Main-effects saved: {args.input.parent / f'group_{args.chroma}_main_effects.csv'}")
     if not posthoc_df.empty:
