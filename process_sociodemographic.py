@@ -286,6 +286,8 @@ def main() -> None:
     in_path = root / "qualtrics" / "final_SF_demographic_data.csv"
     out_dir = root / "covariate_outputs"
     out_dir.mkdir(parents=True, exist_ok=True)
+    tabular_dir = root / "data" / "tabular"
+    tabular_dir.mkdir(parents=True, exist_ok=True)
 
     df = load_qualtrics_multilevel_csv(in_path)
     print(f"Loaded {in_path.name}: rows={len(df)}, cols={df.shape[1]}")
@@ -293,11 +295,20 @@ def main() -> None:
     # -------------------------
     # Single-item covariates
     # -------------------------
+    subject_id_col = col_by_qid(df, "Q71")
     age_col = col_by_qid(df, "Q9")
     pd_col = col_by_qid(df, "Q16")
     sfv_freq_col = col_by_qid(df, "Q80")
     sfv_dur_col = col_by_qid(df, "Q81")
     sfv_dur_other_col = col_by_qid(df, "Q81_5_TEXT")
+
+    # Study ID (Q71): keep as numeric for downstream merges; exclude from correlations.
+    # Use pandas' nullable integer dtype so missing / non-numeric values become <NA>.
+    subject_id = (
+        pd.to_numeric(df[subject_id_col].astype(str).str.strip(), errors="coerce")
+        .astype("Int64")
+        .rename("subject_id")
+    )
 
     age = pd.to_numeric(df[age_col], errors="coerce").rename("age")
 
@@ -346,6 +357,7 @@ def main() -> None:
     write_column_audit(
         out_dir / "covariate_column_audit.csv",
         selections={
+            "subject_id": [subject_id_col],
             "age": [age_col],
             "pd_status": [pd_col],
             "sfv_frequency": [sfv_freq_col],
@@ -375,19 +387,23 @@ def main() -> None:
     )
 
     # Ensure the correlation inputs are purely numeric (prevents silent object-dtype artifacts).
-    covariates = covariates.apply(pd.to_numeric, errors="coerce")
+    covariates_numeric = covariates.apply(pd.to_numeric, errors="coerce")
 
     # -------------------------
     # Save clean dataset + missingness
     # -------------------------
-    covariates.to_csv(out_dir / "covariates_clean.csv", index=False)
+    covariates_numeric.to_csv(out_dir / "covariates_clean.csv", index=False)
+
+    # Also save a copy with the Qualtrics study ID included (kept out of correlations).
+    covariates_with_subject_id = pd.concat([subject_id, covariates_numeric], axis=1)
+    covariates_with_subject_id.to_csv(tabular_dir / "socio_demographic_data_processed.csv", index=False)
 
     missingness = (
-        covariates.isna()
+        covariates_numeric.isna()
         .mean()
         .rename("missing_prop")
         .to_frame()
-        .assign(n_missing=covariates.isna().sum(), n_total=len(covariates))
+        .assign(n_missing=covariates_numeric.isna().sum(), n_total=len(covariates_numeric))
         .sort_values("missing_prop", ascending=False)
     )
     missingness.to_csv(out_dir / "covariate_missingness.csv")
@@ -395,10 +411,12 @@ def main() -> None:
     # -------------------------
     # Correlations (Spearman)
     # -------------------------
-    corr = covariates.corr(method="spearman")
+    # Defensive: ensure subject_id (if ever present) is not included in correlations.
+    corr_inputs = covariates_numeric.drop(columns=["subject_id"], errors="ignore")
+    corr = corr_inputs.corr(method="spearman")
     corr.to_csv(out_dir / "covariate_correlations_spearman.csv")
 
-    pvals = spearman_pvalues(covariates)
+    pvals = spearman_pvalues(corr_inputs)
     pvals.to_csv(out_dir / "covariate_correlations_pvalues.csv")
 
     save_heatmap(

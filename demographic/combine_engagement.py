@@ -44,6 +44,7 @@ df["Condition"] = df["Category"].astype("category")
 df["subject_id"] = df["subject_id"].astype("category")
 df['Rating'] = pd.to_numeric(df['Rating'])
 print(df.head())
+
 # 2 x 2 ANOVA
 results_table = run_two_by_two_anova(df)
 print(results_table)

@@ -26,6 +26,8 @@ Output:
 - ./data/tabular/engagement_data_processed.csv
 """
 
+# combined_engagement_data.csv is the aggregated engagement data from the Short Form Video study
+# It relies on combine_engagement.py to be run first.
 engagement_data = pd.read_csv("./demographic/combined_engagement_data.csv")
 processed_data = pd.DataFrame()
 
