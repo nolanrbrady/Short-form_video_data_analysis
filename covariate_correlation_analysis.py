@@ -60,21 +60,61 @@ def spearman_pvalues(df_numeric: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_heatmap(corr: pd.DataFrame, outpath: Path, title: str) -> None:
-    plt.figure(figsize=(10, 8))
+    """
+    Save a readable correlation heatmap.
+
+    Layout improvements vs a naive heatmap:
+    - Plot only the lower triangle (avoids duplicating information).
+    - Disable cell annotations automatically for larger matrices.
+    - Scale figure size + tick label styling based on matrix size.
+    """
+    n = int(corr.shape[0])
+    # Heuristic sizing that stays readable without becoming enormous.
+    # Give a bit more horizontal space so we can use larger tick-label fonts.
+    fig_w = min(28, max(12, 0.80 * n + 7))
+    fig_h = min(22, max(9, 0.65 * n + 5))
+
+    # Only show one triangle to reduce clutter.
+    mask = pd.DataFrame(
+        [[j > i for j in range(n)] for i in range(n)],
+        index=corr.index,
+        columns=corr.columns,
+    )
+
+    # Annotating every cell gets unreadable quickly; keep it for small matrices only.
+    annot = n <= 12
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     sns.heatmap(
         corr,
-        annot=True,
-        fmt=".2f",
+        mask=mask,
+        annot=annot,
+        fmt=".2f" if annot else "",
+        annot_kws={"size": 8} if annot else None,
         cmap="vlag",
         center=0,
+        vmin=-1,
+        vmax=1,
         square=True,
         linewidths=0.5,
         cbar_kws={"shrink": 0.8},
+        ax=ax,
     )
-    plt.title(title)
+    ax.set_title(title, pad=12)
+
+    # Tick label styling: rotate x labels and reduce font size for readability.
+    # Slightly larger fonts help readability in papers/slides; still scale down for big matrices.
+    tick_fs = 14 if n <= 22 else 12 if n <= 30 else 10
+    ax.tick_params(axis="x", labelrotation=50, labelsize=tick_fs)
+    ax.tick_params(axis="y", labelrotation=0, labelsize=tick_fs)
+    for lbl in ax.get_xticklabels():
+        lbl.set_horizontalalignment("right")
+
+    # Extra bottom margin helps keep rotated x-labels readable with larger font sizes.
+    fig.subplots_adjust(bottom=0.22)
     plt.tight_layout()
-    plt.savefig(outpath, dpi=300)
-    plt.close()
+    plt.savefig(outpath, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 def run_covariate_preset(root: Path, *, input_path: Optional[Path], out_dir: Optional[Path]) -> None:
@@ -116,22 +156,11 @@ def run_combined_preset(root: Path, *, input_path: Optional[Path], out_dir: Opti
 
     # Preserve existing output format (no index column).
     correlations.to_csv(out / "covariate_correlation_analysis.csv", index=False)
-
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(
+    save_heatmap(
         correlations,
-        annot=True,
-        fmt=".2f",
-        cmap="vlag",
-        center=0,
-        square=True,
-        linewidths=0.5,
-        cbar_kws={"shrink": 0.8},
+        out / "covariate_correlation_heatmap.png",
+        title="Correlation Heatmap (Spearman)",
     )
-    plt.title("Correlation Heatmap")
-    plt.tight_layout()
-    plt.savefig(out / "covariate_correlation_heatmap.png", dpi=300)
-    plt.close()
 
     print(f"Loaded: {in_path}")
     print(f"Wrote:  {out / 'covariate_correlation_analysis.csv'}")
