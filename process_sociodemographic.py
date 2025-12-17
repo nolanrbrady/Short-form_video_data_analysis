@@ -1,11 +1,11 @@
 """
-Covariate preprocessing + correlation diagnostics for the Short Form Video (SFV) study.
+Covariate preprocessing for the Short Form Video (SFV) study.
 
 This script is intentionally conservative and paper-friendly:
 - Loads a Qualtrics export that has 3 header rows (QID, label, ImportId) into a DataFrame with MultiIndex columns.
 - Encodes text responses into numeric (ordinal) values for correlations.
 - Computes per-participant composite totals for multi-item scales (PHQ-9, GAD, ASRS, Yang PU, Yang Motivation).
-- Outputs a clean covariate dataset and Spearman correlation diagnostics.
+- Outputs a clean covariate dataset (correlation diagnostics are handled in `covariate_correlation_analysis.py`).
 
 Input (currently):
 - qualtrics/final_SF_demographic_data.csv
@@ -13,9 +13,11 @@ Input (currently):
 Outputs (to covariate_outputs/):
 - covariates_clean.csv
 - covariate_missingness.csv
-- covariate_correlations_spearman.csv
-- covariate_correlations_pvalues.csv (if SciPy available; otherwise NaN)
-- covariate_heatmap.png
+- covariate_column_audit.csv
+- sfv_duration_other_audit.csv
+
+Outputs (to data/tabular/):
+- socio_demographic_data_processed.csv
 """
 
 from __future__ import annotations
@@ -31,24 +33,8 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "Missing dependency 'pandas'.\n\n"
         "This script expects a scientific Python environment (e.g., conda/venv) with:\n"
         "- pandas\n"
-        "- numpy (required by pandas)\n"
-        "- matplotlib\n"
-        "- seaborn\n\n"
+        "- numpy (required by pandas)\n\n"
         "Activate your project environment and re-run."
-    ) from e
-
-try:
-    import matplotlib.pyplot as plt
-except ModuleNotFoundError as e:  # pragma: no cover
-    raise SystemExit(
-        "Missing dependency 'matplotlib'. Activate your environment or install matplotlib and re-run."
-    ) from e
-
-try:
-    import seaborn as sns
-except ModuleNotFoundError as e:  # pragma: no cover
-    raise SystemExit(
-        "Missing dependency 'seaborn'. Activate your environment or install seaborn and re-run."
     ) from e
 
 
@@ -215,60 +201,6 @@ def compute_scale_scores(
     )
 
 
-# =============================================================================
-# Correlations + outputs
-# =============================================================================
-
-
-def spearman_pvalues(df_numeric: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pairwise Spearman p-values.
-    Uses SciPy if available; otherwise returns NaNs (with a warning).
-    """
-    try:
-        from scipy.stats import spearmanr  # type: ignore
-    except Exception:
-        print("[WARN] SciPy not available; p-values will be written as NaN.")
-        return pd.DataFrame(float("nan"), index=df_numeric.columns, columns=df_numeric.columns)
-
-    cols = list(df_numeric.columns)
-    pvals = pd.DataFrame(float("nan"), index=cols, columns=cols)
-
-    for i, c1 in enumerate(cols):
-        for j, c2 in enumerate(cols):
-            if j < i:
-                continue
-            x = df_numeric[c1]
-            y = df_numeric[c2]
-            mask = x.notna() & y.notna()
-            if mask.sum() < 3:
-                p = float("nan")
-            else:
-                _, p = spearmanr(x[mask], y[mask])
-            pvals.loc[c1, c2] = p
-            pvals.loc[c2, c1] = p
-
-    return pvals
-
-
-def save_heatmap(corr: pd.DataFrame, outpath: Path, title: str) -> None:
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(
-        corr,
-        annot=True,
-        fmt=".2f",
-        cmap="vlag",
-        center=0,
-        square=True,
-        linewidths=0.5,
-        cbar_kws={"shrink": 0.8},
-    )
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig(outpath, dpi=300)
-    plt.close()
-
-
 def write_column_audit(
     outpath: Path,
     selections: Dict[str, Sequence[Tuple[str, str, str]]],
@@ -409,23 +341,6 @@ def main() -> None:
     missingness.to_csv(out_dir / "covariate_missingness.csv")
 
     # -------------------------
-    # Correlations (Spearman)
-    # -------------------------
-    # Defensive: ensure subject_id (if ever present) is not included in correlations.
-    corr_inputs = covariates_numeric.drop(columns=["subject_id"], errors="ignore")
-    corr = corr_inputs.corr(method="spearman")
-    corr.to_csv(out_dir / "covariate_correlations_spearman.csv")
-
-    pvals = spearman_pvalues(corr_inputs)
-    pvals.to_csv(out_dir / "covariate_correlations_pvalues.csv")
-
-    save_heatmap(
-        corr,
-        out_dir / "covariate_heatmap.png",
-        title="Covariate Spearman correlations (encoded ordinal / totals)",
-    )
-
-    # -------------------------
     # Lightweight console audit
     # -------------------------
     print("\nScale item counts:")
@@ -445,6 +360,7 @@ def main() -> None:
     print(missingness.head(10).to_string())
 
     print(f"\nWrote outputs to: {out_dir}")
+    print("Tip: run `covariate_correlation_analysis.py` to generate Spearman correlation diagnostics + heatmap.")
 
 
 if __name__ == "__main__":

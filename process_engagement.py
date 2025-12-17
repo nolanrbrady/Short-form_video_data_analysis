@@ -78,14 +78,14 @@ for subject_id in engagement_data["subject_id"].unique():
     # Add the data to the processed data
     new_row = pd.DataFrame([{
         "subject_id": subject_id,
-        "lf_education": lf_education,
-        "lf_entertainment": lf_entertainment,
-        "sf_education": sf_education,
-        "sf_entertainment": sf_entertainment,
-        "long_form": long_form,
-        "short_form": short_form,
-        "education": education,
-        "entertainment": entertainment,
+        "lf_education_engagement": lf_education,
+        "lf_entertainment_engagement": lf_entertainment,
+        "sf_education_engagement": sf_education,
+        "sf_entertainment_engagement": sf_entertainment,
+        "long_form_engagement": long_form,
+        "short_form_engagement": short_form,
+        "education_engagement": education,
+        "entertainment_engagement": entertainment,
     }])
     processed_data = pd.concat([processed_data, new_row], ignore_index=True)
 
