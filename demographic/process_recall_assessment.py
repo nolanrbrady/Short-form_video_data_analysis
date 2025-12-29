@@ -80,7 +80,15 @@ def _split_acceptable_answers(key: str) -> list[str]:
     "neil degrasse tyson|neil tyson"
     "bar;bars"
     """
-    s = str(key) if key is not None else ""
+    if key is None:
+        return []
+    if isinstance(key, float) and np.isnan(key):
+        return []
+    
+    s = str(key).strip()
+    if not s or s.lower() == "nan":
+        return []
+
     parts = re.split(r"[|;]", s)
     return [p.strip() for p in parts if p and p.strip()]
 
