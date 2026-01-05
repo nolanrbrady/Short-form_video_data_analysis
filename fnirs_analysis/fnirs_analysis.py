@@ -50,10 +50,13 @@ STIMULUS_DURATION_SEC: float = 120.0  # set per your design (uniform duration as
 # Preprocessing toggles
 APPLY_TDDR: bool = True                  # Spike/baseline-motion artifact correction (TDDR) on OD
 APPLY_FILTER: bool = True                # Band-pass filter on haemoglobin
+
 # A low‑pass in the 0.2–0.3 Hz range is common to suppress respiration (~0.2–0.3 Hz)
 LOW_PASS_HZ: float = 0.30                # remove cardiac/respiration
+
+# NOTE: High-pass filter is removed in favor of the GLM drift model.
 # The fundamental task frequency is ≈ 1 / (120 + 30) = 0.0067 Hz. A standard high‑pass of 0.01 Hz would attenuate or distort this slow block effect
-HIGH_PASS_HZ: float = 0.003               # remove slow drift
+HIGH_PASS_HZ: float = None               # remove slow drift (was 0.003 Hz)
 RESAMPLE_HZ: Optional[float] = None      # e.g., 1.0 for speed; None to keep native
 
 # Beer–Lambert Law
@@ -63,7 +66,7 @@ RESAMPLE_HZ: Optional[float] = None      # e.g., 1.0 for speed; None to keep nat
 BEER_LAMBERT_PPF: Optional[float | Dict[str, float]] = None  # e.g., 6.0; None is recommended
 
 # Optional: drop channels with poor coupling (SCI threshold). None to skip.
-SCALP_COUPLING_MIN: Optional[float] = 0.5  # e.g., 0.5 or 0.75
+SCALP_COUPLING_MIN: Optional[float] = 0.8  # e.g., 0.8 supported by (Pollonini, L., et al. (2014). PHOEBE: a processing system for functional near-infrared spectroscopy data.)
 
 # GLM design settings
 # Adding the derivative makes the amplitude estimate more robust to timing variation.
@@ -72,9 +75,9 @@ DRIFT_MODEL: str = "cosine"               # cosine drift regression
 # High-pass cutoff for the GLM drift model. Should be lower than task-related frequencies.
 # Rule of thumb: 1 / (2 * (task_duration + inter_stimulus_interval)).
 # For 120s blocks, a safe value is e.g., 1/250s = 0.004 Hz.
-HIGH_PASS_HZ_DESIGN: float = 0.0033        # choose ~ 1/(2 * max inter-trial interval); tune per experiment
+HIGH_PASS_HZ_DESIGN: float = 0.0033        # choose ~ 1/(2 * max inter-trial interval (task length + rest length)); tune per experiment
 NOISE_MODEL: str = "ar1"                  # Nilearn AR(1) noise model
-INCLUDE_SHORT_CHANNEL_REGRESSORS: bool = False  # add mean short HbO/HbR to design if present
+INCLUDE_SHORT_CHANNEL_REGRESSORS: bool = False  # We did not use short channels in this study.
 
 # File discovery
 SNIRF_EXTENSIONS: Tuple[str, ...] = (".snirf", ".SNIRF")
