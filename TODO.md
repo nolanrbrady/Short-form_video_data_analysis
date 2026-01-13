@@ -9,6 +9,7 @@ A list of things I need to do for this analysis pipeline.
     * Citations to read for filtering parameters -> (Pinti et al., 2019; Yücel et al., 2021)
 - [ ] Consider using a stricter scalp coupling index (from 0.5 to 0.7-0.8) (Pollonini, L., et al. (2014). PHOEBE: a processing system for functional near-infrared spectroscopy data.)
 - [ ] Force bad channels to be removed prior to GLM
+- [ ] Check and remove trials that don't meet the quality criteria (SCI < 0.8, Bad Channels > 50%, < 2 usable trials per condition)
 - [ ] Consider using boxcar convolved HRF or FIR approach instead of the current `SPM + derivative` approach for HRF_MODEL.
     * SPM + derivative may not be the best fit for the long run tasks.
  

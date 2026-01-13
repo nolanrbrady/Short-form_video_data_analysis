@@ -189,7 +189,18 @@ Outputs (per subject under `glm_results/<subject_id>/`):
 - `*_glm_results.csv`: tidy dataframe of GLM estimates per channel/condition/chromophore
 - `*_ALL_runs_glm_results.csv`: append-only “all runs” table for that subject
 
-### B2) Combine first-level outputs across subjects (and across runs within subject)
+### B2) Quality Control & Exclusion Criteria
+
+The pipeline uses the following criteria for subject-level exclusion (generated via `fnirs_analysis/qc_check.py`):
+
+1.  **Scalp Coupling Index (SCI)**: Subject average SCI must be **≥ 0.8**.
+2.  **Bad Channel Count**: Subjects with **> 50% bad channels** (where a channel is bad if its average SCI < 0.8) are excluded.
+3.  **Minimum Usable Trials**: At least **50% of trials (2/4)** per condition must be usable.
+    - A trial is "usable" if its window-level SCI ≥ 0.8 and it does not exceed the bad channel threshold.
+
+For methodological justifications and citations, see [fnirs_preprocess_justifications.md](file:///Users/nobr3541/Library/CloudStorage/OneDrive-UCB-O365/Desktop/PhD/Research/RISE/Short%20Form%20Video%20Study%20Data/Analysis/fnirs_analysis/fnirs_preprocess_justifications.md).
+
+### B3) Combine first-level outputs across subjects (and across runs within subject)
 
 - Script: `fnirs_analysis/combine_glm_output.py`
 - Input: `glm_results/<subject_id>/*_ALL_runs_glm_results.csv`
