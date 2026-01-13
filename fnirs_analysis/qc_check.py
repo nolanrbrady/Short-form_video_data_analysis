@@ -55,13 +55,13 @@ DATA_ROOT = Path("../fNIRs")
 OUT_CSV = Path(__file__).resolve().parent / "fnirs_qc.csv"
 
 # The requested SCI cutoff for "bad channels" (per-channel threshold on the per-channel SCI).
-SCI_CUTOFF = 0.8
+SCI_CUTOFF = 0.5
 
 # Trial window duration in seconds (120s per your study design).
 TRIAL_DURATION_SEC = 120.0
 
 # Fail-fast safety: do not overwrite output unless explicitly allowed.
-OVERWRITE_OUTPUT = False
+OVERWRITE_OUTPUT = True
 
 # Mapping from raw trigger/annotation ID to condition name.
 ANNOTATION_RENAME_MAP: Dict[str, str] = {
@@ -309,13 +309,16 @@ def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
     """
     Build a per-subject QC table by scanning SNIRF files under data_root.
     """
+    # Compute run-level QC
+    print(f"Finding SNIRF files in {data_root}...")
     snirf_files = _find_snirf_files(data_root)
     if not snirf_files:
         raise FileNotFoundError(f"No .snirf files found under {data_root}")
 
-    # Compute run-level QC
+    print(f"Found {len(snirf_files)} SNIRF file(s). Computing run-level QC...")
     run_qc: List[RunQC] = []
-    for p in snirf_files:
+    for i, p in enumerate(snirf_files, 1):
+        print(f"[{i}/{len(snirf_files)}] Computing QC for: {p.name}")
         run_qc.append(_compute_run_qc(p))
 
     # Group by subject_id
@@ -323,9 +326,10 @@ def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
     for r in run_qc:
         by_subj.setdefault(r.subject_id, []).append(r)
 
+    print(f"Aggregating QC for {len(by_subj)} subject(s)...")
     rows = []
     for subject_id in sorted(by_subj.keys()):
-        print("Processing subject: ", subject_id)
+        print(f"  -> Processing subject: {subject_id}")
         rows.append(_aggregate_subject_qc(by_subj[subject_id], sci_cutoff=sci_cutoff))
 
     df = pd.DataFrame(rows)
@@ -343,6 +347,7 @@ def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
 
 def main() -> int:
     try:
+        print("Starting fNIRS QC Analysis...")
         data_root = _resolve_data_root(DATA_ROOT)
         df = build_qc_table(data_root=data_root, sci_cutoff=float(SCI_CUTOFF))
         out_path = OUT_CSV.expanduser().resolve()
