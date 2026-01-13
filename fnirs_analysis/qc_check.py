@@ -55,7 +55,7 @@ DATA_ROOT = Path("../fNIRs")
 OUT_CSV = Path(__file__).resolve().parent / "fnirs_qc.csv"
 
 # The requested SCI cutoff for "bad channels" (per-channel threshold on the per-channel SCI).
-SCI_CUTOFF = 0.5
+SCI_CUTOFF = 0.8
 
 # Trial window duration in seconds (120s per your study design).
 TRIAL_DURATION_SEC = 120.0
@@ -81,9 +81,9 @@ class RunQC:
     sci: np.ndarray  # per-channel SCI (NaNs allowed)
     snr_db: np.ndarray  # per-channel SNR in dB (NaNs allowed)
     ch_names: List[str]
-    # Trial-window average SCI values (cond_id, trial_avg_sci) for each detected condition trigger.
-    # Example: [("1", 0.92), ("2", 0.75), ...]
-    trial_avg_sci: List[Tuple[str, float]]
+    # Trial-window average SCI values and bad channel counts for each detected condition trigger.
+    # Format: (cond_id, avg_sci, n_bad_channels)
+    trial_qc: List[Tuple[str, float, int]]
 
 
 def _resolve_data_root(user_root: Path) -> Path:
@@ -199,7 +199,8 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
         )
 
     # Compute trial-window SCI: each trial is a 120s segment starting at a condition trigger.
-    trial_avg_sci: List[Tuple[str, float]] = []
+    # Format: (cond_id, avg_sci, n_bad_channels)
+    trial_qc: List[Tuple[str, float, int]] = []
     ann = raw_intensity.annotations
     if ann is not None and len(ann) > 0:
         for desc, onset in zip(ann.description, ann.onset):
@@ -219,13 +220,17 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
                     f"run={snirf_path} desc={desc} onset={onset} tmin={tmin} tmax={tmax}",
                     file=sys.stderr,
                 )
-                trial_avg_sci.append((desc, float("nan")))
+                # Append NaN for SCI and 0 for bad channels (or maybe all channels? let's stick to 0 for now as it's unusable anyway)
+                trial_qc.append((desc, float("nan"), 0))
                 continue
 
             raw_trial = raw_od.copy().crop(tmin=tmin, tmax=tmax, include_tmax=False)
             sci_trial = mne_nirs_preproc.scalp_coupling_index(raw_trial)
             sci_trial = np.asarray(sci_trial, dtype=float)[picks]
-            trial_avg_sci.append((desc, float(np.nanmean(sci_trial))))
+            
+            avg_sci = float(np.nanmean(sci_trial))
+            n_bad = int(np.sum(sci_trial < SCI_CUTOFF))
+            trial_qc.append((desc, avg_sci, n_bad))
 
     return RunQC(
         subject_id=_subject_id_from_path(snirf_path),
@@ -233,7 +238,7 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
         sci=sci,
         snr_db=np.asarray(snr_db, dtype=float),
         ch_names=ch_names,
-        trial_avg_sci=trial_avg_sci,
+        trial_qc=trial_qc,
     )
 
 
@@ -284,21 +289,40 @@ def _aggregate_subject_qc(runs: Sequence[RunQC], sci_cutoff: float) -> dict:
     # Count useable trials per condition (trial-window average SCI > cutoff).
     valid_trials_counts = {name: 0 for name in ANNOTATION_RENAME_MAP.values()}
 
+    n_channels = len(ref_ch_names)
     for r in runs:
-        for cond_id, trial_sci in r.trial_avg_sci:
+        for cond_id, trial_sci, trial_bad_count in r.trial_qc:
             if cond_id not in ANNOTATION_RENAME_MAP:
                 continue
-            if np.isfinite(trial_sci) and float(trial_sci) > sci_cutoff:
+            
+            # Trial is useable if:
+            # 1. Trial SCI >= cutoff
+            # 2. Bad channel count <= 50%
+            is_sci_ok = np.isfinite(trial_sci) and float(trial_sci) >= sci_cutoff
+            is_ch_count_ok = trial_bad_count <= (n_channels / 2.0)
+            
+            if is_sci_ok and is_ch_count_ok:
                 valid_trials_counts[ANNOTATION_RENAME_MAP[cond_id]] += 1
 
+    # Subject-level exclusion flags
+    pass_sci = avg_sci >= sci_cutoff
+    pass_ch_count = len(bad_channels) <= (n_channels / 2.0)
+    # Check if all conditions have at least 2 useable trials
+    pass_trials = all(count >= 2 for count in valid_trials_counts.values())
+    
     qc_dict = {
         "subject_id": subject_id,
-        # SNR is reported in dB (see `_compute_intensity_snr_db` for definition).
         "avg_snr_db": avg_snr_db,
         "avg_sci": avg_sci,
         "bad_channels": ", ".join(bad_channels),
         "n_bad_channels": int(len(bad_channels)),
         "n_runs_found": int(len(runs)),
+        "exclude_subject": not (pass_sci and pass_ch_count and pass_trials),
+        "reason_for_exclusion": (
+            ("" if pass_sci else "SCI_low; ") +
+            ("" if pass_ch_count else "Too_many_bad_channels; ") +
+            ("" if pass_trials else "Insufficient_useable_trials; ")
+        ).strip("; "),
     }
     # Add the per-condition usable trial counts
     qc_dict.update(valid_trials_counts)
