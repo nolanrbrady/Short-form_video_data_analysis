@@ -9,6 +9,10 @@ The QC metrics are as follows:
 - Average SCI
 - List of Bad Channels (using an SCI cut off of 0.8) - These are channels that have an SCI value less than 0.8
 - Number of Bad Channels - The number of channels that have an SCI value less than 0.8
+- Number of useable trials per condition (Short-Form Education, Short-Form Entertainment, Long-Form Entertainment, Long-Form Education)
+  - A "run" is the whole fNIRS scan (one SNIRF file).
+  - A "trial" is a 120s segment of the scan starting at a condition trigger annotation ("1".."4").
+  - A trial is counted if its trial-window average SCI > 0.8.
 
 The end result should be a CSV file where each participant has a row and each column is a QC metric.
 
@@ -23,7 +27,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -53,8 +57,19 @@ OUT_CSV = Path(__file__).resolve().parent / "fnirs_qc.csv"
 # The requested SCI cutoff for "bad channels" (per-channel threshold on the per-channel SCI).
 SCI_CUTOFF = 0.8
 
+# Trial window duration in seconds (120s per your study design).
+TRIAL_DURATION_SEC = 120.0
+
 # Fail-fast safety: do not overwrite output unless explicitly allowed.
 OVERWRITE_OUTPUT = False
+
+# Mapping from raw trigger/annotation ID to condition name.
+ANNOTATION_RENAME_MAP: Dict[str, str] = {
+    "1": "Short-Form Education",
+    "2": "Short-Form Entertainment",
+    "3": "Long-Form Entertainment",
+    "4": "Long-Form Education",
+}
 
 
 @dataclass(frozen=True)
@@ -66,6 +81,9 @@ class RunQC:
     sci: np.ndarray  # per-channel SCI (NaNs allowed)
     snr_db: np.ndarray  # per-channel SNR in dB (NaNs allowed)
     ch_names: List[str]
+    # Trial-window average SCI values (cond_id, trial_avg_sci) for each detected condition trigger.
+    # Example: [("1", 0.92), ("2", 0.75), ...]
+    trial_avg_sci: List[Tuple[str, float]]
 
 
 def _resolve_data_root(user_root: Path) -> Path:
@@ -150,6 +168,7 @@ def _compute_intensity_snr_db(raw_intensity: mne.io.BaseRaw) -> np.ndarray:
 def _compute_run_qc(snirf_path: Path) -> RunQC:
     """
     Load a SNIRF run and compute per-channel SCI (on optical density) and SNR (on intensity).
+    Also extracts event triggers.
     """
     raw_intensity = mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
 
@@ -179,12 +198,42 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
             f"File: {snirf_path}"
         )
 
+    # Compute trial-window SCI: each trial is a 120s segment starting at a condition trigger.
+    trial_avg_sci: List[Tuple[str, float]] = []
+    ann = raw_intensity.annotations
+    if ann is not None and len(ann) > 0:
+        for desc, onset in zip(ann.description, ann.onset):
+            if desc not in ANNOTATION_RENAME_MAP:
+                continue
+
+            # Crop OD to the trial window and compute SCI on that segment.
+            tmin = float(onset)
+            tmax = float(onset) + float(TRIAL_DURATION_SEC)
+            # Clamp to available data range; if a run is truncated, we still compute on what exists.
+            raw_tmax = float(raw_od.times[-1]) if raw_od.n_times > 0 else 0.0
+            tmax = min(tmax, raw_tmax)
+
+            if tmax <= tmin:
+                print(
+                    "[qc_check] WARNING: trial window is empty after clamping; "
+                    f"run={snirf_path} desc={desc} onset={onset} tmin={tmin} tmax={tmax}",
+                    file=sys.stderr,
+                )
+                trial_avg_sci.append((desc, float("nan")))
+                continue
+
+            raw_trial = raw_od.copy().crop(tmin=tmin, tmax=tmax, include_tmax=False)
+            sci_trial = mne_nirs_preproc.scalp_coupling_index(raw_trial)
+            sci_trial = np.asarray(sci_trial, dtype=float)[picks]
+            trial_avg_sci.append((desc, float(np.nanmean(sci_trial))))
+
     return RunQC(
         subject_id=_subject_id_from_path(snirf_path),
         run_path=snirf_path,
         sci=sci,
         snr_db=np.asarray(snr_db, dtype=float),
         ch_names=ch_names,
+        trial_avg_sci=trial_avg_sci,
     )
 
 
@@ -217,8 +266,8 @@ def _aggregate_subject_qc(runs: Sequence[RunQC], sci_cutoff: float) -> dict:
                 + ", ".join(r.ch_names[:10])
             )
 
-    # Aggregate per-channel across runs (still per-channel; no channel is labeled bad based on
-    # any across-channel average).
+    # Aggregate per-channel across runs (still per-channel)
+    # NOTE: no channel is labeled bad based on any across-channel average).
     sci_stack = np.vstack([r.sci for r in runs])  # (n_runs, n_channels)
     snr_stack = np.vstack([r.snr_db for r in runs])  # (n_runs, n_channels)
 
@@ -232,7 +281,17 @@ def _aggregate_subject_qc(runs: Sequence[RunQC], sci_cutoff: float) -> dict:
     # Bad channels are defined *per channel* using the per-channel SCI values.
     bad_channels = [ch for ch, sci in zip(ref_ch_names, sci_by_channel) if np.isfinite(sci) and sci < sci_cutoff]
 
-    return {
+    # Count useable trials per condition (trial-window average SCI > cutoff).
+    valid_trials_counts = {name: 0 for name in ANNOTATION_RENAME_MAP.values()}
+
+    for r in runs:
+        for cond_id, trial_sci in r.trial_avg_sci:
+            if cond_id not in ANNOTATION_RENAME_MAP:
+                continue
+            if np.isfinite(trial_sci) and float(trial_sci) > sci_cutoff:
+                valid_trials_counts[ANNOTATION_RENAME_MAP[cond_id]] += 1
+
+    qc_dict = {
         "subject_id": subject_id,
         # SNR is reported in dB (see `_compute_intensity_snr_db` for definition).
         "avg_snr_db": avg_snr_db,
@@ -241,6 +300,9 @@ def _aggregate_subject_qc(runs: Sequence[RunQC], sci_cutoff: float) -> dict:
         "n_bad_channels": int(len(bad_channels)),
         "n_runs_found": int(len(runs)),
     }
+    # Add the per-condition usable trial counts
+    qc_dict.update(valid_trials_counts)
+    return qc_dict
 
 
 def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
@@ -263,6 +325,7 @@ def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
 
     rows = []
     for subject_id in sorted(by_subj.keys()):
+        print("Processing subject: ", subject_id)
         rows.append(_aggregate_subject_qc(by_subj[subject_id], sci_cutoff=sci_cutoff))
 
     df = pd.DataFrame(rows)
