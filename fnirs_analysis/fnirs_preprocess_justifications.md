@@ -8,7 +8,7 @@ This file lists **peer‑reviewed** precedents that support the three QC choices
 
 - **Hocke, Oni, Duszynski, Corrigan, Frederick, Dunn (2018)** — *Automated Processing of fNIRS Data—A Visual Guide to the Pitfalls and Consequences*  
   **Reason for inclusion:** Uses the PHOEBE optode–scalp coupling approach with a **hard-coded SCI threshold of ≥ 0.7** as part of its channel acceptance logic (i.e., channels below this coupling level are treated as poor quality).  
-  **Link:** https://www.mdpi.com/1999-4893/11/5/67
+  **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC6428450/
 
 - **Hernandez & Pollonini (2020)** — *NIRSplot: A Tool for Quality Assessment of fNIRS Scans*  
   **Reason for inclusion:** Establishes a commonly used “good coupling” prior for SCI, noting **~0.8 as a reasonable threshold** for good optode–scalp coupling in their QT‑NIRS/NIRSplot framework (useful as an upper-end reference; your 0.7 run‑level rule is a slightly more permissive, pragmatic cutoff).  
