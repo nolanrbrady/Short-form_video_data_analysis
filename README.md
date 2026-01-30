@@ -173,14 +173,33 @@ To merge with `data/tabular/combined_sfv_data.csv`, you will need a shared key:
 **Goal:** Merge the externally-produced Homer3 betas table with the combined tabular dataset and test whether
 **Format depends on Content (and vice versa)** at the level of **channelwise prefrontal activation**, for **HbO** and **HbR**.
 
+### C0) Prerequisites / required prior work
+
+Inputs required:
+- `data/tabular/homer3_glm_betas_wide.csv` (externally produced; see “Homer3 GLM betas export” above)
+- `data/tabular/combined_sfv_data.csv` (produced by the tabular preprocessing pipeline)
+
+Requirements / invariants:
+- `combined_sfv_data.csv` must contain **exactly one row per subject** (unique `subject_id`).
+- `homer3_glm_betas_wide.csv` must contain **exactly one row per subject** (unique `Subject` after normalization).
+- Beta columns can include `0`/`NaN` as pruned-channel stand-ins; downstream modeling treats these as missing (do not impute).
+
+Recommended prior step (if you haven’t generated it yet):
+- Run `generate_combined_data.py` to (re)build `data/tabular/combined_sfv_data.csv` from the raw sources.
+
 ### C1) Inner-join Homer3 betas with combined tabular data
 
 - Python: `merge_homer3_betas_with_combined_data.py`
 - R: `merge_homer3_betas_with_combined_data.R`
 
+What it does:
+- Normalizes IDs by extracting digits (handles `0017` vs `17`, and `sub_0017`-style IDs).
+- Performs an **INNER JOIN** and writes a merged “one row per subject” CSV for inspection / downstream use.
+
 Notes:
 - IDs are normalized by extracting digits (handles `0017` vs `17`, and `sub_0017`-style IDs).
 - Output is one row per subject containing both demographics/behavior and beta columns.
+- Scripts **fail hard** if either input contains duplicate `subject_id` values after normalization (expected exactly one row per subject).
 
 Example (Python):
 
@@ -195,6 +214,10 @@ python merge_homer3_betas_with_combined_data.py \
 
 - Python: `analyze_format_content_lmm_channelwise.py`
 - R: `analyze_format_content_lmm_channelwise.R`
+
+Order / dependencies:
+- Assumes Pipeline C0 prerequisites are satisfied.
+- Can be run directly from the two input CSVs (it merges internally); C1 is still recommended to create an auditable merged artifact.
 
 Model (per channel × chromophore):
 - LMM: `beta ~ format_c * content_c + (1 | subject_id)`
@@ -213,6 +236,11 @@ Multiple testing:
 Post-hoc (only if the interaction is FDR-significant for that channel/chromophore):
 - All 6 pairwise contrasts among the 4 conditions.
 - **No multiple-test correction** in post-hoc contrasts (per study instruction).
+- Post-hoc `mean_diff` is reported as `condition_a - condition_b`.
+
+Minimum sample gating:
+- Models are only fit for channel/chrom pairs with at least `min_subjects` complete-case subjects (default: 6).
+- Scripts print a warning summary (count + examples) for models skipped due to `min_subjects`.
 
 Example (Python dry-run to validate parsing without fitting models):
 
@@ -222,6 +250,7 @@ python analyze_format_content_lmm_channelwise.py --dry-run
 
 Outputs:
 - `data/results/format_content_lmm_main_effects_*.csv`
+- `data/results/format_content_lmm_main_effects_tidy_r.csv` (R: spec-compliant tidy main-effects table)
 - `data/results/format_content_lmm_posthoc_pairwise_*.csv`
 
 ### A6) Correlation diagnostics / heatmaps (optional)
