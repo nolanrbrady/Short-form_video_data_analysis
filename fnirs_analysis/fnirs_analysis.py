@@ -66,7 +66,8 @@ RESAMPLE_HZ: Optional[float] = None      # e.g., 1.0 for speed; None to keep nat
 BEER_LAMBERT_PPF: Optional[float | Dict[str, float]] = None  # e.g., 6.0; None is recommended
 
 # Optional: drop channels with poor coupling (SCI threshold). None to skip.
-SCALP_COUPLING_MIN: Optional[float] = 0.8  # e.g., 0.8 supported by (Pollonini, L., et al. (2014). PHOEBE: a processing system for functional near-infrared spectroscopy data.)
+# SCI itself is introduced in Pollonini et al. (2016) (PHOEBE), while an ~0.8 “good coupling” reference is used in Hernandez & Pollonini (2020) (NIRSplot).
+SCALP_COUPLING_MIN: Optional[float] = 0.8
 
 # GLM design settings
 # Adding the derivative makes the amplitude estimate more robust to timing variation.

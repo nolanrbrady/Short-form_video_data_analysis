@@ -51,3 +51,19 @@ This file lists **peer‑reviewed** precedents that support the three QC choices
 - **Fiske et al. (2022)** — *The neural correlates of inhibitory control in 10-month-old infants: A functional near-infrared spectroscopy study*  
   **Reason for inclusion:** Notes participants were encouraged to complete **at least three blocks of each type** to ensure enough reliable fNIRS data—directly supporting “≥3 per condition” as a defensible minimum.  
   **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC7616317/
+
+---
+
+## 4) Windowed trial QC (SCI + PSP): **10s windows; SCI < 0.8 AND PSP < 0.1 marks bad**
+
+- **Pollonini, L., et al. (2016)** — *PHOEBE: a method for real time mapping of optodes-scalp coupling in functional near-infrared spectroscopy*  
+  **Reason for inclusion:** Establishes SCI as a coupling-quality metric and supports **10s windowed QC** cadence used for time-local quality assessment.  
+  **Link:** https://doi.org/10.1364/BOE.7.005104
+
+- **Hernandez & Pollonini (2020)** — *NIRSplot: A Tool for Quality Assessment of fNIRS Scans*  
+  **Reason for inclusion:** QT-NIRS/NIRSplot uses **SCI + PSP** as complementary windowed QC metrics for identifying bad time intervals.  
+  **Link:** https://research.birmingham.ac.uk/en/publications/nirsplot-a-tool-for-quality-assessment-of-fnirs-scans/
+
+- **Meier et al. (2025)** — *The effects of protocol factors and participant characteristics on fNIRS signal quality…*  
+  **Reason for inclusion:** Reports use of **SCI=0.8** and **PSP=0.1** defaults in applied QT-NIRS QC, supporting the chosen thresholds.  
+  **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC12489784/
