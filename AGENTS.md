@@ -8,11 +8,16 @@ More information on the study can be found in README.md.
 # Scientific Integrity
 This study is due to be published in a major cognitive science journal and as such the quality of the preprocessing, statistical analysis, results, etc needs to be of the highest scientific quality. If you implement something please always cite the peer-reviewed source from which you derived the information. Everything must be defensible with citations both immediately in the comment of the section and in a CITATIONS.md file. The CITATIONS.md file needs to be cleanly organized by section (i.e preprocessing, statistical analysis, etc) with the authors name, how the citation was used, a link to the work, and reasoning for the use as it relates to this study.
 
+## Data Integrity Note (Homer betas import)
+- `data/tabular/homer3_glm_betas_wide.csv` is produced externally and imported into this repo.
+- This file contains both `0` and `NaN` values that are *stand-ins for channels pruned during preprocessing*.
+- Do **not** treat these as “true zero activation” and do **not** silently impute them; handle them explicitly as missing/pruned channels in downstream analyses.
+
 
 # Vocabulary
 - "Run" indicates the whole fNIRs sequence which is made up of a any number of events or tasks.
 - "Task" is a subset of a run the start of which is marked by an event or trigger. Ours in this experiment are "1"..."4".
-- "Trials" is synonymous with Task
+- "Block" or "Trials" is synonymous with Task in this research
 
 Do:
 - Always ensure the documentation is up to date. We never want out of date .md files that pollute the codebase. 

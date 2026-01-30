@@ -6,13 +6,15 @@ The study is a within-subjects design with 4 conditions each condition was prese
 The QC metrics are as follows:
 - Subject ID
 - Average SNR
-- Average SCI
-- List of Bad Channels (using an SCI cut off of 0.8) - These are channels that have an SCI value less than 0.8
-- Number of Bad Channels - The number of channels that have an SCI value less than 0.8
+- List of Bad Channels (using an SCI cut off of 0.8) - These are channels that have an SCI value <= 0.8 (or non-finite SCI)
+- Number of Bad Channels - The number of channels that have an SCI value <= 0.8 (or non-finite SCI)
 - Number of useable trials per condition (Short-Form Education, Short-Form Entertainment, Long-Form Entertainment, Long-Form Education)
   - A "run" is the whole fNIRS scan (one SNIRF file).
   - A "trial" is a 120s segment of the scan starting at a condition trigger annotation ("1".."4").
-  - A trial is counted if its trial-window average SCI > 0.8.
+  - A trial is counted if it has sufficiently few bad channel-window pairs using windowed SCI and PSP.
+    - Windows are 10s non-overlapping segments across the trial.
+    - A channel-window pair is bad if SCI < 0.8 AND PSP < 0.1.
+    - A trial is unusable if >10% of channel-window pairs are bad.
 
 The end result should be a CSV file where each participant has a row and each column is a QC metric.
 
@@ -34,6 +36,7 @@ import pandas as pd
 
 import mne
 from mne.preprocessing import nirs as mne_nirs_preproc
+from mne_nirs.preprocessing import peak_power, scalp_coupling_index_windowed
 
 
 # =======================
@@ -60,6 +63,16 @@ SCI_CUTOFF = 0.8
 # Trial window duration in seconds (120s per your study design).
 TRIAL_DURATION_SEC = 120.0
 
+# Windowed QC parameters for trial evaluation (QT-NIRS / NIRSplot defaults).
+# See CITATIONS.md (Quality Control: Pollonini 2016; Hernandez & Pollonini 2020; Meier 2025).
+WINDOW_DURATION_SEC = 10.0
+PSP_THRESHOLD = 0.1
+MAX_BAD_WINDOW_FRACTION = 0.10
+
+# Trial-count exclusion rules
+MIN_USABLE_TRIALS_PER_CONDITION = 3
+MAX_TOTAL_UNUSABLE_TRIALS = 2  # exclude if >= 3 trials are unusable
+
 # Fail-fast safety: do not overwrite output unless explicitly allowed.
 OVERWRITE_OUTPUT = True
 
@@ -81,9 +94,20 @@ class RunQC:
     sci: np.ndarray  # per-channel SCI (NaNs allowed)
     snr_db: np.ndarray  # per-channel SNR in dB (NaNs allowed)
     ch_names: List[str]
-    # Trial-window average SCI values and bad channel counts for each detected condition trigger.
-    # Format: (cond_id, avg_sci, n_bad_channels)
-    trial_qc: List[Tuple[str, float, int]]
+    # Windowed trial QC for each detected condition trigger.
+    # Format: (cond_id, trial_qc)
+    trial_qc: List[Tuple[str, "TrialQC"]]
+
+
+@dataclass(frozen=True)
+class TrialQC:
+    """QC metrics computed for a single trial window."""
+
+    percent_bad: float
+    n_bad_pairs: int
+    n_windows: int
+    n_channels: int
+    is_usable: bool
 
 
 def _resolve_data_root(user_root: Path) -> Path:
@@ -198,16 +222,16 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
             f"File: {snirf_path}"
         )
 
-    # Compute trial-window SCI: each trial is a 120s segment starting at a condition trigger.
-    # Format: (cond_id, avg_sci, n_bad_channels)
-    trial_qc: List[Tuple[str, float, int]] = []
+    # Compute trial QC using windowed SCI and PSP (10s non-overlapping windows).
+    # References: PHOEBE SCI and QT-NIRS/NIRSplot quality metrics (see CITATIONS.md).
+    trial_qc: List[Tuple[str, TrialQC]] = []
     ann = raw_intensity.annotations
     if ann is not None and len(ann) > 0:
         for desc, onset in zip(ann.description, ann.onset):
             if desc not in ANNOTATION_RENAME_MAP:
                 continue
 
-            # Crop OD to the trial window and compute SCI on that segment.
+            # Crop OD to the trial window and compute SCI/PSP on that segment.
             tmin = float(onset)
             tmax = float(onset) + float(TRIAL_DURATION_SEC)
             # Clamp to available data range; if a run is truncated, we still compute on what exists.
@@ -220,17 +244,88 @@ def _compute_run_qc(snirf_path: Path) -> RunQC:
                     f"run={snirf_path} desc={desc} onset={onset} tmin={tmin} tmax={tmax}",
                     file=sys.stderr,
                 )
-                # Append NaN for SCI and 0 for bad channels (or maybe all channels? let's stick to 0 for now as it's unusable anyway)
-                trial_qc.append((desc, float("nan"), 0))
+                # Unusable trial window; represent it as fully bad.
+                trial_qc.append(
+                    (
+                        desc,
+                        TrialQC(
+                            percent_bad=1.0,
+                            n_bad_pairs=int(len(picks)),
+                            n_windows=0,
+                            n_channels=int(len(picks)),
+                            is_usable=False,
+                        ),
+                    )
+                )
                 continue
 
-            raw_trial = raw_od.copy().crop(tmin=tmin, tmax=tmax, include_tmax=False)
-            sci_trial = mne_nirs_preproc.scalp_coupling_index(raw_trial)
-            sci_trial = np.asarray(sci_trial, dtype=float)[picks]
-            
-            avg_sci = float(np.nanmean(sci_trial))
-            n_bad = int(np.sum(sci_trial < SCI_CUTOFF))
-            trial_qc.append((desc, avg_sci, n_bad))
+            raw_trial_od = raw_od.copy().crop(tmin=tmin, tmax=tmax, include_tmax=False)
+            raw_trial_od.pick(picks)
+
+            # PSP expects haemoglobin data (MNE-NIRS doc).
+            raw_trial_hb = mne_nirs_preproc.beer_lambert_law(raw_trial_od)
+
+            # Windowed SCI and PSP (10s windows). We compute the "bad" mask explicitly
+            # to align with the study rule: bad if SCI < 0.8 AND PSP < 0.1.
+            _, sci_scores, sci_times = scalp_coupling_index_windowed(
+                raw_trial_hb,
+                time_window=WINDOW_DURATION_SEC,
+                threshold=SCI_CUTOFF,
+                verbose=False,
+            )
+            _, psp_scores, psp_times = peak_power(
+                raw_trial_hb,
+                time_window=WINDOW_DURATION_SEC,
+                threshold=PSP_THRESHOLD,
+                verbose=False,
+            )
+
+            sci_scores = np.asarray(sci_scores, dtype=float)
+            psp_scores = np.asarray(psp_scores, dtype=float)
+
+            n_windows = min(sci_scores.shape[1], psp_scores.shape[1])
+            if n_windows == 0:
+                raise RuntimeError(
+                    f"No windows computed for trial QC: run={snirf_path} desc={desc} "
+                    f"tmin={tmin} tmax={tmax}"
+                )
+
+            if sci_scores.shape[1] != psp_scores.shape[1]:
+                print(
+                    "[qc_check] WARNING: SCI/PSP window count mismatch; "
+                    f"SCI windows={sci_scores.shape[1]} PSP windows={psp_scores.shape[1]} "
+                    f"run={snirf_path} desc={desc} tmin={tmin} tmax={tmax} "
+                    f"sci_times={len(sci_times)} psp_times={len(psp_times)}",
+                    file=sys.stderr,
+                )
+
+            sci_scores = sci_scores[:, :n_windows]
+            psp_scores = psp_scores[:, :n_windows]
+
+            is_bad_pair = (
+                (~np.isfinite(sci_scores))
+                | (~np.isfinite(psp_scores))
+                | ((sci_scores < SCI_CUTOFF) & (psp_scores < PSP_THRESHOLD))
+            )
+
+            n_bad_pairs = int(np.sum(is_bad_pair))
+            n_channels = int(sci_scores.shape[0])
+            total_pairs = int(n_channels * n_windows)
+            percent_bad = float(n_bad_pairs) / float(total_pairs) if total_pairs > 0 else 1.0
+
+            is_usable = percent_bad <= MAX_BAD_WINDOW_FRACTION
+            trial_qc.append(
+                (
+                    desc,
+                    TrialQC(
+                        percent_bad=percent_bad,
+                        n_bad_pairs=n_bad_pairs,
+                        n_windows=int(n_windows),
+                        n_channels=n_channels,
+                        is_usable=is_usable,
+                    ),
+                )
+            )
 
     return RunQC(
         subject_id=_subject_id_from_path(snirf_path),
@@ -280,48 +375,51 @@ def _aggregate_subject_qc(runs: Sequence[RunQC], sci_cutoff: float) -> dict:
     snr_by_channel = np.nanmean(snr_stack, axis=0)
 
     # Subject-level summaries (requested outputs)
-    avg_sci = float(np.nanmean(sci_by_channel)) if np.any(np.isfinite(sci_by_channel)) else float("nan")
     avg_snr_db = float(np.nanmean(snr_by_channel)) if np.any(np.isfinite(snr_by_channel)) else float("nan")
 
     # Bad channels are defined *per channel* using the per-channel SCI values.
-    bad_channels = [ch for ch, sci in zip(ref_ch_names, sci_by_channel) if np.isfinite(sci) and sci < sci_cutoff]
+    # Treat non-finite SCI as bad.
+    bad_channels = [
+        ch
+        for ch, sci in zip(ref_ch_names, sci_by_channel)
+        if (not np.isfinite(sci)) or (float(sci) <= sci_cutoff)
+    ]
 
-    # Count useable trials per condition (trial-window average SCI > cutoff).
+    # Count useable trials per condition using SCI+PSP windowed QC.
     valid_trials_counts = {name: 0 for name in ANNOTATION_RENAME_MAP.values()}
+    total_trials = 0
+    total_unusable = 0
 
     n_channels = len(ref_ch_names)
     for r in runs:
-        for cond_id, trial_sci, trial_bad_count in r.trial_qc:
+        for cond_id, trial_qc in r.trial_qc:
             if cond_id not in ANNOTATION_RENAME_MAP:
                 continue
-            
-            # Trial is useable if:
-            # 1. Trial SCI >= cutoff
-            # 2. Bad channel count <= 50%
-            is_sci_ok = np.isfinite(trial_sci) and float(trial_sci) >= sci_cutoff
-            is_ch_count_ok = trial_bad_count <= (n_channels / 2.0)
-            
-            if is_sci_ok and is_ch_count_ok:
+            total_trials += 1
+            if trial_qc.is_usable:
                 valid_trials_counts[ANNOTATION_RENAME_MAP[cond_id]] += 1
+            else:
+                total_unusable += 1
 
     # Subject-level exclusion flags
-    pass_sci = avg_sci >= sci_cutoff
     pass_ch_count = len(bad_channels) <= (n_channels / 2.0)
-    # Check if all conditions have at least 2 useable trials
-    pass_trials = all(count >= 2 for count in valid_trials_counts.values())
+    # Check if all conditions have at least 3 useable trials
+    pass_trials = all(count >= MIN_USABLE_TRIALS_PER_CONDITION for count in valid_trials_counts.values())
+    pass_total_unusable = total_unusable <= MAX_TOTAL_UNUSABLE_TRIALS
     
     qc_dict = {
         "subject_id": subject_id,
         "avg_snr_db": avg_snr_db,
-        "avg_sci": avg_sci,
         "bad_channels": ", ".join(bad_channels),
         "n_bad_channels": int(len(bad_channels)),
         "n_runs_found": int(len(runs)),
-        "exclude_subject": not (pass_sci and pass_ch_count and pass_trials),
+        "n_trials_total": int(total_trials),
+        "n_trials_unusable": int(total_unusable),
+        "exclude_subject": not (pass_ch_count and pass_trials and pass_total_unusable),
         "reason_for_exclusion": (
-            ("" if pass_sci else "SCI_low; ") +
             ("" if pass_ch_count else "Too_many_bad_channels; ") +
-            ("" if pass_trials else "Insufficient_useable_trials; ")
+            ("" if pass_trials else "Insufficient_useable_trials_per_condition; ") +
+            ("" if pass_total_unusable else "Too_many_unusable_trials; ")
         ).strip("; "),
     }
     # Add the per-condition usable trial counts
@@ -359,11 +457,10 @@ def build_qc_table(data_root: Path, sci_cutoff: float) -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     # Sort so the lowest-quality subjects appear first:
-    # - Lower avg_sci is worse (ascending)
     # - More bad channels is worse (descending)
     df = df.sort_values(
-        by=["avg_sci", "n_bad_channels", "subject_id"],
-        ascending=[True, False, True],
+        by=["n_bad_channels", "avg_snr_db", "subject_id"],
+        ascending=[False, True, True],
         na_position="last",
     ).reset_index(drop=True)
     return df

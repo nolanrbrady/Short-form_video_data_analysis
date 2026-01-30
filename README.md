@@ -1,4 +1,6 @@
 ## Short-form Video Study — Analysis Repo
+Last updated: 01-30-2026
+Updated by: Nolan Brady
 
 This repo contains two primary analysis “tracks”:
 
@@ -24,7 +26,6 @@ These are the stimulus/trigger codes used in the fNIRS recordings and the analys
 - **`data/tabular/`**: “analysis-ready” CSVs produced by preprocessing scripts (merged by `subject_id`)
 - **`fnirs_analysis/`**: fNIRS GLM pipeline + second-level (group) inference scripts (MNE / MNE-NIRS)
 - **`glm_results/`**: subject GLM outputs + combined tables + group-level outputs
-- **`fnirs_homer/`**: Homer3 derivatives (if you ran the Homer pipeline); used by Homer beta extractors
 - **`covariate_outputs/`**: covariate-only outputs (clean covariates, missingness audits, correlation heatmaps)
 
 ---
@@ -44,7 +45,9 @@ Common dependencies across scripts:
 
 ## Pipeline A — Tabular preprocessing (demographics + engagement + recall)
 
-All tabular merges are keyed on **`subject_id`**.
+All tabular merges are keyed on **`subject_id`** (the Qualtrics study ID from `qualtrics/final_SF_demographic_data.csv`, Q71).
+
+If you want to merge tabular data with fNIRS betas, ensure you have a consistent ID scheme (or a mapping table), because fNIRS pipelines often use IDs like `sub-XXXX` while Qualtrics uses a numeric `subject_id`.
 
 ### A1) Engagement preprocessing
 
@@ -145,7 +148,83 @@ Command:
 python generate_combined_data.py
 ```
 
-### A5) Correlation diagnostics / heatmaps (optional)
+### A5) Import Homer3 GLM betas (optional; produced externally)
+
+This repo does **not** run Homer3. If you run Homer3 elsewhere, copy the exported wide table into:
+
+- `data/tabular/homer3_glm_betas_wide.csv`
+
+Current format on disk:
+
+- ID column: `Subject` (values like `sub_0001`)
+- Feature columns: `S##_D##_Cond##_HbO` / `S##_D##_Cond##_HbR`
+
+**Important missingness note:** this file currently contains both `0` and `NaN` values that are *stand-ins for channels that were pruned during preprocessing*. Do **not** interpret these as “true zero activation”; treat them as missing/pruned channels in downstream modeling.
+
+To merge with `data/tabular/combined_sfv_data.csv`, you will need a shared key:
+
+- Either export Homer betas with a `subject_id` column that matches Qualtrics, **or**
+- Create a mapping between `Subject` (e.g., `sub_0001`) and Qualtrics `subject_id` and merge using that.
+
+---
+
+## Pipeline C — Homer3 betas + Format×Content (channelwise LMM)
+
+**Goal:** Merge the externally-produced Homer3 betas table with the combined tabular dataset and test whether
+**Format depends on Content (and vice versa)** at the level of **channelwise prefrontal activation**, for **HbO** and **HbR**.
+
+### C1) Inner-join Homer3 betas with combined tabular data
+
+- Python: `merge_homer3_betas_with_combined_data.py`
+- R: `merge_homer3_betas_with_combined_data.R`
+
+Notes:
+- IDs are normalized by extracting digits (handles `0017` vs `17`, and `sub_0017`-style IDs).
+- Output is one row per subject containing both demographics/behavior and beta columns.
+
+Example (Python):
+
+```bash
+python merge_homer3_betas_with_combined_data.py \
+  --homer-csv data/tabular/homer3_glm_betas_wide.csv \
+  --combined-csv data/tabular/combined_sfv_data.csv \
+  --out-csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv
+```
+
+### C2) Channelwise within-subject inference: Format, Content, and Format×Content
+
+- Python: `analyze_format_content_lmm_channelwise.py`
+- R: `analyze_format_content_lmm_channelwise.R`
+
+Model (per channel × chromophore):
+- LMM: `beta ~ format_c * content_c + (1 | subject_id)`
+- Coding: `format_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+
+Pruned channels / missingness policy:
+- Treat **both `0` and `NaN`** in Homer betas as **pruned/missing** (do **not** impute).
+- Default behavior is **complete-case within channel**: drop subjects missing any of the 4 conditions for that channel.
+
+Multiple testing:
+- BH-FDR is applied **separately** per chromophore (**HbO**, **HbR**) and **separately per effect**
+  (Format, Content, Interaction), across channels.
+- **Reminder (ask before publication):** consider whether you want a broader correction family
+  (e.g., across effects and/or chromophores) depending on the final reporting plan.
+
+Post-hoc (only if the interaction is FDR-significant for that channel/chromophore):
+- All 6 pairwise contrasts among the 4 conditions.
+- **No multiple-test correction** in post-hoc contrasts (per study instruction).
+
+Example (Python dry-run to validate parsing without fitting models):
+
+```bash
+python analyze_format_content_lmm_channelwise.py --dry-run
+```
+
+Outputs:
+- `data/results/format_content_lmm_main_effects_*.csv`
+- `data/results/format_content_lmm_posthoc_pairwise_*.csv`
+
+### A6) Correlation diagnostics / heatmaps (optional)
 
 - Script: `covariate_correlation_analysis.py`
 - Two presets:
@@ -198,7 +277,7 @@ The pipeline uses the following criteria for subject-level exclusion (generated 
 3.  **Minimum Usable Trials**: At least **50% of trials (2/4)** per condition must be usable.
     - A trial is "usable" if its window-level SCI ≥ 0.8 and it does not exceed the bad channel threshold.
 
-For methodological justifications and citations, see [fnirs_preprocess_justifications.md](file:///Users/nobr3541/Library/CloudStorage/OneDrive-UCB-O365/Desktop/PhD/Research/RISE/Short%20Form%20Video%20Study%20Data/Analysis/fnirs_analysis/fnirs_preprocess_justifications.md).
+For methodological justifications and citations, see `fnirs_analysis/fnirs_preprocess_justifications.md`.
 
 ### B3) Combine first-level outputs across subjects (and across runs within subject)
 
@@ -215,7 +294,7 @@ Command:
 python fnirs_analysis/combine_glm_output.py --root glm_results --out glm_results --chroma both
 ```
 
-### B3) Group-level inference options
+### B4) Group-level inference options
 
 There are two group pipelines provided; both read the combined runs-level table.
 
@@ -253,29 +332,6 @@ Methodology notes / planned improvements live in:
 
 ---
 
-## Pipeline C — Homer3 beta extraction (optional / alternative fNIRS path)
-
-If you ran Homer3 and have `.mat` outputs under `fnirs_homer/derivatives/homer/`, there are two helpers:
-
-### C1) Python extractor (defensive; scans `.mat` files)
-
-- Script: `extract_homer_beta_vals.py`
-- Default assumption in script: `--derivatives ./derivatives/homer` (so you likely want to pass your actual path)
-
-Example:
-
-```bash
-python extract_homer_beta_vals.py --derivatives fnirs_homer/derivatives/homer --out homer_betas.csv
-```
-
-### C2) MATLAB exporter (expects `groupResults.mat`)
-
-- Script: `homer_betas.m`
-- Input: `groupResults.mat` (and/or scans sibling run `.mat` files)
-- Output: `betas_long.csv` written next to `groupResults.mat`
-
----
-
 ## “What does each file do?” (quick reference)
 
 ### Tabular / survey / engagement
@@ -285,6 +341,7 @@ python extract_homer_beta_vals.py --derivatives fnirs_homer/derivatives/homer --
 - `process_engagement.py`: per-subject engagement condition means → `data/tabular/engagement_data_processed.csv`
 - `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
 - `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/combined_sfv_data.csv`
+- `data/tabular/homer3_glm_betas_wide.csv`: externally produced Homer3 GLM betas (wide table; copied into this repo for downstream modeling; contains `0` and `NaN` as stand-ins for pruned channels)
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
@@ -296,11 +353,6 @@ python extract_homer_beta_vals.py --derivatives fnirs_homer/derivatives/homer --
 - `fnirs_analysis/group_analysis_anova.py`: group-level two-stage contrast testing + selective channel inference
 - `fnirs_analysis/group_analysis_lme.py`: per-channel mixed-effects + FDR + gated post-hocs
 - `fnirs_analysis/FNIRS_TODO.md`: methodological notes and a change list for the fNIRS pipeline
-
-### fNIRS (Homer)
-
-- `extract_homer_beta_vals.py`: scan Homer `.mat` outputs and export a tidy beta table
-- `homer_betas.m`: MATLAB exporter for Homer `groupResults.mat` (and run-level fallbacks)
 
 ### Misc / exploratory
 

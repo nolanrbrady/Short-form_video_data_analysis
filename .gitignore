@@ -1,3 +1,29 @@
 glm_results/*
 .DS_Store
 *.pyc
+# Ignoring the imported homer data from Git
+./fnirs_homer/*
+*.mat
+*.json
+*.txt
+covariate_outputs/covariate_column_audit.csv
+covariate_outputs/covariate_correlations_pvalues.csv
+covariate_outputs/covariate_correlations_spearman.csv
+covariate_outputs/covariate_heatmap.png
+covariate_outputs/covariate_missingness.csv
+covariate_outputs/covariates_clean.csv
+covariate_outputs/sfv_duration_other_audit.csv
+data/tabular/engagement_data_processed.csv
+data/tabular/socio_demographic_data_processed.csv
+Short Form Video Study.pptx
+qualtrics/final_SF_demographic_data.csv
+.gitignore
+.gitignore
+homer_betas.m
+covariate_outputs/covariate_correlation_analysis.csv
+covariate_outputs/covariate_correlation_heatmap.png
+data/tabular/combined_sfv_data.csv
+data/tabular/recall_assessment_score_diffs.csv
+demographic/combined_engagement_data.csv
+demographic/recall_assessment_audit_post.csv
+demographic/recall_assessment_audit_pre.csv
