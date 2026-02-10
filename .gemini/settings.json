@@ -1,0 +1,11 @@
+{
+  "ui": {
+    "showCitations": true
+  },
+  "experimental": {
+    "skills": true,
+    "introspectionAgentSettings": {
+      "enabled": true
+    }
+  }
+}

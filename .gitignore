@@ -4,7 +4,6 @@ glm_results/*
 # Ignoring the imported homer data from Git
 ./fnirs_homer/*
 *.mat
-*.json
 *.txt
 covariate_outputs/covariate_column_audit.csv
 covariate_outputs/covariate_correlations_pvalues.csv
@@ -27,3 +26,7 @@ data/tabular/recall_assessment_score_diffs.csv
 demographic/combined_engagement_data.csv
 demographic/recall_assessment_audit_post.csv
 demographic/recall_assessment_audit_pre.csv
+
+data/results/*
+
+data/results/
