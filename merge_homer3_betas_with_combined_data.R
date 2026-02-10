@@ -8,10 +8,11 @@
 #
 # Key behavior:
 #   - Extracts the numeric subject id from both ID columns (handles padding like 0017 vs 17,
-#     and Homer-style IDs like sub_0017).
+#     and Homer-style IDs like sub_0017). This matches the merge spec in `ANALYSIS_SPEC.md`.
 #   - Produces a single merged row per subject containing all columns from both inputs.
 #   - Does NOT impute missingness. Downstream modeling must explicitly treat 0/NaN as
 #     pruned/missing channels per repo policy.
+#   - Fails hard if either input has duplicate subject IDs after normalization (one row per subject is required).
 #
 # Scientific integrity note:
 #   - homer3_glm_betas_wide.csv can contain both 0 and NaN as stand-ins for pruned channels.
@@ -21,7 +22,7 @@
 #   Rscript merge_homer3_betas_with_combined_data.R \
 #     --homer_csv data/tabular/homer3_glm_betas_wide.csv \
 #     --combined_csv data/tabular/combined_sfv_data.csv \
-#     --out_csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv
+#     --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 
 suppressPackageStartupMessages({
   library(readr)
@@ -34,7 +35,7 @@ parse_args <- function() {
   defaults <- list(
     homer_csv = "data/tabular/homer3_glm_betas_wide.csv",
     combined_csv = "data/tabular/combined_sfv_data.csv",
-    out_csv = "data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv"
+    out_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv"
   )
   if (length(args) == 0) return(defaults)
 
@@ -52,6 +53,14 @@ parse_args <- function() {
 }
 
 normalize_subject_id <- function(x, column_name) {
+  # Normalize to an integer subject ID by extracting digits.
+  #
+  # Examples accepted:
+  #   - "sub_0001" -> 1
+  #   - "0017" -> 17
+  #
+  # This function is intentionally strict: if any row cannot be mapped to a numeric ID,
+  # we fail fast rather than performing a partial/unsafe merge.
   x_chr <- as.character(x)
   extracted <- str_extract(x_chr, "\\d+")
   if (any(is.na(extracted))) {
@@ -69,9 +78,16 @@ normalize_subject_id <- function(x, column_name) {
 }
 
 coerce_beta_columns_to_numeric <- function(homer) {
+  # Coerce Homer3 beta columns to numeric.
+  #
+  # Homer3 exports can store numeric betas as strings. This step ensures betas are numeric and
+  # fails hard if unexpected non-numeric tokens are present (to avoid silent corruption of results).
+  #
+  # Note: This does not "fix" pruned channels; it preserves NA and does not impute anything.
   beta_cols <- names(homer)[str_detect(names(homer), "^S\\d+_D\\d+_Cond\\d{2}_(HbO|HbR)$")]
   if (length(beta_cols) == 0) stop("No beta columns matched pattern like 'S01_D01_Cond01_HbO'.")
 
+  # Allowed missing tokens sometimes appear in CSV exports. Anything else is treated as a data error.
   allowed_missing <- c("", "NA", "NaN", "nan", "NAN", "NULL", "null")
   for (col in beta_cols) {
     raw <- as.character(homer[[col]])
@@ -104,8 +120,10 @@ main <- function() {
   if (!("Subject" %in% names(homer))) stop(paste0("Expected column 'Subject' in ", args$homer_csv))
   if (!("subject_id" %in% names(combined))) stop(paste0("Expected column 'subject_id' in ", args$combined_csv))
 
+  # Ensure Homer beta columns are numeric (some exports store them as strings).
   homer <- coerce_beta_columns_to_numeric(homer)
 
+  # Normalize the join key from both sources.
   homer <- homer %>%
     mutate(subject_id = normalize_subject_id(.data$Subject, "Subject")) %>%
     rename(homer_subject = Subject)
@@ -113,7 +131,8 @@ main <- function() {
   combined <- combined %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
 
-  # Fail hard if either input contains duplicate subject IDs. The merge spec assumes one row per subject.
+  # Fail hard if either input contains duplicate subject IDs.
+  # The merge spec assumes exactly one row per subject in each input prior to joining.
   for (nm in c("combined", "homer")) {
     df <- if (nm == "combined") combined else homer
     dup <- df %>%
