@@ -226,3 +226,232 @@ Console reporting:
 - Do not impute pruned channels.
 - Do not “collapse” channels into an ROI summary (inference is per-channel).
 
+---
+
+# ANALYSIS_SPEC — Retention Length×Content (subject-level LMM)
+Last updated: 2026-02-09
+
+## Scope
+
+Goal: Evaluate whether **retention improvement** (post - pre) differs by:
+- **Length** (Short vs Long),
+- **Content** (Education vs Entertainment),
+- and their **Length×Content interaction**,
+while accounting for repeated measures (4 within-subject conditions).
+
+## Inputs
+
+Primary CSV input:
+- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+Required columns:
+- `subject_id`
+- `diff_short_form_education`
+- `diff_short_form_entertainment`
+- `diff_long_form_education`
+- `diff_long_form_entertainment`
+
+## Subject ID + data integrity
+
+- `subject_id` is normalized by extracting digits and converting to integer.
+- Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
+- Required retention columns must all exist; missing columns are a hard error.
+- Retention columns must be numeric/coercible to numeric; non-numeric values are a hard error.
+
+## Condition mapping and coding
+
+Condition mapping:
+- `diff_short_form_education` -> `SF_Edu`
+- `diff_short_form_entertainment` -> `SF_Ent`
+- `diff_long_form_entertainment` -> `LF_Ent`
+- `diff_long_form_education` -> `LF_Edu`
+
+Effect coding:
+- `length_c = -0.5` (Short), `+0.5` (Long)
+- `content_c = -0.5` (Entertainment), `+0.5` (Education)
+
+## Missingness policy
+
+- Complete-case by subject across the 4 retention conditions:
+  include only subjects with all 4 non-missing retention values.
+- Retention value `0` is treated as a valid observed value (not missing).
+- No imputation is allowed.
+
+## Primary statistical model
+
+Model:
+- One subject-level LMM:
+  - `retention_diff ~ length_c * content_c + (1 | subject_id)`
+
+Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
+- estimate, SE, df, t, uncorrected p, Holm-adjusted p, Wald 95% CI
+- sample size fields: `n_subjects`, `n_obs`
+- singular-fit flag
+
+R implementation notes:
+- Fit with `lmerTest::lmer` (REML).
+- p-values from `lmerTest` (Satterthwaite df approximation).
+
+## Multiple testing correction
+
+- Apply **Holm correction** across the **three omnibus effects**:
+  - Length
+  - Content
+  - Length×Content interaction
+
+Significance gate:
+- Use adjusted `p < alpha` for inferential gating.
+
+## Post-hoc analysis
+
+Gate:
+- Run post-hoc contrasts only when interaction adjusted p-value is significant (`p_adj_interaction < alpha`).
+
+Method:
+- Fit condition model: `retention_diff ~ condition + (1 | subject_id)`
+- Compute all 6 pairwise condition contrasts via `emmeans`, uncorrected (`adjust = "none"`):
+  - `SF_Edu` vs `SF_Ent`
+  - `SF_Edu` vs `LF_Ent`
+  - `SF_Edu` vs `LF_Edu`
+  - `SF_Ent` vs `LF_Ent`
+  - `SF_Ent` vs `LF_Edu`
+  - `LF_Ent` vs `LF_Edu`
+
+Output includes:
+- `condition_a`, `condition_b`, `mean_diff` (`condition_a - condition_b`), `se`, `df`, `t`, `p_unc`, `stat_type`
+
+## Outputs
+
+- Main effects:
+  - `data/results/retention_format_content_lmm_main_effects_r.csv`
+- Post-hoc pairwise:
+  - `data/results/retention_format_content_lmm_posthoc_pairwise_r.csv`
+
+## Validation requirements
+
+Validation script:
+- `tests/validate_retention_pipeline_r.R`
+
+Must verify:
+- deterministic analytic recovery of known Length/Content/Interaction effects
+- end-to-end coefficient recovery in synthetic data with known generating parameters
+- manual Holm agreement with output adjusted p-values
+- post-hoc gating behavior (on/off)
+- complete-case behavior for `NA`
+- retention `0` handling as valid (not missing)
+- fail-hard behavior for duplicates, missing columns, and non-numeric retention values
+
+---
+
+# ANALYSIS_SPEC — Engagement Length×Content (subject-level LMM)
+Last updated: 2026-02-09
+
+## Scope
+
+Goal: Evaluate whether **engagement ratings** differ by:
+- **Length** (Short vs Long),
+- **Content** (Education vs Entertainment),
+- and their **Length×Content interaction**,
+while accounting for repeated measures (4 within-subject conditions).
+
+## Inputs
+
+Primary CSV input:
+- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+Required columns:
+- `subject_id`
+- `sf_education_engagement`
+- `sf_entertainment_engagement`
+- `lf_education_engagement`
+- `lf_entertainment_engagement`
+
+## Subject ID + data integrity
+
+- `subject_id` is normalized by extracting digits and converting to integer.
+- Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
+- Required engagement columns must all exist; missing columns are a hard error.
+- Engagement columns must be numeric/coercible to numeric; non-numeric values are a hard error.
+
+## Condition mapping and coding
+
+Condition mapping:
+- `sf_education_engagement` -> `SF_Edu`
+- `sf_entertainment_engagement` -> `SF_Ent`
+- `lf_entertainment_engagement` -> `LF_Ent`
+- `lf_education_engagement` -> `LF_Edu`
+
+Effect coding:
+- `length_c = -0.5` (Short), `+0.5` (Long)
+- `content_c = -0.5` (Entertainment), `+0.5` (Education)
+
+## Missingness policy
+
+- Complete-case by subject across the 4 engagement conditions:
+  include only subjects with all 4 non-missing engagement values.
+- Engagement value `0` is treated as a valid observed value (not missing).
+- No imputation is allowed.
+
+## Primary statistical model
+
+Model:
+- One subject-level LMM:
+  - `engagement ~ length_c * content_c + (1 | subject_id)`
+
+Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
+- estimate, SE, df, t, uncorrected p, Holm-adjusted p, Wald 95% CI
+- sample size fields: `n_subjects`, `n_obs`
+- singular-fit flag
+
+R implementation notes:
+- Fit with `lmerTest::lmer` (REML).
+- p-values from `lmerTest` (Satterthwaite df approximation).
+
+## Multiple testing correction
+
+- Apply **Holm correction** across the **three omnibus effects**:
+  - Length
+  - Content
+  - Length×Content interaction
+
+Significance gate:
+- Use adjusted `p < alpha` for inferential gating.
+
+## Post-hoc analysis
+
+Gate:
+- Run post-hoc contrasts only when interaction adjusted p-value is significant (`p_adj_interaction < alpha`).
+
+Method:
+- Fit condition model: `engagement ~ condition + (1 | subject_id)`
+- Compute all 6 pairwise condition contrasts via `emmeans`, uncorrected (`adjust = "none"`):
+  - `SF_Edu` vs `SF_Ent`
+  - `SF_Edu` vs `LF_Ent`
+  - `SF_Edu` vs `LF_Edu`
+  - `SF_Ent` vs `LF_Ent`
+  - `SF_Ent` vs `LF_Edu`
+  - `LF_Ent` vs `LF_Edu`
+
+Output includes:
+- `condition_a`, `condition_b`, `mean_diff` (`condition_a - condition_b`), `se`, `df`, `t`, `p_unc`, `stat_type`
+
+## Outputs
+
+- Main effects:
+  - `data/results/engagement_format_content_lmm_main_effects_r.csv`
+- Post-hoc pairwise:
+  - `data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv`
+
+## Validation requirements
+
+Validation script:
+- `tests/validate_engagement_pipeline_r.R`
+
+Must verify:
+- deterministic analytic recovery of known Length/Content/Interaction effects
+- end-to-end coefficient recovery in synthetic data with known generating parameters
+- manual Holm agreement with output adjusted p-values
+- post-hoc gating behavior (on/off)
+- complete-case behavior for `NA`
+- engagement `0` handling as valid (not missing)
+- fail-hard behavior for duplicates, missing columns, and non-numeric engagement values
