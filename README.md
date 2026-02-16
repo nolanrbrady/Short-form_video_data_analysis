@@ -1,5 +1,5 @@
 ## Short-form Video Study — Analysis Repo
-Last updated: 01-30-2026
+Last updated: 02-13-2026
 Updated by: Nolan Brady
 
 This repo contains two primary analysis “tracks”:
@@ -15,7 +15,6 @@ These are the stimulus/trigger codes used in the fNIRS recordings and the analys
 - **Short-Form Entertainment**: `2`
 - **Long-Form Entertainment**: `3`
 - **Long-Form Education**: `4`
-
 ---
 
 ## Repo layout (what lives where)
@@ -210,6 +209,59 @@ python merge_homer3_betas_with_combined_data.py \
   --out-csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv
 ```
 
+### C1b) QC report from Homer3 beta-wide table (subject-level channel exclusion)
+
+- Python: `fnirs_analysis/homer_betas_qc.py`
+
+Goal:
+- Quantify subject-level excluded/pruned channel burden directly from the imported Homer3 wide table.
+
+Definitions used:
+- A beta entry is **excluded** if it is `0` or `NaN` (per project data-integrity note).
+- A channel is **available** for a condition only if **both** `HbO` and `HbR` are non-excluded.
+- Primary bad-channel rule: excluded in **>= 2 of 4** conditions (`--bad-channel-min-excluded-conds 2`).
+- Task pass rule: condition has **strictly > 50%** channels available.
+
+Sensitivity outputs:
+- The script also reports bad-channel counts/lists for:
+  - any-condition excluded (>=1/4)
+  - all-condition excluded (4/4)
+
+Outputs:
+- `data/results/homer3_betas_qc_subject_level.csv` (one row per subject)
+- `data/results/homer3_betas_qc_cohort_summary.csv` (single-row cohort summary)
+
+Example:
+
+```bash
+python fnirs_analysis/homer_betas_qc.py \
+  --input-csv data/tabular/homer3_glm_betas_wide.csv \
+  --output-csv data/results/homer3_betas_qc_subject_level.csv \
+  --summary-csv data/results/homer3_betas_qc_cohort_summary.csv
+```
+
+### C1c) Centralized participant exclusions for inferential scripts
+
+Use a single exclusion manifest so subject filtering is consistent across all inferential endpoints.
+
+- File: `data/config/excluded_subjects.json`
+- Format: top-level JSON array of subject IDs (e.g., `["sub_0041", "sub_0044", "sub_0050"]`)
+- Matching rule: IDs are normalized by numeric component (e.g., `sub_0041`, `0041`, and `41` are treated as the same participant)
+- Missing-ID behavior: if an ID in the exclusion file is not present in a given analysis input, the script prints a warning and continues
+
+This manifest is consumed by:
+- `analyze_format_content_lmm_channelwise.R`
+- `analyze_format_content_lmm_roi.R`
+- `analyze_retention_format_content_lmm.R`
+- `analyze_engagement_format_content_lmm.R`
+
+Override path (optional):
+
+```bash
+Rscript analyze_format_content_lmm_channelwise.R \
+  --exclude_subjects_json data/config/excluded_subjects.json
+```
+
 ### C2) Channelwise within-subject inference: Format, Content, and Format×Content
 
 - Python: `analyze_format_content_lmm_channelwise.py`
@@ -217,7 +269,8 @@ python merge_homer3_betas_with_combined_data.py \
 
 Order / dependencies:
 - Assumes Pipeline C0 prerequisites are satisfied.
-- Can be run directly from the two input CSVs (it merges internally); C1 is still recommended to create an auditable merged artifact.
+- Preferred input is the pre-merged table `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  so covariates and beta columns are available in one file.
 
 Model (per channel × chromophore):
 - LMM: `beta ~ format_c * content_c + (1 | subject_id)`
@@ -237,21 +290,219 @@ Post-hoc (only if the interaction is FDR-significant for that channel/chromophor
 - All 6 pairwise contrasts among the 4 conditions.
 - **No multiple-test correction** in post-hoc contrasts (per study instruction).
 - Post-hoc `mean_diff` is reported as `condition_a - condition_b`.
+- Post-hoc outputs include `stat_type` (`t` vs `z`) to indicate whether emmeans used a t-statistic (finite df) or asymptotic z.
 
 Minimum sample gating:
 - Models are only fit for channel/chrom pairs with at least `min_subjects` complete-case subjects (default: 6).
 - Scripts print a warning summary (count + examples) for models skipped due to `min_subjects`.
 
-Example (Python dry-run to validate parsing without fitting models):
+Large-sample df limits (R only):
+- `emmeans` may disable some denominator-df adjustments when the number of observations is large (prints a note).
+- If you explicitly want to enable those adjustments (may be slow / memory-heavy), pass:
+  - `--pbkrtest_limit <N>` and/or `--lmerTest_limit <N>`
+
+Example (R; preferred merged input path):
 
 ```bash
-python analyze_format_content_lmm_channelwise.py --dry-run
+Rscript analyze_format_content_lmm_channelwise.R \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --exclude_subjects_json data/config/excluded_subjects.json
 ```
 
 Outputs:
 - `data/results/format_content_lmm_main_effects_*.csv`
 - `data/results/format_content_lmm_main_effects_tidy_r.csv` (R: spec-compliant tidy main-effects table)
 - `data/results/format_content_lmm_posthoc_pairwise_*.csv`
+- Subject exclusions are applied from `data/config/excluded_subjects.json` (or `--exclude_subjects_json` override).
+
+Optional output filtering (R only):
+- `analyze_format_content_lmm_channelwise.R` contains `FILTER_MAIN_EFFECTS_TO_FDR_SIG_ONLY` (default `FALSE`) to write only rows with `p_fdr < 0.05` to the main-effects CSVs for quick review.
+
+### C2b) ROI-wise within-subject inference: Format, Content, and Format×Content
+
+- R: `analyze_format_content_lmm_roi.R`
+
+Order / dependencies:
+- Assumes Pipeline C0 prerequisites are satisfied.
+- Uses the same pre-merged input table as C2:
+  `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+ROI definition input:
+- `data/config/roi_definition.json` (strict JSON object: `ROI -> [channel_ids]`)
+- Channel IDs must match Homer naming (example: `S01_D01`).
+- Script fails fast on malformed JSON, overlapping channel assignments, or ROI channels absent from the data.
+
+ROI beta construction:
+- For each `subject × ROI × chrom × condition`, ROI beta is the arithmetic mean
+  across available (non-missing) channels in that ROI.
+- `0` and `NaN` are treated as pruned/missing channel values and are not imputed.
+
+Model / inference:
+- LMM (per ROI × chrom): `beta ~ format_c * content_c + (1 | subject_id)`
+- Same coding and interaction-gated post-hoc policy as C2.
+- BH-FDR is applied separately per chromophore and per effect across ROIs.
+
+Example:
+
+```bash
+Rscript analyze_format_content_lmm_roi.R \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --roi_json data/config/roi_definition.json \
+  --exclude_subjects_json data/config/excluded_subjects.json
+```
+
+Outputs:
+- `data/results/format_content_lmm_roi_main_effects_r.csv`
+- `data/results/format_content_lmm_roi_main_effects_tidy_r.csv`
+- `data/results/format_content_lmm_roi_posthoc_pairwise_r.csv`
+
+Validation:
+
+```bash
+Rscript tests/validate_pipeline_c_roi_r.R
+```
+
+### C3) Retention within-subject inference: Length, Content, and Length×Content
+
+- R: `analyze_retention_format_content_lmm.R`
+
+Input:
+- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  (must contain `subject_id` and:
+  `diff_short_form_education`, `diff_short_form_entertainment`,
+  `diff_long_form_education`, `diff_long_form_entertainment`)
+
+Model:
+- LMM: `retention_diff ~ length_c * content_c + (1 | subject_id)`
+- Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+
+Missingness policy:
+- Complete-case by subject across the 4 retention conditions.
+- Retention `0` values are treated as valid values (not missing).
+- Subject exclusions are applied from `data/config/excluded_subjects.json` (or `--exclude_subjects_json` override).
+
+Multiple testing:
+- Holm correction across the 3 planned omnibus effects:
+  - Length
+  - Content
+  - Length×Content interaction
+
+Post-hoc:
+- Run all 6 pairwise condition contrasts only if interaction adjusted p `< alpha`.
+- Pairwise p-values are uncorrected (`adjust="none"`).
+
+Example:
+
+```bash
+Rscript analyze_retention_format_content_lmm.R \
+  --input_csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --out_main_csv data/results/retention_format_content_lmm_main_effects_r.csv \
+  --out_posthoc_csv data/results/retention_format_content_lmm_posthoc_pairwise_r.csv
+```
+
+Outputs:
+- `data/results/retention_format_content_lmm_main_effects_r.csv`
+- `data/results/retention_format_content_lmm_posthoc_pairwise_r.csv`
+
+Validation:
+
+```bash
+Rscript tests/validate_retention_pipeline_r.R
+```
+
+### C4) Engagement within-subject inference: Length, Content, and Length×Content
+
+- R: `analyze_engagement_format_content_lmm.R`
+
+Input:
+- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  (must contain `subject_id` and:
+  `sf_education_engagement`, `sf_entertainment_engagement`,
+  `lf_education_engagement`, `lf_entertainment_engagement`)
+
+Model:
+- LMM: `engagement ~ length_c * content_c + (1 | subject_id)`
+- Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+
+Missingness policy:
+- Complete-case by subject across the 4 engagement conditions.
+- Engagement `0` values are treated as valid values (not missing).
+- Subject exclusions are applied from `data/config/excluded_subjects.json` (or `--exclude_subjects_json` override).
+
+Multiple testing:
+- Holm correction across the 3 planned omnibus effects:
+  - Length
+  - Content
+  - Length×Content interaction
+
+Post-hoc:
+- Run all 6 pairwise condition contrasts only if interaction adjusted p `< alpha`.
+- Pairwise p-values are uncorrected (`adjust="none"`).
+
+Example:
+
+```bash
+Rscript analyze_engagement_format_content_lmm.R \
+  --input_csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --out_main_csv data/results/engagement_format_content_lmm_main_effects_r.csv \
+  --out_posthoc_csv data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv
+```
+
+Outputs:
+- `data/results/engagement_format_content_lmm_main_effects_r.csv`
+- `data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv`
+
+Validation:
+
+```bash
+Rscript tests/validate_engagement_pipeline_r.R
+```
+
+### C5) Monte Carlo type-I error calibration (all inferential pipelines)
+
+- Script: `tests/calibrate_type1_error_r.R`
+- Purpose:
+  - Run repeated **null-effect** synthetic datasets through all four R inferential scripts:
+    - `analyze_format_content_lmm_channelwise.R`
+    - `analyze_format_content_lmm_roi.R`
+    - `analyze_retention_format_content_lmm.R`
+    - `analyze_engagement_format_content_lmm.R`
+  - Estimate empirical type-I error rates from adjusted p-values (`p_fdr`) per effect.
+  - Fail if any observed rate exceeds a configured upper bound.
+
+Example:
+
+```bash
+# Default calibration run
+Rscript tests/calibrate_type1_error_r.R
+
+# Faster smoke run
+Rscript tests/calibrate_type1_error_r.R --n_reps 20 --type1_upper_bound 0.20
+
+# Stricter manuscript QA run
+Rscript tests/calibrate_type1_error_r.R --n_reps 200 --type1_upper_bound 0.10
+```
+
+### C6) Monte Carlo type-II error calibration (all inferential pipelines)
+
+- Script: `tests/calibrate_type2_error_r.R`
+- Purpose:
+  - Run repeated **non-null** synthetic datasets through all four R inferential scripts.
+  - Estimate empirical power and type-II error (`1 - power`) from adjusted p-values (`p_fdr`) per effect.
+  - Fail if any observed type-II error exceeds a configured upper bound.
+
+Example:
+
+```bash
+# Default calibration run
+Rscript tests/calibrate_type2_error_r.R
+
+# Faster smoke run
+Rscript tests/calibrate_type2_error_r.R --n_reps 20 --type2_upper_bound 0.60
+
+# Stricter manuscript QA run
+Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
+```
 
 ### A6) Correlation diagnostics / heatmaps (optional)
 
@@ -371,6 +622,7 @@ Methodology notes / planned improvements live in:
 - `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
 - `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/combined_sfv_data.csv`
 - `data/tabular/homer3_glm_betas_wide.csv`: externally produced Homer3 GLM betas (wide table; copied into this repo for downstream modeling; contains `0` and `NaN` as stand-ins for pruned channels)
+- `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
@@ -378,6 +630,8 @@ Methodology notes / planned improvements live in:
 ### fNIRS (MNE/MNE-NIRS)
 
 - `fnirs_analysis/fnirs_analysis.py`: SNIRF preprocessing + first-level GLM per run; writes per-subject outputs under `glm_results/`
+- `fnirs_analysis/homer_betas_qc.py`: subject-level QC from imported Homer beta-wide table (`0`/`NaN` treated as excluded channels); writes subject and cohort QC CSVs
+- `r_subject_exclusions.R`: shared R helpers that enforce centralized subject exclusions from JSON across inferential scripts
 - `fnirs_analysis/combine_glm_output.py`: combine subject GLM CSVs; writes `combined_glm_long*.csv` + `combined_matrices/`
 - `fnirs_analysis/group_analysis_anova.py`: group-level two-stage contrast testing + selective channel inference
 - `fnirs_analysis/group_analysis_lme.py`: per-channel mixed-effects + FDR + gated post-hocs
@@ -386,5 +640,9 @@ Methodology notes / planned improvements live in:
 ### Misc / exploratory
 
 - `analyze_sfv_demographics.py`: standalone demographic summary + figures for an input `SFV_demo_data.csv` colocated with the script (older/one-off analysis)
+- `analyze_format_content_lmm_channelwise.R`: within-subject channelwise LMM for Format/Content/Interaction + interaction-gated post-hoc contrasts
+- `analyze_format_content_lmm_roi.R`: within-subject ROI-wise LMM using `data/config/roi_definition.json` + interaction-gated post-hoc contrasts
+- `analyze_retention_format_content_lmm.R`: within-subject retention LMM for Length/Content/Interaction + interaction-gated post-hoc contrasts
+- `analyze_engagement_format_content_lmm.R`: within-subject engagement LMM for Length/Content/Interaction + interaction-gated post-hoc contrasts
 - `data_quality_evaluation.py`: placeholder for a future subject-level fNIRS QC report (see `TODO.md`)
 - `TODO.md`: high-level analysis TODO list

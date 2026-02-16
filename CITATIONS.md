@@ -83,28 +83,28 @@
   - **Title:** Revealing the spatiotemporal requirements for accurate subject identification with resting-state functional connectivity: a simultaneous fNIRS-fMRI study
   - **First Author:** Novi
   - **Year:** 2023
-  - **Usage:** Subject Inclusion Criteria
-  - **Reasoning:** Precedent for excluding runs/subjects with < 50% good channels.
+  - **Usage:** Subject Inclusion Criteria; Beta-table QC thresholding
+  - **Reasoning:** Precedent for excluding runs/subjects with < 50% good channels; reused for condition-level channel-sufficiency thresholding in imported Homer beta-table QC.
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC9896013/
-  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`
+  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
 
 - **Pinti et al. (2024)**
   - **Title:** Ecological functional near-infrared spectroscopy in mobile children: using short separation channels to correct for systemic contamination during naturalistic neuroimaging
   - **First Author:** Pinti
   - **Year:** 2024
-  - **Usage:** Exclusion Criteria
-  - **Reasoning:** Supports the exclusion rule of < 50% good quality channels and the minimum requirement of usable blocks (trials).
+  - **Usage:** Exclusion Criteria; Beta-table QC thresholding
+  - **Reasoning:** Supports the exclusion rule of < 50% good quality channels and the minimum requirement of usable blocks (trials), including downstream condition-level channel sufficiency reporting.
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC11460616/
-  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`
+  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
 
 - **Dina et al. (2025)**
   - **Title:** Measuring neurodevelopment of inhibitory control in children using naturalistic virtual reality
   - **First Author:** Dina
   - **Year:** 2025
-  - **Usage:** Exclusion Criteria
-  - **Reasoning:** Replicates the < 50% good-channel exclusion logic and the requirement for a minimum number of blocks per condition.
+  - **Usage:** Exclusion Criteria; Beta-table QC thresholding
+  - **Reasoning:** Replicates the < 50% good-channel exclusion logic and the requirement for a minimum number of blocks per condition; used as precedent for condition-level channel sufficiency summaries.
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC12289916/
-  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`
+  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
 
 - **Fiske et al. (2022)**
   - **Title:** The neural correlates of inhibitory control in 10-month-old infants: A functional near-infrared spectroscopy study
@@ -115,6 +115,35 @@
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC7616317/
   - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`
 
+# Measures (Questionnaires)
+
+- **Kroenke, K., Spitzer, R. L., & Williams, J. B. W. (2001)**
+  - **Title:** The PHQ-9: Validity of a Brief Depression Severity Measure
+  - **First Author:** Kroenke
+  - **Year:** 2001
+  - **Usage:** PHQ-9 depressive symptom severity (sum-score construct)
+  - **Reasoning:** Canonical peer-reviewed reference for the PHQ-9 instrument, cited to justify interpretation of the `phq_total` composite score derived from Qualtrics items labeled “PHQ-9” in this study dataset.
+  - **Link:** https://doi.org/10.1046/j.1525-1497.2001.016009606.x
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
+
+- **Spitzer, R. L., Kroenke, K., Williams, J. B. W., & Löwe, B. (2006)**
+  - **Title:** A brief measure for assessing generalized anxiety disorder: the GAD-7
+  - **First Author:** Spitzer
+  - **Year:** 2006
+  - **Usage:** GAD-7 generalized anxiety symptom severity (sum-score construct)
+  - **Reasoning:** Canonical peer-reviewed reference for the GAD-7 instrument, cited to justify interpretation of the `gad_total` composite score derived from Qualtrics items labeled “GAD” in this study dataset.
+  - **Link:** https://doi.org/10.1001/archinte.166.10.1092
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
+
+- **Kessler, R. C., Adler, L., Ames, M., et al. (2005)**
+  - **Title:** The World Health Organization Adult ADHD Self-Report Scale (ASRS): A short screening scale for use in the general population
+  - **First Author:** Kessler
+  - **Year:** 2005
+  - **Usage:** WHO ASRS adult ADHD symptom screening (sum-score construct)
+  - **Reasoning:** Canonical peer-reviewed reference for the WHO ASRS instrument, cited to justify interpretation of the `asrs_total` composite score derived from Qualtrics items labeled “ASRS” in this study dataset.
+  - **Link:** https://doi.org/10.1017/S0033291704002892
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
+
 # Statistical Analysis
 
 - **Laird, N. M., & Ware, J. H. (1982)**
@@ -124,34 +153,61 @@
   - **Usage:** Random-effects Models
   - **Reasoning:** Foundational framework for random-effects models in longitudinal data analysis.
   - **Link:** https://pubmed.ncbi.nlm.nih.gov/7168798/
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
 - **Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015)**
   - **Title:** Fitting Linear Mixed-Effects Models Using lme4
   - **First Author:** Bates
   - **Year:** 2015
   - **Usage:** Linear mixed-effects modeling
-  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise LMM analysis in R.
+  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement LMM analyses in R.
   - **Link:** https://doi.org/10.18637/jss.v067.i01
-  - **Source:** `analyze_format_content_lmm_channelwise.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`
 
 - **Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. B. (2017)**
   - **Title:** lmerTest Package: Tests in Linear Mixed Effects Models
   - **First Author:** Kuznetsova
   - **Year:** 2017
   - **Usage:** Fixed-effect tests and Satterthwaite degrees of freedom
-  - **Reasoning:** Justifies the `lmerTest` approach for approximate t-tests / p-values in linear mixed models used in the channelwise analysis.
+  - **Reasoning:** Justifies the `lmerTest` approach for approximate t-tests / p-values in linear mixed models used in the channelwise, ROI-wise, retention, and engagement analyses.
   - **Link:** https://doi.org/10.18637/jss.v082.i13
-  - **Source:** `analyze_format_content_lmm_channelwise.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
 - **Satterthwaite, F. E. (1946)**
   - **Title:** An approximate distribution of estimates of variance components
   - **First Author:** Satterthwaite
   - **Year:** 1946
   - **Usage:** Approximate degrees of freedom (Satterthwaite)
-  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) to obtain approximate p-values for fixed effects in LMMs.
+  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) to obtain approximate p-values for fixed effects in LMMs, including channelwise, ROI-wise, retention, and engagement analyses.
   - **Link:** https://doi.org/10.2307/3002019
-  - **Source:** `analyze_format_content_lmm_channelwise.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+
+- **Poldrack, R. A. (2007)**
+  - **Title:** Region of interest analysis for fMRI
+  - **First Author:** Poldrack
+  - **Year:** 2007
+  - **Usage:** ROI signal extraction strategy
+  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference.
+  - **Link:** https://doi.org/10.1093/scan/nsm006
+  - **Source:** `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`, `README.md`
+
+- **Holm, S. (1979)**
+  - **Title:** A Simple Sequentially Rejective Multiple Test Procedure
+  - **First Author:** Holm
+  - **Year:** 1979
+  - **Usage:** Multiple testing correction (omnibus effects)
+  - **Reasoning:** Justifies the Holm correction used across the three pre-planned omnibus effects in the retention and engagement supporting analyses.
+  - **Link:** https://doi.org/10.2307/4615733
+  - **Source:** `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`
+
+- **Burton, A., Altman, D. G., Royston, P., & Holder, R. L. (2006)**
+  - **Title:** The design of simulation studies in medical statistics
+  - **First Author:** Burton
+  - **Year:** 2006
+  - **Usage:** Monte Carlo type-I/type-II calibration test design
+  - **Reasoning:** Provides guidance for designing simulation studies to evaluate operating characteristics (including false-positive and false-negative behavior) of statistical methods under controlled data-generating mechanisms; used to justify repeated null/non-null calibration harnesses in this repo.
+  - **Link:** https://doi.org/10.1002/sim.2673
+  - **Source:** `tests/calibrate_type1_error_r.R`, `tests/calibrate_type2_error_r.R`, `tests/README.md`
 
 - **Pinheiro, J. C., & Bates, D. M. (2000)**
   - **Title:** Mixed-Effects Models in S and S-PLUS
@@ -178,7 +234,7 @@
   - **Usage:** False Discovery Rate (FDR)
   - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans
@@ -187,7 +243,7 @@
   - **Usage:** Post-hoc contrasts / estimated marginal means
   - **Reasoning:** Peer-reviewed reference for least-squares means / estimated marginal means and their use for post-hoc contrasts in linear (mixed) models; emmeans is the modern successor in R used for post-hoc comparisons in this repo.
   - **Link:** https://doi.org/10.18637/jss.v069.i01
-  - **Source:** `analyze_format_content_lmm_channelwise.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
 - **Searle, S. R., Speed, F. M., & Milliken, G. A. (1980)**
   - **Title:** Population marginal means in the linear model: An alternative to least squares means
@@ -196,7 +252,7 @@
   - **Usage:** Estimated marginal means concept
   - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries.
   - **Link:** https://doi.org/10.1080/00031305.1980.10483031
-  - **Source:** `analyze_format_content_lmm_channelwise.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
 - **Student (1908)**
   - **Title:** The Probable Error of a Mean
@@ -224,3 +280,14 @@
   - **Reasoning:** Review on the use of the General Linear Model in fNIRS, offering recommendations for filtering, drift handling, and inference.
   - **Link:** https://www.frontiersin.org/articles/10.3389/fnhum.2018.00505/full
   - **Source:** `fnirs_analysis/FNIRS_TODO.md`
+
+# Reproducibility
+
+- **Sandve, G. K., et al. (2013)**
+  - **Title:** Ten Simple Rules for Reproducible Computational Research
+  - **First Author:** Sandve
+  - **Year:** 2013
+  - **Usage:** Centralized exclusion manifest across analysis scripts
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions (here: participant exclusions) to prevent script-specific drift across inferential endpoints.
+  - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
+  - **Source:** `r_subject_exclusions.R`, `analyze_format_content_lmm_roi.R`, `README.md`

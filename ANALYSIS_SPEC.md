@@ -228,6 +228,120 @@ Console reporting:
 
 ---
 
+# ANALYSIS_SPEC — Homer3 betas + Format×Content (ROI-wise)
+Last updated: 2026-02-13
+
+## Scope
+
+Goal: Evaluate whether **the effect of Format depends on Content (Format×Content interaction)** at the
+level of **ROI-wise prefrontal activation**, using the same Homer3 subject-level GLM betas and within-subject
+design as the channelwise pipeline.
+
+Both chromophores are analyzed and reported:
+- **HbO**
+- **HbR**
+
+Inference is performed **per ROI**.
+
+---
+
+## Inputs
+
+Primary CSV input:
+- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  - Must include one row per subject (`subject_id`) and Homer beta columns matching:
+    - `S##_D##_Cond##_HbO`
+    - `S##_D##_Cond##_HbR`
+
+ROI definition input:
+- `data/config/roi_definition.json`
+  - Must be strict JSON.
+  - Top-level object maps ROI names to arrays of channel IDs:
+    - Example: `"VMPFC": ["S01_D01", "S01_D02"]`
+
+---
+
+## ROI definition integrity rules
+
+- ROI JSON must parse without coercion/fallback.
+- ROI names must be non-empty.
+- Each ROI must contain at least one channel.
+- Channel IDs must match Homer naming (`S##_D##` after normalization).
+- A channel cannot be assigned to multiple ROIs.
+- ROI channels not present in the input beta columns are a hard error.
+
+---
+
+## Missingness / pruned-channel policy (critical)
+
+Per repo policy:
+- Treat `0` and `NaN` in beta columns as pruned/missing channel values.
+- Do not impute.
+
+ROI summary construction:
+- For each `subject × ROI × chrom × condition`, ROI beta is the arithmetic mean over
+  available (non-missing) channels in that ROI.
+- If all channels are missing for that cell, ROI beta is missing.
+
+Complete-case inclusion rule (within ROI/chrom):
+- Keep only subjects with non-missing ROI beta in all 4 conditions.
+
+---
+
+## Condition mapping and model
+
+Condition mapping from beta columns:
+- `Cond01` → `SF_Edu`
+- `Cond02` → `SF_Ent`
+- `Cond03` → `LF_Ent`
+- `Cond04` → `LF_Edu`
+
+Effect coding:
+- `format_c = -0.5` (Short), `+0.5` (Long)
+- `content_c = -0.5` (Entertainment), `+0.5` (Education)
+
+Primary model (per ROI × chrom):
+- `beta ~ format_c * content_c + (1 | subject_id)`
+
+Inference and post-hoc:
+- Main effects reported for Format, Content, and Interaction.
+- Post-hoc pairwise condition contrasts (6 total) run only when ROI/chrom interaction
+  is FDR-significant.
+- Post-hoc p-values are uncorrected (`adjust = "none"`).
+
+---
+
+## Multiple testing correction
+
+- Use BH-FDR.
+- Families are defined separately by chromophore and effect, across ROIs:
+  - HbO / Format across ROIs
+  - HbO / Content across ROIs
+  - HbO / Interaction across ROIs
+  - HbR / Format across ROIs
+  - HbR / Content across ROIs
+  - HbR / Interaction across ROIs
+
+---
+
+## Output requirements
+
+Main effects (wide):
+- CSV with one row per ROI × chrom and per-effect estimate/statistics fields.
+
+Main effects (tidy/spec):
+- CSV with one row per ROI × chrom × effect including:
+  - `roi`, `chrom`, `effect`
+  - `estimate`, `ci95_low`, `ci95_high`
+  - `p_unc`, `p_fdr`
+  - `n_subjects`, `n_obs`
+  - `singular_fit`
+
+Post-hoc:
+- CSV with pairwise contrasts only for gated ROI/chrom pairs.
+
+---
+
 # ANALYSIS_SPEC — Retention Length×Content (subject-level LMM)
 Last updated: 2026-02-09
 

@@ -24,6 +24,7 @@ So the pipeline below is “best-possible under constraints,” but you should s
 
 **Parameters**
 - `dRange = [0.1 5000]`  *(keeping your current choice, per your request)*
+        - Using a value of `[0.059, 850]` provides only channels in the 95% quantile range.
 - `SNRthresh = 2`
 - `SDrange = [25 45]` mm
 
@@ -54,7 +55,7 @@ So the pipeline below is “best-possible under constraints,” but you should s
 - `tMotion = 1.0`
 - `tMask   = 1.0`
 - `STDEVthresh = 50`
-- `AMPthresh   = 0.4`
+- `AMPthresh   = 0.4` **Homer Default Here is 0.5**
 
 **Why**
 - Brigadoi et al. explicitly report these HOMER motion-detection parameters:
@@ -210,7 +211,7 @@ Barker et al introduce the iWLS method and demonstrate that it out performs OLS 
 ### `hmrR_PruneChannels`
 - `dRange`: `0.1 5000`
 - `SNRthresh`: `2`
-- `SDrange`: `25 45`
+- `SDrange`: `25 50`
 
 ### `hmrR_MotionArtifactByChannel`
 - `tMotion`: `1.0`
