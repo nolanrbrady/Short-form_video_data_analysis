@@ -287,6 +287,22 @@ main <- function() {
   fmt_s02 <- main_tidy %>% filter(channel == "S02_D01", chrom == "HbO", effect == "format") %>% pull(estimate)
   assert_true(abs(fmt_s01[[1]] - fmt_s02[[1]]) > 0.2, "channelwise subsetting appears broken (format estimates too similar)")
 
+  # 3c) Explicit inferential TP/TN checks:
+  # - True positive: strong-interaction channel must be FDR-significant.
+  # - True negative: null-interaction channel must remain non-significant.
+  for (chrom_name in chroms) {
+    p_sig <- main_tidy %>%
+      filter(channel == "S01_D01", chrom == chrom_name, effect == "interaction") %>%
+      pull(p_fdr)
+    p_null <- main_tidy %>%
+      filter(channel == "S02_D01", chrom == chrom_name, effect == "interaction") %>%
+      pull(p_fdr)
+    assert_true(length(p_sig) == 1, paste0("missing TP p_fdr row for S01_D01 ", chrom_name))
+    assert_true(length(p_null) == 1, paste0("missing TN p_fdr row for S02_D01 ", chrom_name))
+    assert_true(p_sig[[1]] < 0.05, paste0("expected TP interaction significance for S01_D01 ", chrom_name))
+    assert_true(p_null[[1]] >= 0.05, paste0("expected TN non-significance for S02_D01 ", chrom_name))
+  }
+
   # 4) Post-hoc gating: should only include the channel with strong interaction (S01_D01), not S02_D01
   assert_true(all(posthoc$channel %in% c("S01_D01")), "posthoc contains channels that should not have passed interaction gate")
 

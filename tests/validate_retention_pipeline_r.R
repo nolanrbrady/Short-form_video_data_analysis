@@ -177,6 +177,11 @@ main <- function() {
   assert_true(abs(est_content[[1]] - truth$content) < tol, "content estimate not close to generating truth")
   assert_true(abs(est_inter[[1]] - truth$interaction) < tol, "interaction estimate not close to generating truth")
 
+  # 2a) Explicit inferential TP check on strong-effect synthetic data.
+  p_inter <- main_df %>% filter(effect == "interaction") %>% pull(p_fdr)
+  assert_true(length(p_inter) == 1, "missing interaction p_fdr row in TP run")
+  assert_true(p_inter[[1]] < 0.05, "expected interaction to be significant in TP synthetic dataset")
+
   # 2b) Central exclusion list: excluding one present subject should reduce analyzed N by exactly 1.
   out_main_excl <- file.path(tmp, "main_excluded_one.csv")
   out_posthoc_excl <- file.path(tmp, "posthoc_excluded_one.csv")
@@ -206,6 +211,34 @@ main <- function() {
   assert_true(run_abs$status == 0, "analysis failed when exclusion ID was absent")
   main_abs <- read_csv(out_main_abs, show_col_types = FALSE)
   assert_true(all(main_abs$n_subjects == n_subjects), "absent exclusion ID should not change n_subjects")
+
+  # 2d) Explicit inferential TN check with a null-effect synthetic dataset.
+  df_null <- generate_retention(
+    n_subjects = 30,
+    b0 = 0.30,
+    bL = 0.00,
+    bC = 0.00,
+    bI = 0.00,
+    noise_sd = 0.10,
+    seed = 777
+  )
+  input_null <- file.path(tmp, "retention_null.csv")
+  out_main_null <- file.path(tmp, "main_null.csv")
+  out_posthoc_null <- file.path(tmp, "posthoc_null.csv")
+  write_csv(df_null, input_null)
+  run_null <- run_analysis(
+    input_null,
+    out_main_null,
+    out_posthoc_null,
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(run_null$status == 0, "analysis failed on TN null synthetic data")
+  main_null <- read_csv(out_main_null, show_col_types = FALSE)
+  posthoc_null <- read_csv(out_posthoc_null, show_col_types = FALSE)
+  assert_true(all(main_null$p_fdr >= 0.05), "expected all omnibus effects to be non-significant in TN null dataset")
+  assert_true(nrow(posthoc_null) == 0, "posthoc should be empty for TN null dataset")
 
   # 3) Holm correctness across exactly the three omnibus effects.
   p_adj_manual <- holm_adjust_manual(main_df$p_unc)
