@@ -1,10 +1,12 @@
 #!/usr/bin/env Rscript
 
-# Channelwise within-subject inference for Format x Content effects on prefrontal activation.
+# ROI-wise within-subject inference for Format x Content effects on prefrontal activation.
 #
 # Inputs
 #   - data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 #     (one-row-per-subject merged file with `subject_id` plus Homer beta columns)
+#   - data/config/roi_definition.json
+#     (ROI name -> array of Homer channel IDs, e.g., "S01_D01")
 #
 # Design
 #   - Within-subjects 2x2 factorial:
@@ -16,7 +18,13 @@
 #       Cond03 = Long-Form Entertainment
 #       Cond04 = Long-Form Education
 #
-# Model (per channel x chromophore)
+# ROI beta construction
+#   - Per subject x ROI x chrom x condition, beta is the arithmetic mean across
+#     available (non-missing) channels in that ROI.
+#   - This follows a standard ROI signal-summary approach in neuroimaging
+#     (Poldrack, 2007; see CITATIONS.md).
+#
+# Model (per ROI x chromophore)
 #   - LMM: beta ~ format_c * content_c + (1|subject_id)
 #     with numeric sum coding:
 #       format_c  = -0.5 (Short), +0.5 (Long)
@@ -24,26 +32,28 @@
 #
 # Missingness / pruned channels (repo policy)
 #   - Treat BOTH 0 and NA in beta columns as pruned/missing (do not impute).
-#   - Default: complete-case within channel/chrom (subject must have all 4 conditions present).
+#   - Complete-case within ROI/chrom (subject must have all 4 conditions present).
 #
 # Multiple testing correction
-#   - BH-FDR separately per chromophore and per effect across channels.
+#   - BH-FDR separately per chromophore and per effect across ROIs.
 #
-# Post-hoc (only if interaction q < alpha for that channel/chrom)
+# Post-hoc (only if interaction q < alpha for that ROI/chrom)
 #   - All pairwise comparisons among the 4 condition combinations (6 contrasts),
 #     uncorrected (adjust="none").
 #
 # Citations (see CITATIONS.md)
+#   - Poldrack (2007): ROI signal extraction framework.
 #   - Benjamini & Hochberg (1995): BH-FDR.
 #   - Laird & Ware (1982): mixed-effects models.
 #   - Kuznetsova et al. (2017): lmerTest / Satterthwaite df.
-#   - Lenth (2021): emmeans for contrasts.
+#   - Lenth (2016): emmeans for contrasts.
 
 suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
   library(tidyr)
   library(stringr)
+  library(jsonlite)
   library(lme4)
   library(lmerTest)
   library(emmeans)
@@ -89,10 +99,11 @@ parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
     input_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
+    roi_json = "data/config/roi_definition.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",
-    out_main_csv = "data/results/format_content_lmm_main_effects_r.csv",
-    out_main_tidy_csv = "data/results/format_content_lmm_main_effects_tidy_r.csv",
-    out_posthoc_csv = "data/results/format_content_lmm_posthoc_pairwise_r.csv",
+    out_main_csv = "data/results/format_content_lmm_roi_main_effects_r.csv",
+    out_main_tidy_csv = "data/results/format_content_lmm_roi_main_effects_tidy_r.csv",
+    out_posthoc_csv = "data/results/format_content_lmm_roi_posthoc_pairwise_r.csv",
     alpha = 0.05,
     min_subjects = 6,
     # Optional: enable/raise df adjustment limits for emmeans/lmerTest in large datasets.
@@ -119,13 +130,6 @@ parse_args <- function() {
 
 normalize_subject_id <- function(x, column_name) {
   # Normalize to an integer subject ID by extracting digits.
-  #
-  # Examples accepted:
-  #   - "sub_0001" -> 1
-  #   - "0017" -> 17
-  #
-  # This function is intentionally strict: if any row cannot be mapped to a numeric ID,
-  # we fail fast rather than performing a partial/unsafe merge.
   x_chr <- as.character(x)
   extracted <- str_extract(x_chr, "\\d+")
   if (any(is.na(extracted))) {
@@ -142,8 +146,93 @@ normalize_subject_id <- function(x, column_name) {
   as.integer(extracted)
 }
 
+normalize_channel_id <- function(x, context_label) {
+  # Normalize Homer channel IDs into canonical S##_## format for reliable matching.
+  x_chr <- toupper(str_trim(as.character(x)))
+  m <- str_match(x_chr, "^S(\\d+)_D(\\d+)$")
+  bad <- which(is.na(m[, 1]))
+  if (length(bad) > 0) {
+    bad_vals <- unique(x_chr[bad])
+    bad_vals <- bad_vals[!is.na(bad_vals)]
+    bad_vals <- head(bad_vals, 10)
+    stop(
+      paste0(
+        "Failed to parse channel IDs in ", context_label, ". ",
+        "Expected format like S01_D01. Examples: ",
+        paste(bad_vals, collapse = ", ")
+      )
+    )
+  }
+  paste0("S", sprintf("%02d", as.integer(m[, 2])), "_D", sprintf("%02d", as.integer(m[, 3])))
+}
+
+load_roi_definition <- function(roi_json_path) {
+  if (!file.exists(roi_json_path)) {
+    stop(paste0("ROI definition file not found: ", roi_json_path))
+  }
+
+  roi_obj <- tryCatch(
+    jsonlite::fromJSON(roi_json_path, simplifyVector = FALSE),
+    error = function(e) {
+      stop(
+        paste0(
+          "Failed to parse ROI JSON at ", roi_json_path,
+          ". Use strict JSON syntax (double quotes, comma-separated arrays). Error: ",
+          conditionMessage(e)
+        )
+      )
+    }
+  )
+
+  if (!is.list(roi_obj) || length(roi_obj) == 0 || is.null(names(roi_obj)) || any(!nzchar(names(roi_obj)))) {
+    stop("ROI definition must be a non-empty JSON object mapping ROI names to channel arrays.")
+  }
+
+  roi_rows <- list()
+  for (roi_name in names(roi_obj)) {
+    channels_raw <- roi_obj[[roi_name]]
+    channels <- if (is.list(channels_raw) && !is.data.frame(channels_raw)) {
+      unlist(channels_raw, use.names = FALSE)
+    } else {
+      channels_raw
+    }
+    if (!is.character(channels) || length(channels) == 0) {
+      stop(paste0("ROI '", roi_name, "' must map to a non-empty array of channel IDs."))
+    }
+    channels_norm <- normalize_channel_id(channels, paste0("roi_definition[", roi_name, "]"))
+    if (anyDuplicated(channels_norm) > 0) {
+      dup <- unique(channels_norm[duplicated(channels_norm)])
+      stop(
+        paste0(
+          "ROI '", roi_name, "' contains duplicate channel IDs after normalization: ",
+          paste(dup, collapse = ", ")
+        )
+      )
+    }
+    roi_rows[[length(roi_rows) + 1]] <- tibble(roi = roi_name, channel = channels_norm)
+  }
+
+  roi_map <- bind_rows(roi_rows)
+
+  overlap <- roi_map %>%
+    count(channel, name = "n_rois") %>%
+    filter(.data$n_rois > 1)
+
+  if (nrow(overlap) > 0) {
+    offenders <- overlap %>% head(10)
+    stop(
+      paste0(
+        "Each channel must belong to exactly one ROI. Overlaps detected: ",
+        paste0(offenders$channel, "=", offenders$n_rois, collapse = ", ")
+      )
+    )
+  }
+
+  roi_map %>% arrange(roi, channel)
+}
+
 load_merged_input <- function(input_csv) {
-  # Preferred path for channelwise analysis:
+  # Preferred path for ROI analysis:
   # consume pre-merged wide table so covariates and beta columns are already co-located.
   df <- read_csv(input_csv, show_col_types = FALSE)
   if (!("subject_id" %in% names(df))) {
@@ -174,7 +263,7 @@ load_merged_input <- function(input_csv) {
         "Expected exactly one row per subject. ",
         "Example duplicates (subject_id, n_rows): ",
         paste0(examples$subject_id, "=", examples$n_rows, collapse = ", "),
-        ". Fix the upstream CSV before running the channelwise analysis."
+        ". Fix the upstream CSV before running ROI analysis."
       )
     )
   }
@@ -183,10 +272,7 @@ load_merged_input <- function(input_csv) {
 }
 
 reshape_to_long <- function(df_merged) {
-  # Convert wide beta columns to long format for per-(channel × chrom) modeling.
-  #
-  # Each wide beta column is one (channel × condition × chrom) measurement; long format creates one row per:
-  #   subject × channel × chrom × condition
+  # Convert wide beta columns to long format for per-(ROI × chrom) modeling.
   #
   # Pruned-channel policy: treat beta == 0 as missing (do not impute).
   beta_cols <- names(df_merged)[str_detect(names(df_merged), "^S\\d+_D\\d+_Cond\\d{2}_(HbO|HbR)$")]
@@ -202,15 +288,17 @@ reshape_to_long <- function(df_merged) {
       remove = TRUE
     ) %>%
     {
-      # Fail hard on any unexpected condition codes to avoid silently dropping columns.
       bad_conds <- setdiff(unique(.$cond), c("01", "02", "03", "04"))
       if (length(bad_conds) > 0) {
         stop(paste0("Unexpected condition codes in beta columns: ", paste(sort(bad_conds), collapse = ", ")))
       }
       .
     } %>%
-    mutate(beta = suppressWarnings(as.numeric(beta))) %>%
-    mutate(beta = na_if(beta, 0)) %>%
+    mutate(
+      channel = normalize_channel_id(.data$channel, "beta column names"),
+      beta = suppressWarnings(as.numeric(.data$beta)),
+      beta = na_if(.data$beta, 0)
+    ) %>%
     mutate(
       condition = case_when(
         cond == "01" ~ "SF_Edu",
@@ -235,8 +323,49 @@ reshape_to_long <- function(df_merged) {
     filter(!is.na(condition), !is.na(chrom), !is.na(channel))
 }
 
+validate_roi_channels <- function(df_long, roi_map) {
+  available_channels <- sort(unique(df_long$channel))
+  roi_channels <- sort(unique(roi_map$channel))
+
+  missing_in_data <- setdiff(roi_channels, available_channels)
+  if (length(missing_in_data) > 0) {
+    stop(
+      paste0(
+        "ROI definition contains channels not found in beta columns: ",
+        paste(head(missing_in_data, 20), collapse = ", "),
+        if (length(missing_in_data) > 20) " ..." else ""
+      )
+    )
+  }
+
+  unmapped <- setdiff(available_channels, roi_channels)
+  if (length(unmapped) > 0) {
+    cat(
+      "[warn] ", length(unmapped),
+      " channels in the input are not mapped to any ROI and will be excluded from ROI analysis.\n",
+      sep = ""
+    )
+  }
+}
+
+aggregate_to_roi <- function(df_long, roi_map) {
+  # Collapse channel-level betas to ROI-level summaries for inference.
+  #
+  # Signal summary choice (mean across available channels) is a standard ROI
+  # extraction strategy in neuroimaging; see Poldrack (2007) in CITATIONS.md.
+  df_long %>%
+    inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
+    group_by(subject_id, roi, chrom, condition, format, content, format_c, content_c) %>%
+    summarize(
+      n_channels_in_roi = n_distinct(channel),
+      n_channels_nonmissing = sum(!is.na(beta)),
+      beta = if (all(is.na(beta))) NA_real_ else mean(beta, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
 complete_case_subjects <- function(sub) {
-  # Spec complete-case rule (within channel × chrom):
+  # Spec complete-case rule (within ROI × chrom):
   # keep only subjects with all 4 conditions present (non-missing beta).
   non_missing <- sub %>% filter(!is.na(beta))
   keep_ids <- non_missing %>%
@@ -248,7 +377,7 @@ complete_case_subjects <- function(sub) {
 }
 
 fit_factorial_lmm <- function(sub_complete) {
-  # Per-channel × chrom LMM with random intercept for subject (within-subject design).
+  # Per-ROI × chrom LMM with random intercept for subject (within-subject design).
   # References: Laird & Ware (1982); Bates et al. (2015), see `CITATIONS.md`.
   # Inference: lmerTest provides approximate p-values via Satterthwaite df (Kuznetsova et al., 2017).
   lmerTest::lmer(beta ~ format_c * content_c + (1 | subject_id), data = sub_complete, REML = TRUE)
@@ -280,8 +409,6 @@ extract_fixed <- function(model, term) {
 main <- function() {
   args <- parse_args()
 
-  # Optional: override emmeans' safeguards for df calculations in large datasets.
-  # This can increase computation/memory usage substantially.
   if (!is.na(args$pbkrtest_limit)) {
     emmeans::emm_options(pbkrtest.limit = args$pbkrtest_limit)
   }
@@ -289,33 +416,39 @@ main <- function() {
     emmeans::emm_options(lmerTest.limit = args$lmerTest_limit)
   }
 
+  roi_map <- load_roi_definition(args$roi_json)
+
   df_merged <- load_merged_input(args$input_csv)
   cat("[data] merged input file:", args$input_csv, "\n")
+  cat("[data] ROI definition:", args$roi_json, "\n")
+
   excluded <- apply_subject_exclusions(
     df = df_merged,
     subject_col = "subject_id",
     exclude_json_path = args$exclude_subjects_json,
-    context_label = "format_content_channelwise"
+    context_label = "format_content_roi"
   )
   df_merged <- excluded$data
-  df_long <- reshape_to_long(df_merged)
 
-  channels <- sort(unique(df_long$channel))
+  df_long <- reshape_to_long(df_merged)
+  validate_roi_channels(df_long, roi_map)
+  df_roi <- aggregate_to_roi(df_long, roi_map)
+
+  rois <- sort(unique(roi_map$roi))
   chroms <- c("HbO", "HbR")
 
   cat("[data] merged subjects:", length(unique(df_merged$subject_id)), "\n")
-  cat("[data] channels detected:", length(channels), "\n")
-  cat("[data] chromophores detected:", paste(sort(unique(df_long$chrom)), collapse = ", "), "\n")
+  cat("[data] channels mapped to ROIs:", length(unique(roi_map$channel)), "\n")
+  cat("[data] ROIs detected:", length(rois), "\n")
+  cat("[data] chromophores detected:", paste(sort(unique(df_roi$chrom)), collapse = ", "), "\n")
 
   main_rows <- list()
   gated_count <- 0
   gated_examples <- c()
 
   for (chrom_name in chroms) {
-    for (channel_name in channels) {
-      # Important: avoid name collisions with df_long$chrom / df_long$channel.
-      # Use distinct loop variable names to ensure filtering truly subsets per channel × chrom.
-      sub <- df_long %>% filter(.data$chrom == chrom_name, .data$channel == channel_name)
+    for (roi_name in rois) {
+      sub <- df_roi %>% filter(.data$chrom == chrom_name, .data$roi == roi_name)
       sub_cc <- complete_case_subjects(sub)
       n_subj <- length(unique(sub_cc$subject_id))
       if (n_subj < args$min_subjects) {
@@ -323,7 +456,7 @@ main <- function() {
         if (length(gated_examples) < 10) {
           gated_examples <- c(
             gated_examples,
-            paste0(chrom_name, " ", channel_name, " (n_subjects=", n_subj, " < min_subjects=", args$min_subjects, ")")
+            paste0(chrom_name, " ", roi_name, " (n_subjects=", n_subj, " < min_subjects=", args$min_subjects, ")")
           )
         }
         next
@@ -337,7 +470,7 @@ main <- function() {
       inter <- extract_fixed(model, "format_c:content_c")
 
       main_rows[[length(main_rows) + 1]] <- tibble(
-        channel = channel_name,
+        roi = roi_name,
         chrom = chrom_name,
         n_subjects = n_subj,
         n_obs = n_obs,
@@ -368,11 +501,11 @@ main <- function() {
   }
 
   if (length(main_rows) == 0) {
-    msg <- "No models were fit (min_subjects too high or missing data)."
+    msg <- "No ROI models were fit (min_subjects too high or missing data)."
     if (gated_count > 0) {
       msg <- paste0(
         msg,
-        " All ", gated_count, " channel/chrom pairs evaluated were skipped due to min_subjects gating (min_subjects=",
+        " All ", gated_count, " ROI/chrom pairs evaluated were skipped due to min_subjects gating (min_subjects=",
         args$min_subjects, ")."
       )
       if (length(gated_examples) > 0) {
@@ -386,19 +519,19 @@ main <- function() {
     group_by(chrom) %>%
     mutate(
       # Multiple testing correction:
-      # BH-FDR separately per chromophore and per effect, across channels.
+      # BH-FDR separately per chromophore and per effect, across ROIs.
       # Reference: Benjamini & Hochberg (1995), see `CITATIONS.md`.
       p_format_fdr = p.adjust(p_format_unc, method = "BH"),
       p_content_fdr = p.adjust(p_content_unc, method = "BH"),
       p_interaction_fdr = p.adjust(p_interaction_unc, method = "BH")
     ) %>%
     ungroup() %>%
-    arrange(chrom, channel)
+    arrange(chrom, roi)
 
   if (gated_count > 0) {
     cat(
       "[warn] skipped ", gated_count,
-      " channel/chrom models due to min_subjects gating (min_subjects=",
+      " ROI/chrom models due to min_subjects gating (min_subjects=",
       args$min_subjects, "); showing up to 10 examples: ",
       paste(gated_examples, collapse = "; "),
       "\n",
@@ -407,47 +540,43 @@ main <- function() {
   }
 
   sig_inter <- main_df %>% filter(.data$p_interaction_fdr < args$alpha)
-  cat("[results] interaction FDR-significant (q<", args$alpha, "): ", nrow(sig_inter), " channel/chrom pairs\n", sep = "")
+  cat("[results] interaction FDR-significant (q<", args$alpha, "): ", nrow(sig_inter), " ROI/chrom pairs\n", sep = "")
 
   posthoc_rows <- list()
   if (nrow(sig_inter) > 0) {
     for (i in seq_len(nrow(sig_inter))) {
       chrom_name <- sig_inter$chrom[[i]]
-      channel_name <- sig_inter$channel[[i]]
-      sub <- df_long %>% filter(.data$chrom == chrom_name, .data$channel == channel_name)
+      roi_name <- sig_inter$roi[[i]]
+      sub <- df_roi %>% filter(.data$chrom == chrom_name, .data$roi == roi_name)
       sub_cc <- complete_case_subjects(sub) %>% mutate(condition = factor(condition, levels = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")))
       model_cond <- fit_condition_lmm(sub_cc)
       em <- emmeans::emmeans(model_cond, ~ condition)
-      # Use contrast(..., method="pairwise") instead of emmeans::pairs(...) for compatibility
-      # across emmeans versions (pairs() is an S3 method and may not be exported from the namespace).
-      #
+      # Use contrast(..., method="pairwise") for compatibility across emmeans versions.
       # Reference for EMMs/contrasts: Lenth (2016); Searle et al. (1980), see `CITATIONS.md`.
       pw <- emmeans::contrast(em, method = "pairwise", adjust = "none") %>% as.data.frame()
-      # Depending on df availability, emmeans may report either t.ratio (finite df) or z.ratio (asymptotic).
-      # Normalize to a single column name for downstream processing.
       stat_type <- if ("t.ratio" %in% names(pw)) "t" else if ("z.ratio" %in% names(pw)) "z" else NA_character_
       if (is.na(stat_type)) stop("Expected 't.ratio' or 'z.ratio' in emmeans pairwise contrast output.")
       if (stat_type == "z") {
         pw[["t.ratio"]] <- pw[["z.ratio"]]
         cat(
           "[warn] emmeans returned z.ratio (asymptotic). Recording it as t.ratio in posthoc output for ",
-          chrom_name, " ", channel_name, ".\n",
+          chrom_name, " ", roi_name, ".\n",
           sep = ""
         )
       }
       if (!("df" %in% names(pw))) pw[["df"]] <- NA_real_
-      # pw columns include: contrast, estimate, SE, df, t.ratio, p.value
+
       pw <- pw %>%
         mutate(
-          channel = channel_name,
+          roi = roi_name,
           chrom = chrom_name,
           stat_type = stat_type,
           condition_a = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 1]),
           condition_b = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 2])
         ) %>%
-        select(channel, chrom, condition_a, condition_b, stat_type, estimate, SE, df, t.ratio, p.value)
+        select(roi, chrom, condition_a, condition_b, stat_type, estimate, SE, df, t.ratio, p.value)
 
-      names(pw) <- c("channel", "chrom", "condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
+      names(pw) <- c("roi", "chrom", "condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
       posthoc_rows[[length(posthoc_rows) + 1]] <- pw
     }
   }
@@ -455,6 +584,7 @@ main <- function() {
   dir.create(dirname(args$out_main_csv), showWarnings = FALSE, recursive = TRUE)
   dir.create(dirname(args$out_main_tidy_csv), showWarnings = FALSE, recursive = TRUE)
   dir.create(dirname(args$out_posthoc_csv), showWarnings = FALSE, recursive = TRUE)
+
   main_df_out <- main_df
   if (isTRUE(FILTER_MAIN_EFFECTS_TO_FDR_SIG_ONLY)) {
     main_df_out <- main_df %>%
@@ -473,11 +603,11 @@ main <- function() {
   write_csv(main_df_out, args$out_main_csv)
   cat("[write] main effects:", args$out_main_csv, "\n")
 
-  # Spec-compliant tidy main-effects output: one row per (channel x chrom x effect)
+  # Spec-compliant tidy main-effects output: one row per (ROI x chrom x effect)
   main_tidy <- bind_rows(
     main_df %>%
       transmute(
-        channel = .data$channel,
+        roi = .data$roi,
         chrom = .data$chrom,
         effect = "format",
         n_subjects = .data$n_subjects,
@@ -491,7 +621,7 @@ main <- function() {
       ),
     main_df %>%
       transmute(
-        channel = .data$channel,
+        roi = .data$roi,
         chrom = .data$chrom,
         effect = "content",
         n_subjects = .data$n_subjects,
@@ -505,7 +635,7 @@ main <- function() {
       ),
     main_df %>%
       transmute(
-        channel = .data$channel,
+        roi = .data$roi,
         chrom = .data$chrom,
         effect = "interaction",
         n_subjects = .data$n_subjects,
@@ -518,7 +648,7 @@ main <- function() {
         p_fdr = .data$p_interaction_fdr
       )
   ) %>%
-    arrange(chrom, effect, channel)
+    arrange(chrom, effect, roi)
 
   main_tidy_out <- main_tidy
   if (isTRUE(FILTER_MAIN_EFFECTS_TO_FDR_SIG_ONLY)) {
@@ -534,12 +664,12 @@ main <- function() {
   cat("[write] main effects (tidy/spec):", args$out_main_tidy_csv, "\n")
 
   if (length(posthoc_rows) > 0) {
-    posthoc_df <- bind_rows(posthoc_rows) %>% arrange(chrom, channel, condition_a, condition_b)
+    posthoc_df <- bind_rows(posthoc_rows) %>% arrange(chrom, roi, condition_a, condition_b)
     write_csv(posthoc_df, args$out_posthoc_csv)
     cat("[write] posthoc:     ", args$out_posthoc_csv, "\n")
   } else {
     empty <- tibble(
-      channel = character(),
+      roi = character(),
       chrom = character(),
       condition_a = character(),
       condition_b = character(),

@@ -33,7 +33,7 @@ suppressPackageStartupMessages({
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    homer_csv = "data/tabular/homer3_glm_betas_wide.csv",
+    homer_csv = "data/tabular/homer3_glm_betas_wide_ols.csv",
     combined_csv = "data/tabular/combined_sfv_data.csv",
     out_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv"
   )

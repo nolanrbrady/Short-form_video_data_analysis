@@ -68,12 +68,13 @@ for subject_id in engagement_data["subject_id"].unique():
     sf_entertainment = get_average_rating(subject_data, "Short-Form Entertainment")
     print(lf_education, lf_entertainment, sf_education, sf_entertainment)
 
+    # NOTE: Doing this in R now
     # Get the condition averages for the subject
-    long_form = get_condition_averages(subject_data, "Long-Form")
-    short_form = get_condition_averages(subject_data, "Short-Form")
-    education = get_condition_averages(subject_data, "Education")
-    entertainment = get_condition_averages(subject_data, "Entertainment")
-    print(long_form, short_form, education, entertainment)
+    # long_form = get_condition_averages(subject_data, "Long-Form")
+    # short_form = get_condition_averages(subject_data, "Short-Form")
+    # education = get_condition_averages(subject_data, "Education")
+    # entertainment = get_condition_averages(subject_data, "Entertainment")
+    # print(long_form, short_form, education, entertainment)
 
     # Add the data to the processed data
     new_row = pd.DataFrame([{
@@ -82,10 +83,10 @@ for subject_id in engagement_data["subject_id"].unique():
         "lf_entertainment_engagement": lf_entertainment,
         "sf_education_engagement": sf_education,
         "sf_entertainment_engagement": sf_entertainment,
-        "long_form_engagement": long_form,
-        "short_form_engagement": short_form,
-        "education_engagement": education,
-        "entertainment_engagement": entertainment,
+        # "long_form_engagement": long_form,
+        # "short_form_engagement": short_form,
+        # "education_engagement": education,
+        # "entertainment_engagement": entertainment,
     }])
     processed_data = pd.concat([processed_data, new_row], ignore_index=True)
 

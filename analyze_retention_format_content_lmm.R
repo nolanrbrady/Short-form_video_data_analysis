@@ -82,7 +82,7 @@ parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
     input_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
-    exclude_subjects_json = "data/tabular/excluded_subjects.json",
+    exclude_subjects_json = "data/config/excluded_subjects.json",
     out_main_csv = "data/results/retention_format_content_lmm_main_effects_r.csv",
     out_posthoc_csv = "data/results/retention_format_content_lmm_posthoc_pairwise_r.csv",
     alpha = 0.05,

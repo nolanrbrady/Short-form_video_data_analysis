@@ -25,37 +25,37 @@ for file in os.listdir(DATA_DIR):
 # Write the aggregated enagement data to a CSV
 all_data.to_csv("combined_engagement_data.csv")
 
-#================================
-# Statistical Analysis
-#================================
+# #================================
+# # Statistical Analysis
+# #================================
 
-df = all_data
+# df = all_data
 
-# Derive factors from Category
-def parse_content(cat):
-    return "Education" if "Educat" in cat else "Entertainment"
+# # Derive factors from Category
+# def parse_content(cat):
+#     return "Education" if "Educat" in cat else "Entertainment"
 
-def parse_length(cat: str) -> str:
-    return "Short" if "Short-Form" in cat else "Long"
+# def parse_length(cat: str) -> str:
+#     return "Short" if "Short-Form" in cat else "Long"
 
-df["Content"] = df["Category"].apply(parse_content).astype("category")
-df["Length"] = df["Category"].apply(parse_length).astype("category")
-df["Condition"] = df["Category"].astype("category")
-df["subject_id"] = df["subject_id"].astype("category")
-df['Rating'] = pd.to_numeric(df['Rating'])
-print(df.head())
+# df["Content"] = df["Category"].apply(parse_content).astype("category")
+# df["Length"] = df["Category"].apply(parse_length).astype("category")
+# df["Condition"] = df["Category"].astype("category")
+# df["subject_id"] = df["subject_id"].astype("category")
+# df['Rating'] = pd.to_numeric(df['Rating'])
+# print(df.head())
 
-# 2 x 2 ANOVA
-results_table = run_two_by_two_anova(df)
-print(results_table)
+# # 2 x 2 ANOVA
+# results_table = run_two_by_two_anova(df)
+# print(results_table)
 
-# # Fixed Effects Ordinary Least Squares Model
-anova_result, mean_rating = run_fixed_effect_ols(df)
-print("ANOVA Results: ")
-print(anova_result)
+# # # Fixed Effects Ordinary Least Squares Model
+# anova_result, mean_rating = run_fixed_effect_ols(df)
+# print("ANOVA Results: ")
+# print(anova_result)
 
-# Mixed linear model
-model = run_mixed_linear_model(df)
-print("Mixed Effects Model: ")
-print(model.summary())
+# # Mixed linear model
+# model = run_mixed_linear_model(df)
+# print("Mixed Effects Model: ")
+# print(model.summary())
 
