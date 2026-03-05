@@ -45,7 +45,8 @@
 #   - Poldrack (2007): ROI signal extraction framework.
 #   - Benjamini & Hochberg (1995): BH-FDR.
 #   - Laird & Ware (1982): mixed-effects models.
-#   - Kuznetsova et al. (2017): lmerTest / Satterthwaite df.
+#   - Kuznetsova et al. (2017): lmerTest integration with mixed-model inference tooling.
+#   - Kenward & Roger (1997); Halekoh & Højsgaard (2014): Kenward-Roger df/p-value approximation.
 #   - Lenth (2016): emmeans for contrasts.
 
 suppressPackageStartupMessages({
@@ -379,7 +380,8 @@ complete_case_subjects <- function(sub) {
 fit_factorial_lmm <- function(sub_complete) {
   # Per-ROI × chrom LMM with random intercept for subject (within-subject design).
   # References: Laird & Ware (1982); Bates et al. (2015), see `CITATIONS.md`.
-  # Inference: lmerTest provides approximate p-values via Satterthwaite df (Kuznetsova et al., 2017).
+  # Inference: fixed-effect tests are extracted with Kenward-Roger denominator df
+  # via lmerTest + pbkrtest (Kenward & Roger, 1997; Halekoh & Højsgaard, 2014).
   lmerTest::lmer(beta ~ format_c * content_c + (1 | subject_id), data = sub_complete, REML = TRUE)
 }
 
@@ -389,17 +391,32 @@ fit_condition_lmm <- function(sub_complete) {
   lmerTest::lmer(beta ~ condition + (1 | subject_id), data = sub_complete, REML = TRUE)
 }
 
-extract_fixed <- function(model, term) {
-  # Extract fixed-effect results from lmerTest summary:
-  # - Estimate/SE/t/df/p from lmerTest (Satterthwaite df; see `CITATIONS.md`)
+extract_fixed <- function(model, term, anova_kr) {
+  # Extract fixed-effect results using:
+  # - Estimate/SE from model coefficient table
+  # - Kenward-Roger DenDF and p-value from Type-III ANOVA
+  # For 1-df terms, report t as sign(beta) * sqrt(F).
   # - Wald 95% CI
+  if (!(term %in% rownames(anova_kr))) {
+    stop(paste0("Expected term '", term, "' in Kenward-Roger ANOVA table."))
+  }
+
   coefs <- summary(model)$coefficients
   if (!(term %in% rownames(coefs))) stop(paste0("Expected term '", term, "' in model coefficients."))
   est <- as.numeric(coefs[term, "Estimate"])
   se <- as.numeric(coefs[term, "Std. Error"])
-  df <- as.numeric(coefs[term, "df"])
-  t <- as.numeric(coefs[term, "t value"])
-  p <- as.numeric(coefs[term, "Pr(>|t|)"])
+  num_df <- as.numeric(anova_kr[term, "NumDF"])
+  if (!is.finite(num_df) || abs(num_df - 1) > 1e-8) {
+    stop(paste0("Expected NumDF=1 for term '", term, "' but got ", num_df, "."))
+  }
+  df <- as.numeric(anova_kr[term, "DenDF"])
+  f_val <- as.numeric(anova_kr[term, "F value"])
+  if (!is.finite(f_val) || f_val < 0) {
+    stop(paste0("Invalid Kenward-Roger F statistic for term '", term, "': ", f_val))
+  }
+  t <- sign(est) * sqrt(f_val)
+  p <- as.numeric(anova_kr[term, "Pr(>F)"])
+
   ci <- suppressMessages(confint(model, parm = term, method = "Wald"))
   ci_low <- as.numeric(ci[1])
   ci_high <- as.numeric(ci[2])
@@ -408,6 +425,14 @@ extract_fixed <- function(model, term) {
 
 main <- function() {
   args <- parse_args()
+  if (!requireNamespace("pbkrtest", quietly = TRUE)) {
+    stop(
+      paste0(
+        "Kenward-Roger inference requires the 'pbkrtest' package, but it is not installed. ",
+        "Install it before running this script."
+      )
+    )
+  }
 
   if (!is.na(args$pbkrtest_limit)) {
     emmeans::emm_options(pbkrtest.limit = args$pbkrtest_limit)
@@ -415,6 +440,7 @@ main <- function() {
   if (!is.na(args$lmerTest_limit)) {
     emmeans::emm_options(lmerTest.limit = args$lmerTest_limit)
   }
+  emmeans::emm_options(lmer.df = "kenward-roger")
 
   roi_map <- load_roi_definition(args$roi_json)
 
@@ -464,10 +490,11 @@ main <- function() {
       n_obs <- nrow(sub_cc)
 
       model <- fit_factorial_lmm(sub_cc)
+      anova_kr <- anova(model, ddf = "Kenward-Roger", type = 3)
       singular_fit <- lme4::isSingular(model, tol = 1e-4)
-      fmt <- extract_fixed(model, "format_c")
-      cnt <- extract_fixed(model, "content_c")
-      inter <- extract_fixed(model, "format_c:content_c")
+      fmt <- extract_fixed(model, "format_c", anova_kr)
+      cnt <- extract_fixed(model, "content_c", anova_kr)
+      inter <- extract_fixed(model, "format_c:content_c", anova_kr)
 
       main_rows[[length(main_rows) + 1]] <- tibble(
         roi = roi_name,
@@ -550,19 +577,21 @@ main <- function() {
       sub <- df_roi %>% filter(.data$chrom == chrom_name, .data$roi == roi_name)
       sub_cc <- complete_case_subjects(sub) %>% mutate(condition = factor(condition, levels = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")))
       model_cond <- fit_condition_lmm(sub_cc)
-      em <- emmeans::emmeans(model_cond, ~ condition)
+      em <- emmeans::emmeans(model_cond, ~ condition, lmer.df = "kenward-roger")
       # Use contrast(..., method="pairwise") for compatibility across emmeans versions.
       # Reference for EMMs/contrasts: Lenth (2016); Searle et al. (1980), see `CITATIONS.md`.
       pw <- emmeans::contrast(em, method = "pairwise", adjust = "none") %>% as.data.frame()
       stat_type <- if ("t.ratio" %in% names(pw)) "t" else if ("z.ratio" %in% names(pw)) "z" else NA_character_
       if (is.na(stat_type)) stop("Expected 't.ratio' or 'z.ratio' in emmeans pairwise contrast output.")
       if (stat_type == "z") {
-        pw[["t.ratio"]] <- pw[["z.ratio"]]
+        pw[["t_display"]] <- "t can't be calculated"
         cat(
-          "[warn] emmeans returned z.ratio (asymptotic). Recording it as t.ratio in posthoc output for ",
+          "[warn] emmeans returned z.ratio (asymptotic). Writing \"t can't be calculated\" in posthoc t column for ",
           chrom_name, " ", roi_name, ".\n",
           sep = ""
         )
+      } else {
+        pw[["t_display"]] <- as.character(pw[["t.ratio"]])
       }
       if (!("df" %in% names(pw))) pw[["df"]] <- NA_real_
 
@@ -574,7 +603,7 @@ main <- function() {
           condition_a = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 1]),
           condition_b = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 2])
         ) %>%
-        select(roi, chrom, condition_a, condition_b, stat_type, estimate, SE, df, t.ratio, p.value)
+        select(roi, chrom, condition_a, condition_b, stat_type, estimate, SE, df, t_display, p.value)
 
       names(pw) <- c("roi", "chrom", "condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
       posthoc_rows[[length(posthoc_rows) + 1]] <- pw
@@ -677,7 +706,7 @@ main <- function() {
       mean_diff = numeric(),
       se = numeric(),
       df = numeric(),
-      t = numeric(),
+      t = character(),
       p_unc = numeric()
     )
     write_csv(empty, args$out_posthoc_csv)
