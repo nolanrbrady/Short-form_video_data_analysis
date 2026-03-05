@@ -240,7 +240,7 @@ Barker et al introduce the iWLS method and demonstrate that it out performs OLS 
 - `idxBasis`: `2`
 - `paramsBasis`: `0.1 3.0 1.8 3.0`
 - `rhoSD_ssThresh`: `0`
-- `flagSSmethod`: `0`
+- `flagNuisanceRMethod`: `0`
 - `c_vector`: `0`
 
 ---

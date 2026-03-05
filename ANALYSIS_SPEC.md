@@ -141,7 +141,7 @@ Significance threshold:
 - Gate significance on **FDR-corrected p < 0.05**.
 
 R implementation notes:
-- LMM via `lme4::lmer` with p-values via `lmerTest` (Satterthwaite df approximation).
+- LMM via `lme4::lmer`, with fixed-effect p-values/df from Kenward-Roger Type-III tests via `lmerTest` + `pbkrtest`.
 - Post-hoc via `emmeans`.
 
 Python implementation notes:
@@ -150,7 +150,7 @@ Python implementation notes:
 
 References (see `CITATIONS.md`):
 - Mixed models: Laird & Ware (1982); Bates et al. (2015).
-- Satterthwaite df: Satterthwaite (1946); Kuznetsova et al. (2017).
+- Kenward-Roger inference: Kenward & Roger (1997); Halekoh & Højsgaard (2014); Kuznetsova et al. (2017).
 
 ---
 

@@ -168,19 +168,37 @@
   - **Title:** lmerTest Package: Tests in Linear Mixed Effects Models
   - **First Author:** Kuznetsova
   - **Year:** 2017
-  - **Usage:** Fixed-effect tests and Satterthwaite degrees of freedom
-  - **Reasoning:** Justifies the `lmerTest` approach for approximate t-tests / p-values in linear mixed models used in the channelwise, ROI-wise, retention, and engagement analyses.
+  - **Usage:** Fixed-effect tests in linear mixed models
+  - **Reasoning:** Justifies the `lmerTest` implementation used for mixed-model fixed-effect inference across analyses in this repo, including channelwise and ROI scripts that pair `lmerTest` with Kenward-Roger denominator df calculations.
   - **Link:** https://doi.org/10.18637/jss.v082.i13
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+
+- **Kenward, M. G., & Roger, J. H. (1997)**
+  - **Title:** Small Sample Inference for Fixed Effects from Restricted Maximum Likelihood
+  - **First Author:** Kenward
+  - **Year:** 1997
+  - **Usage:** Kenward-Roger denominator degrees of freedom and F-test approximation
+  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation now used for fixed-effect tests in the channelwise and ROI format×content LMM scripts.
+  - **Link:** https://doi.org/10.2307/2533558
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
+
+- **Halekoh, U., & Højsgaard, S. (2014)**
+  - **Title:** A Kenward-Roger Approximation and Parametric Bootstrap Methods for Tests in Linear Mixed Models - The R Package pbkrtest
+  - **First Author:** Halekoh
+  - **Year:** 2014
+  - **Usage:** R implementation of Kenward-Roger tests via `pbkrtest`
+  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df and p-values for `lmer` models.
+  - **Link:** https://doi.org/10.18637/jss.v059.i09
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
 
 - **Satterthwaite, F. E. (1946)**
   - **Title:** An approximate distribution of estimates of variance components
   - **First Author:** Satterthwaite
   - **Year:** 1946
   - **Usage:** Approximate degrees of freedom (Satterthwaite)
-  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) to obtain approximate p-values for fixed effects in LMMs, including channelwise, ROI-wise, retention, and engagement analyses.
+  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) in retention and engagement LMM analyses.
   - **Link:** https://doi.org/10.2307/3002019
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
 - **Poldrack, R. A. (2007)**
   - **Title:** Region of interest analysis for fMRI
@@ -287,7 +305,7 @@
   - **Title:** Ten Simple Rules for Reproducible Computational Research
   - **First Author:** Sandve
   - **Year:** 2013
-  - **Usage:** Centralized exclusion manifest across analysis scripts
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions (here: participant exclusions) to prevent script-specific drift across inferential endpoints.
+  - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification)
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, and machine-readable certification artifacts) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `analyze_format_content_lmm_roi.R`, `README.md`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `certify_preprocess_merge_integrity.py`, `README.md`, `analyze_format_content_lmm_roi.R`
