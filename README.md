@@ -1,5 +1,5 @@
 ## Short-form Video Study — Analysis Repo
-Last updated: 02-13-2026
+Last updated: 03-03-2026
 Updated by: Nolan Brady
 
 This repo contains two primary analysis “tracks”:
@@ -165,6 +165,34 @@ To merge with `data/tabular/combined_sfv_data.csv`, you will need a shared key:
 - Either export Homer betas with a `subject_id` column that matches Qualtrics, **or**
 - Create a mapping between `Subject` (e.g., `sub_0001`) and Qualtrics `subject_id` and merge using that.
 
+### A6) Single entry-point preprocessing + merge + certification
+
+If you already have the required upstream inputs on disk and want one command to
+run preprocessing/merge in the correct order with strict integrity checks:
+
+```bash
+bash pipeline_preprocess_merge.sh
+```
+
+What this entry-point does (in order):
+1. Clears `data/results/` at run start.
+2. Runs `process_engagement.py`.
+3. Runs `process_sociodemographic.py`.
+4. Runs `generate_combined_data.py`.
+5. Runs `merge_homer3_betas_with_combined_data.R`.
+6. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
+
+Required inputs for this entry-point:
+- `demographic/combined_engagement_data.csv`
+- `data/tabular/recall_assessment_score_diffs.csv`
+- `qualtrics/final_SF_demographic_data.csv`
+- `data/tabular/homer3_glm_betas_wide.csv`
+
+Certification outputs:
+- `data/results/preprocess_merge_certification.json`
+- `data/results/preprocess_merge_id_audit.csv`
+- `data/results/preprocess_merge_dropped_ids.csv`
+
 ---
 
 ## Pipeline C — Homer3 betas + Format×Content (channelwise LMM)
@@ -184,11 +212,11 @@ Requirements / invariants:
 - Beta columns can include `0`/`NaN` as pruned-channel stand-ins; downstream modeling treats these as missing (do not impute).
 
 Recommended prior step (if you haven’t generated it yet):
-- Run `generate_combined_data.py` to (re)build `data/tabular/combined_sfv_data.csv` from the raw sources.
+- Run `bash pipeline_preprocess_merge.sh` for end-to-end preprocessing + merge + certification.
+- Or run `generate_combined_data.py` to (re)build `data/tabular/combined_sfv_data.csv` if orchestrating manually.
 
 ### C1) Inner-join Homer3 betas with combined tabular data
 
-- Python: `merge_homer3_betas_with_combined_data.py`
 - R: `merge_homer3_betas_with_combined_data.R`
 
 What it does:
@@ -200,13 +228,13 @@ Notes:
 - Output is one row per subject containing both demographics/behavior and beta columns.
 - Scripts **fail hard** if either input contains duplicate `subject_id` values after normalization (expected exactly one row per subject).
 
-Example (Python):
+Example (R):
 
 ```bash
-python merge_homer3_betas_with_combined_data.py \
-  --homer-csv data/tabular/homer3_glm_betas_wide.csv \
-  --combined-csv data/tabular/combined_sfv_data.csv \
-  --out-csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv
+Rscript merge_homer3_betas_with_combined_data.R \
+  --homer_csv data/tabular/homer3_glm_betas_wide.csv \
+  --combined_csv data/tabular/combined_sfv_data.csv \
+  --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 ```
 
 ### C1b) QC report from Homer3 beta-wide table (subject-level channel exclusion)
@@ -367,7 +395,7 @@ Rscript tests/validate_pipeline_c_roi_r.R
 - R: `analyze_retention_format_content_lmm.R`
 
 Input:
-- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   (must contain `subject_id` and:
   `diff_short_form_education`, `diff_short_form_entertainment`,
   `diff_long_form_education`, `diff_long_form_entertainment`)
@@ -395,7 +423,7 @@ Example:
 
 ```bash
 Rscript analyze_retention_format_content_lmm.R \
-  --input_csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --out_main_csv data/results/retention_format_content_lmm_main_effects_r.csv \
   --out_posthoc_csv data/results/retention_format_content_lmm_posthoc_pairwise_r.csv
 ```
@@ -415,7 +443,7 @@ Rscript tests/validate_retention_pipeline_r.R
 - R: `analyze_engagement_format_content_lmm.R`
 
 Input:
-- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   (must contain `subject_id` and:
   `sf_education_engagement`, `sf_entertainment_engagement`,
   `lf_education_engagement`, `lf_entertainment_engagement`)
@@ -443,7 +471,7 @@ Example:
 
 ```bash
 Rscript analyze_engagement_format_content_lmm.R \
-  --input_csv data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --out_main_csv data/results/engagement_format_content_lmm_main_effects_r.csv \
   --out_posthoc_csv data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv
 ```
@@ -504,7 +532,7 @@ Rscript tests/calibrate_type2_error_r.R --n_reps 20 --type2_upper_bound 0.60
 Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
 ```
 
-### A6) Correlation diagnostics / heatmaps (optional)
+### A7) Correlation diagnostics / heatmaps (optional)
 
 - Script: `covariate_correlation_analysis.py`
 - Two presets:

@@ -31,9 +31,10 @@ suppressPackageStartupMessages({
 })
 
 parse_args <- function() {
+  # *betas_wide.csv -> uses AR-IRLS with a hpf of 0.001 and a lpf of 0.2
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    homer_csv = "data/tabular/homer3_glm_betas_wide_ols.csv",
+    homer_csv = "data/tabular/homer3_glm_betas_wide.csv",
     combined_csv = "data/tabular/combined_sfv_data.csv",
     out_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv"
   )
