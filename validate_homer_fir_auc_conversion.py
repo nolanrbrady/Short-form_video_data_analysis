@@ -1,11 +1,12 @@
 """Validate the FIR-to-AUC conversion against excluded-channel policy.
 
-This script intentionally uses top-of-file configuration variables instead of a
-CLI so the validation assumptions remain easy to inspect and audit.
+Validation defaults remain explicit in this file, while CLI path overrides let
+the pipeline configure raw/AUC/settings locations from one place.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -26,6 +27,33 @@ RAW_FIR_CSV = "data/tabular/homer3_glm_betas_wide_fir.csv"
 AUC_CSV = "data/tabular/generated_data/homer3_glm_betas_wide_auc.csv"
 SETTINGS_JSON = "data/config/preprocessing_settings.json"
 BASIS_FAMILY = "Homer3 idxBasis=1 Gaussian"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Validate that the FIR-to-AUC conversion preserves excluded-channel policy."
+    )
+    parser.add_argument(
+        "--raw-fir-csv",
+        default=RAW_FIR_CSV,
+        help="Path to the raw Homer FIR basis-weight CSV.",
+    )
+    parser.add_argument(
+        "--auc-csv",
+        default=AUC_CSV,
+        help="Path to the derived single-beta AUC CSV.",
+    )
+    parser.add_argument(
+        "--settings-json",
+        default=SETTINGS_JSON,
+        help="Path to the shared preprocessing settings JSON.",
+    )
+    parser.add_argument(
+        "--provenance-json",
+        default=None,
+        help="Optional override for the FIR-to-AUC provenance JSON path.",
+    )
+    return parser.parse_args()
 
 
 def _parse_auc_value(raw: str) -> float:
@@ -166,7 +194,13 @@ def validate_homer_fir_auc_conversion(
 
 
 def main() -> None:
-    validate_homer_fir_auc_conversion()
+    args = parse_args()
+    validate_homer_fir_auc_conversion(
+        raw_fir_csv=args.raw_fir_csv,
+        auc_csv=args.auc_csv,
+        settings_json=args.settings_json,
+        provenance_json=args.provenance_json,
+    )
     print("[PASS] FIR-to-AUC conversion lint passed")
 
 

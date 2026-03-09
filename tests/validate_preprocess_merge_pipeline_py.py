@@ -156,16 +156,35 @@ def test_end_to_end_merge_and_certification(tmp_path: Path) -> None:
     write_raw_fir_csv(raw_fir_csv, settings_path)
     write_combined_csv(combined_csv)
 
-    collapse_homer_fir_to_auc(
-        input_csv=str(raw_fir_csv),
-        output_csv=str(auc_csv),
-        settings_json=str(settings_path),
+    collapse = run_command(
+        [
+            "python",
+            "collapse_homer_fir_to_auc.py",
+            "--input-csv",
+            str(raw_fir_csv),
+            "--output-csv",
+            str(auc_csv),
+            "--settings-json",
+            str(settings_path),
+        ],
+        cwd=ROOT,
     )
-    validate_homer_fir_auc_conversion(
-        str(raw_fir_csv),
-        str(auc_csv),
-        settings_json=str(settings_path),
+    assert collapse.returncode == 0, collapse.stderr or collapse.stdout
+
+    validate = run_command(
+        [
+            "python",
+            "validate_homer_fir_auc_conversion.py",
+            "--raw-fir-csv",
+            str(raw_fir_csv),
+            "--auc-csv",
+            str(auc_csv),
+            "--settings-json",
+            str(settings_path),
+        ],
+        cwd=ROOT,
     )
+    assert validate.returncode == 0, validate.stderr or validate.stdout
     auc_df = pd.read_csv(auc_csv)
     row1 = auc_df.loc[auc_df["Subject"] == "sub_0001"].iloc[0]
     row2 = auc_df.loc[auc_df["Subject"] == "sub_0002"].iloc[0]

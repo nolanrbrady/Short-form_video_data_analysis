@@ -196,7 +196,10 @@ Configured production settings:
 Command:
 
 ```bash
-python collapse_homer_fir_to_auc.py
+python collapse_homer_fir_to_auc.py \
+  --input-csv data/tabular/homer3_glm_betas_wide_fir.csv \
+  --output-csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
+  --settings-json data/config/preprocessing_settings.json
 ```
 
 ### A5c) Plot reconstructed FIR HRFs for selected subjects (HbO + HbR on same graph)
@@ -233,6 +236,11 @@ run preprocessing/merge in the correct order with strict integrity checks:
 bash pipeline_preprocess_merge.sh
 ```
 
+The key file locations for the FIR-to-AUC, merge, and certification steps are
+declared as variables at the top of `pipeline_preprocess_merge.sh`, so those
+paths can now be changed from the pipeline entry point without editing the
+Python/R scripts.
+
 What this entry-point does (in order):
 1. Clears `data/results/` at run start.
 2. Runs `process_engagement.py`.
@@ -249,7 +257,7 @@ Required inputs for this entry-point:
 - `demographic/combined_engagement_data.csv`
 - `data/tabular/generated_data/recall_assessment_score_diffs.csv`
 - `qualtrics/final_SF_demographic_data.csv`
-- `data/tabular/homer3_glm_betas_wide_fir.csv`
+- the raw FIR CSV pointed to by `HOMER_RAW_FIR_CSV` in `pipeline_preprocess_merge.sh`
 
 Certification outputs:
 - `data/results/preprocess_merge_certification.json`

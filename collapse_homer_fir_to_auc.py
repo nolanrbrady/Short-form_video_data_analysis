@@ -1,11 +1,13 @@
 """Collapse Homer FIR basis-weight exports to single beta values via AUC.
 
-This script intentionally uses top-of-file configuration variables instead of a
-CLI so the methodological assumptions remain easy to inspect and edit.
+The computational method is still governed by explicit defaults in this file,
+but the file paths can be overridden via CLI so the pipeline can configure
+inputs/outputs from one place without editing source.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -27,6 +29,28 @@ INPUT_CSV = "data/tabular/homer3_glm_betas_wide_fir.csv"
 OUTPUT_CSV = "data/tabular/generated_data/homer3_glm_betas_wide_auc.csv"
 SETTINGS_JSON = "data/config/preprocessing_settings.json"
 BASIS_FAMILY = "Homer3 idxBasis=1 Gaussian"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Collapse Homer FIR basis-weight exports into single AUC beta values."
+    )
+    parser.add_argument(
+        "--input-csv",
+        default=INPUT_CSV,
+        help="Path to the raw Homer FIR basis-weight CSV.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        default=OUTPUT_CSV,
+        help="Path to the derived single-beta AUC CSV.",
+    )
+    parser.add_argument(
+        "--settings-json",
+        default=SETTINGS_JSON,
+        help="Path to the shared preprocessing settings JSON.",
+    )
+    return parser.parse_args()
 
 
 def _format_output_value(value: float) -> str:
@@ -112,7 +136,12 @@ def collapse_homer_fir_to_auc(
 
 
 def main() -> None:
-    output_path = collapse_homer_fir_to_auc()
+    args = parse_args()
+    output_path = collapse_homer_fir_to_auc(
+        input_csv=args.input_csv,
+        output_csv=args.output_csv,
+        settings_json=args.settings_json,
+    )
     print(f"[INFO] Wrote FIR-to-AUC beta table: {output_path}")
     print(f"[INFO] Wrote FIR-to-AUC provenance: {default_auc_provenance_path(output_path)}")
 
