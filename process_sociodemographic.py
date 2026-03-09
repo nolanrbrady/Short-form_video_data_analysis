@@ -213,6 +213,30 @@ def write_column_audit(
     pd.DataFrame(rows).to_csv(outpath, index=False)
 
 
+def validate_subject_ids(subject_id: pd.Series, *, dataset_name: str) -> None:
+    """Fail fast if subject IDs are missing or duplicated."""
+    issues: list[str] = []
+    missing_mask = subject_id.isna()
+    if missing_mask.any():
+        missing_rows = [int(idx) + 2 for idx in subject_id.index[missing_mask][:10]]
+        issues.append(
+            "missing/non-numeric subject_id values at 1-based CSV row numbers "
+            f"{missing_rows}"
+        )
+
+    duplicate_counts = subject_id.astype("Int64").value_counts()
+    duplicate_counts = duplicate_counts[duplicate_counts > 1]
+    if not duplicate_counts.empty:
+        examples = ", ".join(f"{int(idx)}={int(count)}" for idx, count in duplicate_counts.head(10).items())
+        issues.append(f"duplicate subject_id values {examples}")
+
+    if issues:
+        raise ValueError(
+            f"{dataset_name} contains invalid participant identifiers: {'; '.join(issues)}. "
+            "Fix the Qualtrics study-ID column before generating covariates."
+        )
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent
     in_path = root / "qualtrics" / "final_SF_demographic_data.csv"
@@ -241,6 +265,7 @@ def main() -> None:
         .astype("Int64")
         .rename("subject_id")
     )
+    validate_subject_ids(subject_id, dataset_name=in_path.name)
 
     age = pd.to_numeric(df[age_col], errors="coerce").rename("age")
 

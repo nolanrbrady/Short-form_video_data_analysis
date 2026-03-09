@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 STEP_INDEX=0
-STEP_TOTAL=5
+STEP_TOTAL=7
 
 log() {
   echo "[pipeline] $*"
@@ -49,7 +49,7 @@ log "Validating required input files"
 need_file "demographic/combined_engagement_data.csv"
 need_file "data/tabular/recall_assessment_score_diffs.csv"
 need_file "qualtrics/final_SF_demographic_data.csv"
-need_file "data/tabular/homer3_glm_betas_wide.csv"
+need_file "data/tabular/homer3_glm_betas_wide_fir.csv"
 
 log "Cleaning data/results (unconditional)"
 mkdir -p "data/results"
@@ -64,16 +64,22 @@ run_step "Preprocess socio-demographic covariates" \
 run_step "Build combined tabular dataset" \
   python generate_combined_data.py
 
+run_step "Collapse Homer FIR betas to baseline-corrected task-window AUC betas" \
+  python collapse_homer_fir_to_auc.py
+
+run_step "Lint FIR-to-AUC conversion against excluded-channel policy" \
+  python validate_homer_fir_auc_conversion.py
+
 run_step "Merge Homer3 betas with combined tabular data" \
   Rscript merge_homer3_betas_with_combined_data.R \
-    --homer_csv data/tabular/homer3_glm_betas_wide.csv \
+    --homer_csv data/tabular/homer3_glm_betas_wide_auc.csv \
     --combined_csv data/tabular/combined_sfv_data.csv \
     --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 
 run_step "Certify preprocess+merge integrity" \
   python certify_preprocess_merge_integrity.py \
     --combined_csv data/tabular/combined_sfv_data.csv \
-    --homer_csv data/tabular/homer3_glm_betas_wide.csv \
+    --homer_csv data/tabular/homer3_glm_betas_wide_auc.csv \
     --merged_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
     --out_json data/results/preprocess_merge_certification.json \
     --out_audit_csv data/results/preprocess_merge_id_audit.csv \

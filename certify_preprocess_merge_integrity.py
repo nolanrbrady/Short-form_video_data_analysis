@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--homer_csv",
-        default="data/tabular/homer3_glm_betas_wide.csv",
+        default="data/tabular/homer3_glm_betas_wide_auc.csv",
         help="Path to Homer3 wide beta CSV.",
     )
     parser.add_argument(
