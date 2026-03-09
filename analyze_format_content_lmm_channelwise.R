@@ -23,7 +23,7 @@
 #       content_c = -0.5 (Entertainment), +0.5 (Education)
 #
 # Missingness / pruned channels (repo policy)
-#   - Treat BOTH 0 and NA in beta columns as pruned/missing (do not impute).
+#   - Derived FIR-to-AUC beta tables encode pruned channels as NA (do not impute).
 #   - Default: complete-case within channel/chrom (subject must have all 4 conditions present).
 #
 # Multiple testing correction
@@ -189,7 +189,7 @@ reshape_to_long <- function(df_merged) {
   # Each wide beta column is one (channel × condition × chrom) measurement; long format creates one row per:
   #   subject × channel × chrom × condition
   #
-  # Pruned-channel policy: treat beta == 0 as missing (do not impute).
+  # Derived FIR-to-AUC beta tables preserve only NA as pruned-channel missingness.
   beta_cols <- names(df_merged)[str_detect(names(df_merged), "^S\\d+_D\\d+_Cond\\d{2}_(HbO|HbR)$")]
   if (length(beta_cols) == 0) stop("No beta columns matched pattern like 'S01_D01_Cond01_HbO'.")
 
@@ -211,7 +211,6 @@ reshape_to_long <- function(df_merged) {
       .
     } %>%
     mutate(beta = suppressWarnings(as.numeric(beta))) %>%
-    mutate(beta = na_if(beta, 0)) %>%
     mutate(
       condition = case_when(
         cond == "01" ~ "SF_Edu",

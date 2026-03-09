@@ -1,26 +1,27 @@
 #!/usr/bin/env Rscript
 
-# Merge Homer3 GLM betas (wide) with tabular combined dataset (demographics/behavior).
+# Merge Homer3 single-beta GLM/AUC betas (wide) with tabular combined dataset (demographics/behavior).
 #
 # This script performs an INNER JOIN between:
-#   - data/tabular/homer3_glm_betas_wide.csv (ID column: Subject, e.g. sub_0001)
+#   - data/tabular/homer3_glm_betas_wide_auc.csv (ID column: Subject, e.g. sub_0001)
 #   - data/tabular/combined_sfv_data.csv     (ID column: subject_id, sometimes zero-padded)
 #
 # Key behavior:
 #   - Extracts the numeric subject id from both ID columns (handles padding like 0017 vs 17,
 #     and Homer-style IDs like sub_0017). This matches the merge spec in `ANALYSIS_SPEC.md`.
 #   - Produces a single merged row per subject containing all columns from both inputs.
-#   - Does NOT impute missingness. Downstream modeling must explicitly treat 0/NaN as
-#     pruned/missing channels per repo policy.
+#   - Does NOT impute missingness. The derived FIR-to-AUC beta table encodes pruned
+#     channels as `NaN`, which downstream modeling must handle explicitly.
 #   - Fails hard if either input has duplicate subject IDs after normalization (one row per subject is required).
 #
 # Scientific integrity note:
-#   - homer3_glm_betas_wide.csv can contain both 0 and NaN as stand-ins for pruned channels.
-#     Do not interpret these as true zero activation; handle as missing downstream.
+#   - the raw FIR import `homer3_glm_betas_wide_fir.csv` can contain both 0 and NaN as
+#     stand-ins for pruned channels, but the derived AUC file passed here should carry
+#     those pruned cells forward as `NaN` only.
 #
 # Usage:
 #   Rscript merge_homer3_betas_with_combined_data.R \
-#     --homer_csv data/tabular/homer3_glm_betas_wide.csv \
+#     --homer_csv data/tabular/homer3_glm_betas_wide_auc.csv \
 #     --combined_csv data/tabular/combined_sfv_data.csv \
 #     --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 
@@ -34,7 +35,7 @@ parse_args <- function() {
   # *betas_wide.csv -> uses AR-IRLS with a hpf of 0.001 and a lpf of 0.2
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    homer_csv = "data/tabular/homer3_glm_betas_wide.csv",
+    homer_csv = "data/tabular/homer3_glm_betas_wide_auc.csv",
     combined_csv = "data/tabular/combined_sfv_data.csv",
     out_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv"
   )
