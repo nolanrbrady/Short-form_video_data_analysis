@@ -6,7 +6,7 @@
 # - Verify that `analyze_format_content_lmm_channelwise.R` adheres to `ANALYSIS_SPEC.md`:
 #   - Subject ID normalization (`sub_0001` aligns with `0001`/`1`)
 #   - Condition mapping + ±0.5 effect coding
-#   - Pruned-channel policy: treat 0 as missing
+#   - Pruned-channel policy: treat NA as missing
 #   - Complete-case within channel×chrom (all 4 conditions required)
 #   - BH-FDR families per chrom × effect across channels
 #   - Post-hoc gating: only interaction-FDR-significant channel×chrom pairs
@@ -217,9 +217,11 @@ main <- function() {
   )
   combined <- generate_combined(n_subjects)
 
-  # Inject a pruned channel (0) for one subject in one condition: should force complete-case drop
+  # Inject a pruned channel (NA) for one subject in one condition: should force complete-case drop
   # for that channel×chrom only.
-  homer[["S01_D01_Cond03_HbO"]][[1]] <- 0
+  homer[["S01_D01_Cond03_HbO"]][[1]] <- NA_real_
+  # Inject one literal zero beta that should remain valid data, not missing.
+  homer[["S02_D01_Cond01_HbO"]][[2]] <- 0
 
   merged <- build_merged_input(homer, combined)
   write_csv(merged, input_csv)
@@ -263,7 +265,10 @@ main <- function() {
   # 2) Pruned channel policy + complete-case: HbO S01_D01 should drop exactly 1 subject (n_subjects = 11)
   row <- main_tidy %>% filter(channel == "S01_D01", chrom == "HbO", effect == "interaction")
   assert_true(nrow(row) == 1, "expected exactly one tidy row for S01_D01 HbO interaction")
-  assert_true(row$n_subjects[[1]] == (n_subjects - 1), "expected HbO S01_D01 to drop one subject due to pruned beta==0")
+  assert_true(row$n_subjects[[1]] == (n_subjects - 1), "expected HbO S01_D01 to drop one subject due to pruned beta==NA")
+  row_zero <- main_tidy %>% filter(channel == "S02_D01", chrom == "HbO", effect == "interaction")
+  assert_true(nrow(row_zero) == 1, "expected exactly one tidy row for S02_D01 HbO interaction")
+  assert_true(row_zero$n_subjects[[1]] == n_subjects, "literal zero beta appears to have been treated as missing")
 
   # 3) Coefficient recovery for strong-effect channel (within tolerance)
   tol <- 0.25
@@ -337,7 +342,6 @@ main <- function() {
       LF_Edu = homer[["S01_D01_Cond04_HbO"]]
     ) %>%
     pivot_longer(cols = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu"), names_to = "condition", values_to = "beta") %>%
-    mutate(beta = na_if(beta, 0)) %>%
     pivot_wider(names_from = condition, values_from = beta)
   # Complete cases only (matches analysis)
   long_cc <- long %>% drop_na(SF_Edu, SF_Ent, LF_Ent, LF_Edu)

@@ -7,7 +7,7 @@
 #   - strict ROI JSON parsing and channel-map validation
 #   - subject ID normalization (`sub_0001` aligns with `0001`/`1`)
 #   - condition mapping + ±0.5 effect coding
-#   - pruned-channel policy: treat 0 as missing
+#   - pruned-channel policy: treat NA as missing
 #   - ROI beta aggregation as mean across available channels
 #   - complete-case within ROI×chrom (all 4 conditions required)
 #   - BH-FDR families per chrom × effect across ROIs
@@ -226,9 +226,11 @@ main <- function() {
   # Pruning injections for ROI mean/complete-case checks:
   # - subject 1 has both ROI1 channels pruned for Cond03 HbO -> ROI1/HbO complete-case drop.
   # - subject 2 has one ROI1 channel pruned for Cond02 HbO only -> should remain included.
-  homer[["S01_D01_Cond03_HbO"]][[1]] <- 0
-  homer[["S01_D02_Cond03_HbO"]][[1]] <- 0
-  homer[["S01_D01_Cond02_HbO"]][[2]] <- 0
+  homer[["S01_D01_Cond03_HbO"]][[1]] <- NA_real_
+  homer[["S01_D02_Cond03_HbO"]][[1]] <- NA_real_
+  homer[["S01_D01_Cond02_HbO"]][[2]] <- NA_real_
+  # Inject one literal zero beta in a non-pruned ROI channel; this should remain valid data.
+  homer[["S02_D01_Cond01_HbO"]][[3]] <- 0
 
   combined <- generate_combined(n_subjects)
   merged <- build_merged_input(homer, combined)
@@ -289,6 +291,12 @@ main <- function() {
   assert_true(
     row_vmpfc_hbo_int$n_subjects[[1]] == (n_subjects - 1),
     "partial ROI-channel pruning appears to be treated incorrectly (all-channels-required behavior detected)"
+  )
+  row_dlpfc_hbo_int <- main_tidy %>% filter(roi == "DLPFC", chrom == "HbO", effect == "interaction")
+  assert_true(nrow(row_dlpfc_hbo_int) == 1, "expected one row for DLPFC HbO interaction")
+  assert_true(
+    row_dlpfc_hbo_int$n_subjects[[1]] == n_subjects,
+    "literal zero ROI beta appears to have been treated as missing"
   )
 
   # Coefficient recovery for ROI means (tolerance relaxed for random effects + noise).
