@@ -1,0 +1,14 @@
+{
+  "latent_hrf_reconstruction": {
+    "trange_start": -10.0,
+    "trange_stop": 130.0,
+    "basis_spacing": 0.5,
+    "basis_sigma": 0.5
+  },
+  "fir_auc_summary": {
+    "baseline_start": -10.0,
+    "baseline_stop": 0.0,
+    "auc_start": 0.0,
+    "auc_stop": 120.0
+  }
+}
