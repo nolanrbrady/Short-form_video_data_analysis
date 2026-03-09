@@ -145,11 +145,11 @@ Your task is 120 s, and you have ~150 s between onsets. This window captures bas
 This is where two “gotchas” matter: **solver choice** and **making the basis match a 120 s block**.
 
 **Parameters (recommended)**
-- `trange = [-10 140]`
+- `trange = [-10 130]`
 - `glmSolveMethod = 2`  *(iWLS / AR-IRLS in Homer3)*
 - `driftOrder = 0`  *(required with iWLS in Homer3; see note below)*
-- `idxBasis = 2`  *(modified gamma ⊗ square-wave block)*
-- `paramsBasis = [0.1 3.0 1.8 3.0]` *(Homer defaults)*
+- `idxBasis = 1`  *(consecutive Gaussian basis set / FIR-style export)*
+- `paramsBasis = [0.5 0.5]`  *(spacing, sigma)*
 - `rhoSD_ssThresh = 15`
 - `flagSSmethod = 0` *(no short-sep regression)*
 - `c_vector = 0`
@@ -169,21 +169,22 @@ So if you want AR-IRLS-style robustness (iWLS), you **must** use `driftOrder=0` 
 #### B) `idxBasis` and `paramsBasis`
 Homer3 defines the relevant basis exactly:
 
-> “idxBasis: 2 - Modified Gamma function convolved with square-wave of duration T” 
+> “idxBasis: 1 - consecutive sequence of Gaussian functions” 
 
 and its parameterization:
 
-> “paramsBasis: [tau1 sigma1 T1 tau2 sigma2 T2]” 
+> “paramsBasis: [stdev step]” 
 
-Homer3 also lists default values (for an event-like T=10), which you should **only change in the T slots** to match your block:
+For this study, the exported FIR basis weights use dense Gaussian support across the
+full sustained block and surrounding baseline/recovery window:
+- `trange = [-10 130]`
+- `idxBasis = 1`
+- `paramsBasis = [0.5 0.5]`
 
-> “defaults: paramsBasis = [0.1 3.0 10 1.8 3.0 10]” 
-
-So for your 120 s block, the defensible change is:
-- keep tau/sigma at Homer defaults (shape priors)
-
-That yields:
-- `paramsBasis = [0.1 3.0 1.8 3.0]`
+That choice is intentional. The older `idxBasis = 2` modified-gamma block basis is
+not the current analysis target in this repo because the present workflow reconstructs
+the latent HRF from the full Gaussian basis-weight vector and then summarizes the
+resulting trajectory with a predeclared `0-120 s` AUC.
 
 **AR-IRLS Justification**
 Barker et al introduce the iWLS method and demonstrate that it out performs OLS (https://pmc.ncbi.nlm.nih.gov/articles/PMC3756568/https://pmc.ncbi.nlm.nih.gov/articles/PMC3756568/)
@@ -192,17 +193,21 @@ Barker et al introduce the iWLS method and demonstrate that it out performs OLS 
 
 ## How to justify `paramsBasis` values (the logic you put in the Methods)
 1) **Pick a basis that matches your paradigm.**  
-   For sustained blocks, Homer’s `idxBasis=2` is explicitly “modified gamma ⊗ square-wave of duration T.”   
-   That’s exactly what you want: an impulse-like HRF shape “stretched” by the block.
+   For the current study workflow, Homer’s `idxBasis=1` Gaussian basis is used so the
+   full latent HRF can be reconstructed over the task and summarized explicitly in a
+   downstream AUC window, rather than forcing the signal into a modified-gamma block form.
 
-2) **Set the duration parameter(s) T to the true stimulus duration.**  
-   Your stimulus is 120 s, so you set `T=120` (for both HbO and HbR entries). This is the *highest-leverage, design-driven* basis choice.
+2) **Choose basis support that spans baseline, task, and immediate recovery.**  
+   The current study uses `trange = [-10 130]`, which covers a 10 s pre-task baseline,
+   the full `0-120 s` task, and a short recovery tail without running into the next block.
 
-3) **Keep tau/sigma at defaults unless you have a physiologically grounded reason to deviate.**  
-   Tau/sigma are shape priors. For a long block, estimates are typically not highly sensitive to small tweaks in tau/sigma compared with getting T right.
+3) **Keep the Gaussian spacing and width explicit and auditable.**  
+   `paramsBasis = [0.5 0.5]` fixes both the spacing and sigma at 0.5 s, matching the
+   imported FIR basis-weight table used by the repo-level collapse step.
 
-4) **Optional (but very defensible) sensitivity check:**  
-   Run a tiny subset with `idxBasis=1` (canonical) vs `idxBasis=2` and confirm your key fixed effects don’t flip direction. Then report that basis choice did not qualitatively change conclusions.
+4) **Use the summary stage, not the basis family, to encode the inferential target.**  
+   The inferential summary is the baseline-corrected AUC over `0-120 s`, not a single
+   basis coefficient. That choice is implemented downstream in the repo and should stay fixed.
 
 ---
 
@@ -231,14 +236,14 @@ Barker et al introduce the iWLS method and demonstrate that it out performs OLS 
 - `ppf`: `6.00 4.94`  *(for mean age ≈ 20 and wavelengths 760/850; confirm wavelength order in SNIRF)*
 
 ### `hmrR_BlockAvg`
-- `trange`: `-10 140`
+- `trange`: `-10 130`
 
 ### `hmrR_GLM`
-- `trange`: `-10 140`
+- `trange`: `-10 130`
 - `glmSolveMethod`: `2`
 - `driftOrder`: `0`
-- `idxBasis`: `2`
-- `paramsBasis`: `0.1 3.0 1.8 3.0`
+- `idxBasis`: `1`
+- `paramsBasis`: `0.5 0.5`
 - `rhoSD_ssThresh`: `0`
 - `flagNuisanceRMethod`: `0`
 - `c_vector`: `0`
@@ -248,4 +253,4 @@ Barker et al introduce the iWLS method and demonstrate that it out performs OLS 
 ## One last “are we missing anything?” checklist (because no short-seps)
 - **Systemic physiology risk** (scalp + systemic): acknowledge and report as a limitation; consider adding a nuisance strategy later (e.g., global/PCA regressors) if reviewers push on it.  [oai_citation:11‡PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC7793571/)
 - **Verify motion + pruning aren’t silently doing nothing** (or everything).
-- **Confirm basis duration matches task** (T=120 is the big one). 
+- **Confirm the imported FIR export really uses `idxBasis=1`, `trange=[-10 130]`, and `paramsBasis=[0.5 0.5]` before collapsing to AUC.** 

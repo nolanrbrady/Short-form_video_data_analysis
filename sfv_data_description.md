@@ -13,13 +13,16 @@ This document describes the columns in `data/tabular/homer3_betas_plus_combined_
   (Condition mapping per `ANALYSIS_SPEC.md`.)
 - **How this file is produced (high level):**
   1) Tabular behavioral + covariate features are merged into `data/tabular/combined_sfv_data.csv` by `generate_combined_data.py`.
-  2) Externally-produced Homer3 GLM betas in `data/tabular/homer3_glm_betas_wide.csv` are inner-joined to `combined_sfv_data.csv` by `merge_homer3_betas_with_combined_data.R` (default output path is this file).
-  3) Because the merge is an **inner join**, participants not present in both inputs are dropped from this merged table.
+  2) Externally-produced Homer3 FIR basis weights in `data/tabular/homer3_glm_betas_wide_fir.csv` are collapsed to baseline-corrected task-window AUC betas in `data/tabular/homer3_glm_betas_wide_auc.csv` by `collapse_homer_fir_to_auc.py`.
+  3) The derived single-beta table is inner-joined to `combined_sfv_data.csv` by `merge_homer3_betas_with_combined_data.R` (default output path is this file).
+  4) Because the merge is an **inner join**, participants not present in both inputs are dropped from this merged table.
+  5) The derived AUC table also carries a sidecar provenance file `data/tabular/homer3_glm_betas_wide_auc.provenance.json` that must match the raw FIR export and settings JSON used to generate it.
 
 ## Critical missingness / pruned-channel note (fNIRS betas)
 
 Per repo policy for Homer3 beta imports:
-- Beta columns can contain **`0` and/or `NaN` values that stand in for pruned channels**.
+- The raw FIR basis-weight table can contain **`0` and/or `NaN` values that stand in for pruned channels**.
+- The derived AUC beta table used for merging carries those pruned channels forward as **`NaN`**.
 - Do **not** interpret these as “true zero activation” and do **not** silently impute them; treat them as **missing/pruned** in downstream analyses.
 
 ## Column glossary (non-fNIRS columns)
@@ -31,7 +34,7 @@ Per repo policy for Homer3 beta imports:
   - During merges/analyses, IDs are typically normalized by extracting digits (e.g., `"sub_0051"` → `51`).
 
 - `homer_subject`
-  - The subject identifier as provided in `data/tabular/homer3_glm_betas_wide.csv` (e.g., `sub_0001`), preserved for traceability after merging.
+  - The subject identifier as provided in `data/tabular/homer3_glm_betas_wide_auc.csv` (e.g., `sub_0001`), preserved for traceability after merging.
 
 ### Engagement (ratings during the fNIRS session)
 
@@ -142,7 +145,7 @@ Columns named like:
 - `S##_D##_Cond##_HbO`
 - `S##_D##_Cond##_HbR`
 
-represent **Homer3 subject-level GLM beta coefficients** exported in wide format from `data/tabular/homer3_glm_betas_wide.csv` and carried through the inner join.
+represent **single-value, baseline-corrected task-window AUC summaries** derived from the raw Homer3 FIR basis-weight export (`data/tabular/homer3_glm_betas_wide_fir.csv`) and carried through the inner join via `data/tabular/homer3_glm_betas_wide_auc.csv`.
 
 ### What each part means
 
@@ -158,4 +161,4 @@ represent **Homer3 subject-level GLM beta coefficients** exported in wide format
 ### Value interpretation
 
 - Each beta cell is a single numeric coefficient for a given `(subject × channel × condition × chromophore)`.
-- As noted above, `0` and `NaN` values can indicate pruned channels and must be handled explicitly as missing.
+- As noted above, `NaN` values indicate pruned channels in the derived AUC table and must be handled explicitly as missing.

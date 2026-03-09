@@ -25,7 +25,7 @@ Inference is performed **per channel**.
 ## Inputs
 
 Primary CSV inputs (repo-local):
-- `data/tabular/homer3_glm_betas_wide.csv`
+- `data/tabular/homer3_glm_betas_wide_auc.csv`
   - Subject ID column is named `Subject` (e.g., `sub_0001`)
   - Beta columns are wide and follow the pattern:
     - `S##_D##_Cond##_HbO`
@@ -50,12 +50,12 @@ Join type:
 - **INNER JOIN** between Homer3 and combined tabular datasets.
 
 ID handling:
-- Both `combined_sfv_data.csv:subject_id` and `homer3_glm_betas_wide.csv:Subject` are treated as **numeric IDs**
+- Both `combined_sfv_data.csv:subject_id` and `homer3_glm_betas_wide_auc.csv:Subject` are treated as **numeric IDs**
   (even if stored as strings).
 - IDs are normalized by **extracting digits** and converting to integer (handles `0017` vs `17`, and `sub_0017`).
 
 Expected row structure:
-- `homer3_glm_betas_wide.csv` contains **one row per subject**.
+- `homer3_glm_betas_wide_auc.csv` contains **one row per subject**.
 - Result of merge is **one row per subject** containing:
   - all relevant combined tabular columns (demographics/behavior)
   - all Homer beta columns
@@ -72,15 +72,27 @@ Implementation scripts:
 ## Missingness / pruned-channel policy (critical)
 
 Per repo policy, Homer betas can include values that stand in for **pruned channels**:
-- `0` values may indicate a pruned channel
-- `NaN` values may indicate a pruned channel
+- in the raw FIR export (`homer3_glm_betas_wide_fir.csv`), `0` values may indicate a pruned channel
+- in the raw FIR export (`homer3_glm_betas_wide_fir.csv`), `NaN` values may indicate a pruned channel
 
 Required handling:
-- Treat **both `0` and `NaN`** in beta columns as **missing/pruned**.
+- In the derived single-beta AUC table (`homer3_glm_betas_wide_auc.csv`), carry pruned channels forward as **`NaN`**.
 - Do **not** treat these values as true zero activation.
 - Do **not** silently impute these values.
 
 Downstream modeling must handle this explicitly as missingness.
+
+Upstream derivation note:
+- `homer3_glm_betas_wide_auc.csv` is produced from the raw FIR export `data/tabular/homer3_glm_betas_wide_fir.csv`
+  by reconstructing the latent HRF from the Gaussian basis weights and computing a baseline-corrected
+  task-window AUC. The merged/statistical analysis scripts consume the derived single-beta table, not the raw FIR table.
+- Production settings are:
+  - `idxBasis = 1`
+  - reconstruction support `[-10, 130]`
+  - basis spacing `0.5 s`
+  - Gaussian sigma `0.5 s`
+  - baseline window `[-10, 0]`
+  - AUC window `[0, 120]`
 
 ---
 
@@ -275,7 +287,7 @@ ROI definition input:
 ## Missingness / pruned-channel policy (critical)
 
 Per repo policy:
-- Treat `0` and `NaN` in beta columns as pruned/missing channel values.
+- In the derived FIR-to-AUC beta table, pruned channels are encoded as `NaN`.
 - Do not impute.
 
 ROI summary construction:

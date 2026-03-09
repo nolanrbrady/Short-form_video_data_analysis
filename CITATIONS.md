@@ -31,10 +31,28 @@
   - **Title:** Best practices for fNIRS publications
   - **First Author:** Yücel
   - **Year:** 2021
-  - **Usage:** Best Practices
-  - **Reasoning:** Guidelines for fNIRS acquisition, analysis, and reporting, specifically regarding systemic physiology and short-separation channels.
+  - **Usage:** Best practices for analysis/reporting, including chromophore transparency and explicit quality handling
+  - **Reasoning:** Provides peer-reviewed guidance for transparent fNIRS reporting. Used here to justify explicitly plotting both HbO and HbR and preserving pruned-channel placeholders (`0`/`NaN`) as missing values in subject-level FIR visualizations (no imputation).
   - **Link:** https://doi.org/10.1117/1.NPh.8.1.012101
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `README.md`
+
+- **Ye, J. C., Tak, S., Jang, K. E., Jung, J., & Jang, J. (2009)**
+  - **Title:** NIRS-SPM: Statistical parametric mapping for near-infrared spectroscopy
+  - **First Author:** Ye
+  - **Year:** 2009
+  - **Usage:** GLM basis-function HRF representation for Homer `idxBasis=1` Gaussian FIR exports
+  - **Reasoning:** Peer-reviewed methodological reference for representing the fNIRS HRF as a weighted sum of temporal basis functions in a GLM. Used here to justify reconstructing the latent HRF from Homer-exported Gaussian basis weights before plotting or summarizing, rather than treating the FIR basis coefficients themselves as the hemodynamic response.
+  - **Link:** https://doi.org/10.1016/j.neuroimage.2008.08.036
+  - **Source:** `homer_fir.py`, `collapse_homer_fir_to_auc.py`, `plot_fir_betas_subjects.py`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Ning, L., et al. (2024)**
+  - **Title:** fNIRS dataset during complex scene analysis with temporal HRF and physiological features
+  - **First Author:** Ning
+  - **Year:** 2024
+  - **Usage:** Time-window AUC summary of reconstructed hemodynamic responses
+  - **Reasoning:** Provides peer-reviewed precedent for summarizing fNIRS hemodynamic trajectories with explicit, fixed-window HRF area-under-the-curve features. Used here to justify the choice of a pre-specified task-window AUC summary once the latent HRF has been reconstructed from the Homer FIR basis weights.
+  - **Link:** https://doi.org/10.3389/fnhum.2024.1418592
+  - **Source:** `homer_fir.py`, `collapse_homer_fir_to_auc.py`, `README.md`, `ANALYSIS_SPEC.md`
 
 # Quality Control
 
@@ -305,7 +323,7 @@
   - **Title:** Ten Simple Rules for Reproducible Computational Research
   - **First Author:** Sandve
   - **Year:** 2013
-  - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification)
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, and machine-readable certification artifacts) to prevent script-specific drift across inferential endpoints.
+  - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `certify_preprocess_merge_integrity.py`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `README.md`, `analyze_format_content_lmm_roi.R`

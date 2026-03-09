@@ -124,6 +124,7 @@ python audit_check.py
   - `data/tabular/socio_demographic_data_processed.csv` (includes `subject_id` for merges)
   - `covariate_outputs/covariates_clean.csv` (covariates only; excludes `subject_id`)
   - `covariate_outputs/covariate_missingness.csv`, `covariate_outputs/covariate_column_audit.csv`, `covariate_outputs/sfv_duration_other_audit.csv`
+- Fails hard if the Qualtrics study ID column contains missing or duplicate `subject_id` values.
 
 Command:
 
@@ -140,6 +141,7 @@ python process_sociodemographic.py
   - `data/tabular/recall_assessment_score_diffs.csv`
 - Output:
   - `data/tabular/combined_sfv_data.csv`
+- Fails hard if any input lacks a unique, non-missing `subject_id` key or if the inner join would not remain one row per subject.
 
 Command:
 
@@ -147,23 +149,79 @@ Command:
 python generate_combined_data.py
 ```
 
-### A5) Import Homer3 GLM betas (optional; produced externally)
+### A5) Import Homer3 FIR basis weights (optional; produced externally)
 
 This repo does **not** run Homer3. If you run Homer3 elsewhere, copy the exported wide table into:
 
-- `data/tabular/homer3_glm_betas_wide.csv`
+- `data/tabular/homer3_glm_betas_wide_fir.csv`
 
 Current format on disk:
 
 - ID column: `Subject` (values like `sub_0001`)
-- Feature columns: `S##_D##_Cond##_HbO` / `S##_D##_Cond##_HbR`
+- Feature columns (FIR): `S##_D##_Cond##_HbO_Basis###` / `S##_D##_Cond##_HbR_Basis###`
+- Upstream Homer settings for this export:
+  - `idxBasis = 1`
+  - `trange = [-10, 130]`
+  - `basis spacing = 0.5 s`
+  - `Gaussian sigma = 0.5 s`
 
-**Important missingness note:** this file currently contains both `0` and `NaN` values that are *stand-ins for channels that were pruned during preprocessing*. Do **not** interpret these as “true zero activation”; treat them as missing/pruned channels in downstream modeling.
+**Important missingness note:** this file can contain both `0` and `NaN` values that are *stand-ins for channels that were pruned during preprocessing*. Do **not** interpret these as “true zero activation”; treat them as missing/pruned channels in downstream modeling.
 
 To merge with `data/tabular/combined_sfv_data.csv`, you will need a shared key:
 
 - Either export Homer betas with a `subject_id` column that matches Qualtrics, **or**
 - Create a mapping between `Subject` (e.g., `sub_0001`) and Qualtrics `subject_id` and merge using that.
+
+### A5b) Collapse FIR basis weights to single AUC betas
+
+- Python: `collapse_homer_fir_to_auc.py`
+- Shared settings: `data/config/preprocessing_settings.json`
+
+What it does:
+- Reads `data/tabular/homer3_glm_betas_wide_fir.csv`.
+- Reconstructs the latent HRF from the exported Gaussian basis weights using the shared settings file.
+- Baseline-corrects each HRF by subtracting the configured pre-onset mean.
+- Computes task-window AUC with trapezoidal integration over the configured time window.
+- Writes `data/tabular/homer3_glm_betas_wide_auc.csv` with single-beta columns like `S01_D01_Cond01_HbO`.
+- Writes `data/tabular/homer3_glm_betas_wide_auc.provenance.json` to lock the AUC table to the raw FIR input, settings file, and exact basis configuration used to generate it.
+- Treats both `0` and `NaN` as pruned/missing only when the entire basis vector is all-zero or all-`NaN`.
+- Fails explicitly on partial missing basis vectors or malformed FIR schemas.
+
+Configured production settings:
+- Reconstruction support: `-10 s` to `130 s`
+- Baseline window: `-10 s` to `0 s`
+- AUC window: `0 s` to `120 s`
+
+Command:
+
+```bash
+python collapse_homer_fir_to_auc.py
+```
+
+### A5c) Plot reconstructed FIR HRFs for selected subjects (HbO + HbR on same graph)
+
+- Python: `plot_fir_betas_subjects.py`
+- Shared settings: `data/config/preprocessing_settings.json`
+
+What it does:
+- Reads `data/tabular/homer3_glm_betas_wide_fir.csv` in a streaming/selective way.
+- Uses top-of-file variables (no CLI) to choose:
+  - `TARGET_SUBJECTS` (default: `sub_0001`, `sub_0002`)
+  - `TARGET_CONDITION` (default: `02`)
+- Reconstructs the Homer `idxBasis=1` HRF from the exported Gaussian basis weights using the shared settings file, then plots `HbO` and `HbR` overlaid in one figure.
+- Treats both `0` and `NaN` as pruned/missing (not true zero activation; no imputation).
+- Fails explicitly if any selected subject/channel/chromophore has partially missing basis weights, because exact HRF reconstruction is not possible without the full coefficient vector.
+
+Output (default directory):
+- `data/results/fir_beta_plots/`
+  - `sub_0001_cond02_S01_D01_fir_hrf_hbo_hbr.png`
+  - `sub_0002_cond02_S01_D01_fir_hrf_hbo_hbr.png`
+
+Command:
+
+```bash
+python plot_fir_betas_subjects.py
+```
 
 ### A6) Single entry-point preprocessing + merge + certification
 
@@ -178,15 +236,19 @@ What this entry-point does (in order):
 1. Clears `data/results/` at run start.
 2. Runs `process_engagement.py`.
 3. Runs `process_sociodemographic.py`.
+   Fails hard on missing/duplicate study IDs in the Qualtrics-derived covariate table.
 4. Runs `generate_combined_data.py`.
-5. Runs `merge_homer3_betas_with_combined_data.R`.
-6. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
+   Fails hard if any tabular input violates the one-row-per-subject merge contract.
+5. Runs `collapse_homer_fir_to_auc.py`.
+6. Runs `validate_homer_fir_auc_conversion.py` and fails hard if excluded FIR basis vectors are not represented as `NaN` in the derived AUC table or if the AUC provenance sidecar does not match the current raw FIR export + settings JSON.
+7. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/homer3_glm_betas_wide_auc.csv`.
+8. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
 
 Required inputs for this entry-point:
 - `demographic/combined_engagement_data.csv`
 - `data/tabular/recall_assessment_score_diffs.csv`
 - `qualtrics/final_SF_demographic_data.csv`
-- `data/tabular/homer3_glm_betas_wide.csv`
+- `data/tabular/homer3_glm_betas_wide_fir.csv`
 
 Certification outputs:
 - `data/results/preprocess_merge_certification.json`
@@ -203,13 +265,16 @@ Certification outputs:
 ### C0) Prerequisites / required prior work
 
 Inputs required:
-- `data/tabular/homer3_glm_betas_wide.csv` (externally produced; see “Homer3 GLM betas export” above)
+- `data/tabular/homer3_glm_betas_wide_fir.csv` (externally produced; see “Homer3 FIR basis-weight export” above)
+- `data/tabular/homer3_glm_betas_wide_auc.csv` (generated locally by `collapse_homer_fir_to_auc.py`)
+- `data/tabular/homer3_glm_betas_wide_auc.provenance.json` (generated locally by `collapse_homer_fir_to_auc.py`)
 - `data/tabular/combined_sfv_data.csv` (produced by the tabular preprocessing pipeline)
 
 Requirements / invariants:
 - `combined_sfv_data.csv` must contain **exactly one row per subject** (unique `subject_id`).
-- `homer3_glm_betas_wide.csv` must contain **exactly one row per subject** (unique `Subject` after normalization).
-- Beta columns can include `0`/`NaN` as pruned-channel stand-ins; downstream modeling treats these as missing (do not impute).
+- `homer3_glm_betas_wide_auc.csv` must contain **exactly one row per subject** (unique `Subject` after normalization).
+- `homer3_glm_betas_wide_auc.provenance.json` must match the current raw FIR export and `data/config/preprocessing_settings.json`.
+- In the derived AUC table, pruned channels are carried forward as `NaN`; downstream modeling treats these as missing (do not impute).
 
 Recommended prior step (if you haven’t generated it yet):
 - Run `bash pipeline_preprocess_merge.sh` for end-to-end preprocessing + merge + certification.
@@ -232,7 +297,7 @@ Example (R):
 
 ```bash
 Rscript merge_homer3_betas_with_combined_data.R \
-  --homer_csv data/tabular/homer3_glm_betas_wide.csv \
+  --homer_csv data/tabular/homer3_glm_betas_wide_auc.csv \
   --combined_csv data/tabular/combined_sfv_data.csv \
   --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
 ```
@@ -263,7 +328,7 @@ Example:
 
 ```bash
 python fnirs_analysis/homer_betas_qc.py \
-  --input-csv data/tabular/homer3_glm_betas_wide.csv \
+  --input-csv data/tabular/homer3_glm_betas_wide_fir.csv \
   --output-csv data/results/homer3_betas_qc_subject_level.csv \
   --summary-csv data/results/homer3_betas_qc_cohort_summary.csv
 ```
@@ -305,7 +370,7 @@ Model (per channel × chromophore):
 - Coding: `format_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
 
 Pruned channels / missingness policy:
-- Treat **both `0` and `NaN`** in Homer betas as **pruned/missing** (do **not** impute).
+- In the derived FIR-to-AUC beta table, pruned channels are encoded as **`NaN`** (do **not** impute).
 - Default behavior is **complete-case within channel**: drop subjects missing any of the 4 conditions for that channel.
 
 Multiple testing:
@@ -363,7 +428,7 @@ ROI definition input:
 ROI beta construction:
 - For each `subject × ROI × chrom × condition`, ROI beta is the arithmetic mean
   across available (non-missing) channels in that ROI.
-- `0` and `NaN` are treated as pruned/missing channel values and are not imputed.
+- In the derived FIR-to-AUC beta table, pruned channels are encoded as `NaN` and are not imputed.
 
 Model / inference:
 - LMM (per ROI × chrom): `beta ~ format_c * content_c + (1 | subject_id)`
@@ -649,9 +714,13 @@ Methodology notes / planned improvements live in:
 - `process_engagement.py`: per-subject engagement condition means → `data/tabular/engagement_data_processed.csv`
 - `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
 - `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/combined_sfv_data.csv`
-- `data/tabular/homer3_glm_betas_wide.csv`: externally produced Homer3 GLM betas (wide table; copied into this repo for downstream modeling; contains `0` and `NaN` as stand-ins for pruned channels)
+- `data/tabular/homer3_glm_betas_wide_fir.csv`: externally produced Homer3 FIR basis-weight table (wide table; copied into this repo; contains `0` and `NaN` as stand-ins for pruned channels)
+- `data/tabular/homer3_glm_betas_wide_auc.csv`: locally derived single-beta table produced by `collapse_homer_fir_to_auc.py` from the FIR basis weights
+- `data/tabular/homer3_glm_betas_wide_auc.provenance.json`: sidecar provenance record for the derived AUC table
+- `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
+- `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
 
