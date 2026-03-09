@@ -16,7 +16,7 @@ Outputs (to covariate_outputs/):
 - covariate_column_audit.csv
 - sfv_duration_other_audit.csv
 
-Outputs (to data/tabular/):
+Outputs (to data/tabular/generated_data/):
 - socio_demographic_data_processed.csv
 """
 
@@ -242,7 +242,7 @@ def main() -> None:
     in_path = root / "qualtrics" / "final_SF_demographic_data.csv"
     out_dir = root / "covariate_outputs"
     out_dir.mkdir(parents=True, exist_ok=True)
-    tabular_dir = root / "data" / "tabular"
+    tabular_dir = root / "data" / "tabular" / "generated_data"
     tabular_dir.mkdir(parents=True, exist_ok=True)
 
     df = load_qualtrics_multilevel_csv(in_path)

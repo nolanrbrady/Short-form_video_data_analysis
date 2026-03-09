@@ -1,10 +1,10 @@
 ## Short-form Video Study — Analysis Repo
-Last updated: 03-03-2026
+Last updated: 03-09-2026
 Updated by: Nolan Brady
 
 This repo contains two primary analysis “tracks”:
 
-- **Tabular / behavioral + survey preprocessing** → outputs in `data/tabular/`
+- **Tabular / behavioral + survey preprocessing** → derived outputs in `data/tabular/generated_data/`
 - **fNIRS preprocessing + subject-level GLM + group stats** → outputs in `glm_results/`
 
 ### Trigger markers (task conditions)
@@ -22,7 +22,8 @@ These are the stimulus/trigger codes used in the fNIRS recordings and the analys
 - **`qualtrics/`**: raw Qualtrics export(s)
   - `qualtrics/final_SF_demographic_data.csv`: Qualtrics export with **3 header rows** (MultiIndex columns)
 - **`demographic/`**: scripts + outputs for engagement + recall assessment preprocessing
-- **`data/tabular/`**: “analysis-ready” CSVs produced by preprocessing scripts (merged by `subject_id`)
+- **`data/tabular/`**: imported/raw tabular files copied into the repo for analysis
+- **`data/tabular/generated_data/`**: preprocessing outputs and merged analysis-ready CSVs (merged by `subject_id`)
 - **`fnirs_analysis/`**: fNIRS GLM pipeline + second-level (group) inference scripts (MNE / MNE-NIRS)
 - **`glm_results/`**: subject GLM outputs + combined tables + group-level outputs
 - **`covariate_outputs/`**: covariate-only outputs (clean covariates, missingness audits, correlation heatmaps)
@@ -70,11 +71,11 @@ Outputs:
 
 - `demographic/combined_engagement_data.csv`: long-format (`subject_id`, `Trigger`, `Category`, `Rating`)
 
-2) **Compute per-subject engagement features → `data/tabular/engagement_data_processed.csv`**
+2) **Compute per-subject engagement features → `data/tabular/generated_data/engagement_data_processed.csv`**
 
 - Script: `process_engagement.py`
 - Input: `demographic/combined_engagement_data.csv`
-- Output: `data/tabular/engagement_data_processed.csv`
+- Output: `data/tabular/generated_data/engagement_data_processed.csv`
 
 Command:
 
@@ -105,7 +106,7 @@ cd ..
 
 Outputs:
 
-- `data/tabular/recall_assessment_score_diffs.csv`: one row per `subject_id`, columns like `diff_short_form_education`, etc.
+- `data/tabular/generated_data/recall_assessment_score_diffs.csv`: one row per `subject_id`, columns like `diff_short_form_education`, etc.
 - `demographic/recall_assessment_audit_pre.csv`, `demographic/recall_assessment_audit_post.csv`: detailed per-question audits (raw text, normalized text, exact/fuzzy match method)
 
 Optional audit sanity-check:
@@ -121,7 +122,7 @@ python audit_check.py
 - Script: `process_sociodemographic.py`
 - Input: `qualtrics/final_SF_demographic_data.csv`
 - Outputs:
-  - `data/tabular/socio_demographic_data_processed.csv` (includes `subject_id` for merges)
+  - `data/tabular/generated_data/socio_demographic_data_processed.csv` (includes `subject_id` for merges)
   - `covariate_outputs/covariates_clean.csv` (covariates only; excludes `subject_id`)
   - `covariate_outputs/covariate_missingness.csv`, `covariate_outputs/covariate_column_audit.csv`, `covariate_outputs/sfv_duration_other_audit.csv`
 - Fails hard if the Qualtrics study ID column contains missing or duplicate `subject_id` values.
@@ -136,11 +137,11 @@ python process_sociodemographic.py
 
 - Script: `generate_combined_data.py`
 - Inputs:
-  - `data/tabular/engagement_data_processed.csv`
-  - `data/tabular/socio_demographic_data_processed.csv`
-  - `data/tabular/recall_assessment_score_diffs.csv`
+  - `data/tabular/generated_data/engagement_data_processed.csv`
+  - `data/tabular/generated_data/socio_demographic_data_processed.csv`
+  - `data/tabular/generated_data/recall_assessment_score_diffs.csv`
 - Output:
-  - `data/tabular/combined_sfv_data.csv`
+  - `data/tabular/generated_data/combined_sfv_data.csv`
 - Fails hard if any input lacks a unique, non-missing `subject_id` key or if the inner join would not remain one row per subject.
 
 Command:
@@ -167,7 +168,7 @@ Current format on disk:
 
 **Important missingness note:** this file can contain both `0` and `NaN` values that are *stand-ins for channels that were pruned during preprocessing*. Do **not** interpret these as “true zero activation”; treat them as missing/pruned channels in downstream modeling.
 
-To merge with `data/tabular/combined_sfv_data.csv`, you will need a shared key:
+To merge with `data/tabular/generated_data/combined_sfv_data.csv`, you will need a shared key:
 
 - Either export Homer betas with a `subject_id` column that matches Qualtrics, **or**
 - Create a mapping between `Subject` (e.g., `sub_0001`) and Qualtrics `subject_id` and merge using that.
@@ -182,8 +183,8 @@ What it does:
 - Reconstructs the latent HRF from the exported Gaussian basis weights using the shared settings file.
 - Baseline-corrects each HRF by subtracting the configured pre-onset mean.
 - Computes task-window AUC with trapezoidal integration over the configured time window.
-- Writes `data/tabular/homer3_glm_betas_wide_auc.csv` with single-beta columns like `S01_D01_Cond01_HbO`.
-- Writes `data/tabular/homer3_glm_betas_wide_auc.provenance.json` to lock the AUC table to the raw FIR input, settings file, and exact basis configuration used to generate it.
+- Writes `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` with single-beta columns like `S01_D01_Cond01_HbO`.
+- Writes `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json` to lock the AUC table to the raw FIR input, settings file, and exact basis configuration used to generate it.
 - Treats both `0` and `NaN` as pruned/missing only when the entire basis vector is all-zero or all-`NaN`.
 - Fails explicitly on partial missing basis vectors or malformed FIR schemas.
 
@@ -241,12 +242,12 @@ What this entry-point does (in order):
    Fails hard if any tabular input violates the one-row-per-subject merge contract.
 5. Runs `collapse_homer_fir_to_auc.py`.
 6. Runs `validate_homer_fir_auc_conversion.py` and fails hard if excluded FIR basis vectors are not represented as `NaN` in the derived AUC table or if the AUC provenance sidecar does not match the current raw FIR export + settings JSON.
-7. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/homer3_glm_betas_wide_auc.csv`.
+7. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`.
 8. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
 
 Required inputs for this entry-point:
 - `demographic/combined_engagement_data.csv`
-- `data/tabular/recall_assessment_score_diffs.csv`
+- `data/tabular/generated_data/recall_assessment_score_diffs.csv`
 - `qualtrics/final_SF_demographic_data.csv`
 - `data/tabular/homer3_glm_betas_wide_fir.csv`
 
@@ -266,9 +267,9 @@ Certification outputs:
 
 Inputs required:
 - `data/tabular/homer3_glm_betas_wide_fir.csv` (externally produced; see “Homer3 FIR basis-weight export” above)
-- `data/tabular/homer3_glm_betas_wide_auc.csv` (generated locally by `collapse_homer_fir_to_auc.py`)
-- `data/tabular/homer3_glm_betas_wide_auc.provenance.json` (generated locally by `collapse_homer_fir_to_auc.py`)
-- `data/tabular/combined_sfv_data.csv` (produced by the tabular preprocessing pipeline)
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` (generated locally by `collapse_homer_fir_to_auc.py`)
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json` (generated locally by `collapse_homer_fir_to_auc.py`)
+- `data/tabular/generated_data/combined_sfv_data.csv` (produced by the tabular preprocessing pipeline)
 
 Requirements / invariants:
 - `combined_sfv_data.csv` must contain **exactly one row per subject** (unique `subject_id`).
@@ -278,7 +279,7 @@ Requirements / invariants:
 
 Recommended prior step (if you haven’t generated it yet):
 - Run `bash pipeline_preprocess_merge.sh` for end-to-end preprocessing + merge + certification.
-- Or run `generate_combined_data.py` to (re)build `data/tabular/combined_sfv_data.csv` if orchestrating manually.
+- Or run `generate_combined_data.py` to (re)build `data/tabular/generated_data/combined_sfv_data.csv` if orchestrating manually.
 
 ### C1) Inner-join Homer3 betas with combined tabular data
 
@@ -297,9 +298,9 @@ Example (R):
 
 ```bash
 Rscript merge_homer3_betas_with_combined_data.R \
-  --homer_csv data/tabular/homer3_glm_betas_wide_auc.csv \
-  --combined_csv data/tabular/combined_sfv_data.csv \
-  --out_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
+  --homer_csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
+  --combined_csv data/tabular/generated_data/combined_sfv_data.csv \
+  --out_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
 ```
 
 ### C1b) QC report from Homer3 beta-wide table (subject-level channel exclusion)
@@ -362,7 +363,7 @@ Rscript analyze_format_content_lmm_channelwise.R \
 
 Order / dependencies:
 - Assumes Pipeline C0 prerequisites are satisfied.
-- Preferred input is the pre-merged table `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- Preferred input is the pre-merged table `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   so covariates and beta columns are available in one file.
 
 Model (per channel × chromophore):
@@ -398,7 +399,7 @@ Example (R; preferred merged input path):
 
 ```bash
 Rscript analyze_format_content_lmm_channelwise.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --exclude_subjects_json data/config/excluded_subjects.json
 ```
 
@@ -418,7 +419,7 @@ Optional output filtering (R only):
 Order / dependencies:
 - Assumes Pipeline C0 prerequisites are satisfied.
 - Uses the same pre-merged input table as C2:
-  `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 
 ROI definition input:
 - `data/config/roi_definition.json` (strict JSON object: `ROI -> [channel_ids]`)
@@ -439,7 +440,7 @@ Example:
 
 ```bash
 Rscript analyze_format_content_lmm_roi.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --roi_json data/config/roi_definition.json \
   --exclude_subjects_json data/config/excluded_subjects.json
 ```
@@ -460,7 +461,7 @@ Rscript tests/validate_pipeline_c_roi_r.R
 - R: `analyze_retention_format_content_lmm.R`
 
 Input:
-- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   (must contain `subject_id` and:
   `diff_short_form_education`, `diff_short_form_entertainment`,
   `diff_long_form_education`, `diff_long_form_entertainment`)
@@ -488,7 +489,7 @@ Example:
 
 ```bash
 Rscript analyze_retention_format_content_lmm.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --out_main_csv data/results/retention_format_content_lmm_main_effects_r.csv \
   --out_posthoc_csv data/results/retention_format_content_lmm_posthoc_pairwise_r.csv
 ```
@@ -508,7 +509,7 @@ Rscript tests/validate_retention_pipeline_r.R
 - R: `analyze_engagement_format_content_lmm.R`
 
 Input:
-- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   (must contain `subject_id` and:
   `sf_education_engagement`, `sf_entertainment_engagement`,
   `lf_education_engagement`, `lf_entertainment_engagement`)
@@ -536,7 +537,7 @@ Example:
 
 ```bash
 Rscript analyze_engagement_format_content_lmm.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --out_main_csv data/results/engagement_format_content_lmm_main_effects_r.csv \
   --out_posthoc_csv data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv
 ```
@@ -602,7 +603,7 @@ Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
 - Script: `covariate_correlation_analysis.py`
 - Two presets:
   - **`covariates` preset**: correlations on `covariate_outputs/covariates_clean.csv`
-  - **`combined` preset**: correlations on `data/tabular/combined_sfv_data.csv`
+  - **`combined` preset**: correlations on `data/tabular/generated_data/combined_sfv_data.csv`
 
 Recommended commands:
 
@@ -611,7 +612,7 @@ Recommended commands:
 python covariate_correlation_analysis.py --preset covariates --out-dir covariate_outputs
 
 # Combined dataset correlations + heatmap saved alongside the combined dataset
-python covariate_correlation_analysis.py --preset combined --out-dir data/tabular
+python covariate_correlation_analysis.py --preset combined --out-dir data/tabular/generated_data
 ```
 
 ---
@@ -709,14 +710,14 @@ Methodology notes / planned improvements live in:
 
 ### Tabular / survey / engagement
 
-- `process_sociodemographic.py`: Qualtrics demographics + psych scales → numeric covariates + audits (`data/tabular/` + `covariate_outputs/`)
+- `process_sociodemographic.py`: Qualtrics demographics + psych scales → numeric covariates + audits (`data/tabular/generated_data/` + `covariate_outputs/`)
 - `demographic/combine_engagement.py`: raw engagement CSVs (external `../../Engagement`) → `demographic/combined_engagement_data.csv` (+ runs basic statsmodels analyses)
-- `process_engagement.py`: per-subject engagement condition means → `data/tabular/engagement_data_processed.csv`
+- `process_engagement.py`: per-subject engagement condition means → `data/tabular/generated_data/engagement_data_processed.csv`
 - `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
-- `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/combined_sfv_data.csv`
+- `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/generated_data/combined_sfv_data.csv`
 - `data/tabular/homer3_glm_betas_wide_fir.csv`: externally produced Homer3 FIR basis-weight table (wide table; copied into this repo; contains `0` and `NaN` as stand-ins for pruned channels)
-- `data/tabular/homer3_glm_betas_wide_auc.csv`: locally derived single-beta table produced by `collapse_homer_fir_to_auc.py` from the FIR basis weights
-- `data/tabular/homer3_glm_betas_wide_auc.provenance.json`: sidecar provenance record for the derived AUC table
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`: locally derived single-beta table produced by `collapse_homer_fir_to_auc.py` from the FIR basis weights
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json`: sidecar provenance record for the derived AUC table
 - `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)

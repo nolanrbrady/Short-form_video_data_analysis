@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 
 """
@@ -23,11 +24,13 @@ Input:
 - ./demographic/combined_engagement_data.csv
 
 Output:
-- ./data/tabular/engagement_data_processed.csv
+- ./data/tabular/generated_data/engagement_data_processed.csv
 """
 
 # combined_engagement_data.csv is the aggregated engagement data from the Short Form Video study
 # It relies on combine_engagement.py to be run first.
+OUTPUT_CSV = Path("./data/tabular/generated_data/engagement_data_processed.csv")
+
 engagement_data = pd.read_csv("./demographic/combined_engagement_data.csv")
 processed_data = pd.DataFrame()
 
@@ -90,4 +93,5 @@ for subject_id in engagement_data["subject_id"].unique():
     }])
     processed_data = pd.concat([processed_data, new_row], ignore_index=True)
 
-processed_data.to_csv("./data/tabular/engagement_data_processed.csv", index=False)
+OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+processed_data.to_csv(OUTPUT_CSV, index=False)

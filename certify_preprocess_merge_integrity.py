@@ -39,17 +39,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--combined_csv",
-        default="data/tabular/combined_sfv_data.csv",
+        default="data/tabular/generated_data/combined_sfv_data.csv",
         help="Path to combined tabular CSV.",
     )
     parser.add_argument(
         "--homer_csv",
-        default="data/tabular/homer3_glm_betas_wide_auc.csv",
+        default="data/tabular/generated_data/homer3_glm_betas_wide_auc.csv",
         help="Path to Homer3 wide beta CSV.",
     )
     parser.add_argument(
         "--merged_csv",
-        default="data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
+        default="data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
         help="Path to merged output CSV.",
     )
     parser.add_argument(

@@ -13,9 +13,9 @@ Presets
             ./covariate_outputs/covariate_heatmap.png
 
 - combined:
-  - Input:  ./data/tabular/combined_sfv_data.csv
-  - Output: ./data/tabular/covariate_correlation_analysis.csv
-            ./data/tabular/covariate_correlation_heatmap.png
+  - Input:  ./data/tabular/generated_data/combined_sfv_data.csv
+  - Output: ./data/tabular/generated_data/covariate_correlation_analysis.csv
+            ./data/tabular/generated_data/covariate_correlation_heatmap.png
 """
 
 from __future__ import annotations
@@ -147,8 +147,8 @@ def run_covariate_preset(root: Path, *, input_path: Optional[Path], out_dir: Opt
 
 
 def run_combined_preset(root: Path, *, input_path: Optional[Path], out_dir: Optional[Path]) -> None:
-    in_path = input_path or (root / "data" / "tabular" / "combined_sfv_data.csv")
-    out = out_dir or (root / "data" / "tabular")
+    in_path = input_path or (root / "data" / "tabular" / "generated_data" / "combined_sfv_data.csv")
+    out = out_dir or (root / "data" / "tabular" / "generated_data")
     out.mkdir(parents=True, exist_ok=True)
 
     combined_data = pd.read_csv(in_path)

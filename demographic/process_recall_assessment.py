@@ -433,8 +433,10 @@ if __name__ == "__main__":
     print("Audit method counts (post):")
     print(post_audit["method"].value_counts(dropna=False))
 
-    # Save to CSV next to this script by default.
-    out_path = os.path.join("../data/tabular/", "recall_assessment_score_diffs.csv")
+    # Save generated recall diffs outside the raw-import directory.
+    out_dir = os.path.join("..", "data", "tabular", "generated_data")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "recall_assessment_score_diffs.csv")
     pre_audit_path = os.path.join(os.path.dirname(__file__), "recall_assessment_audit_pre.csv")
     post_audit_path = os.path.join(os.path.dirname(__file__), "recall_assessment_audit_post.csv")
     out_df.to_csv(out_path, index=False)

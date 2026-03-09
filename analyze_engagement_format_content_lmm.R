@@ -3,7 +3,7 @@
 # Engagement within-subject inference for Length x Content effects.
 #
 # Input
-#   - data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv
+#   - data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
 #     (must include `subject_id` plus engagement columns:
 #      sf_education_engagement, sf_entertainment_engagement,
 #      lf_education_engagement, lf_entertainment_engagement)
@@ -80,7 +80,7 @@ REQUIRED_ENG_COLS <- c(
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    input_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
+    input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     exclude_subjects_json = "data/config/excluded_subjects.json",
     out_main_csv = "data/results/engagement_format_content_lmm_main_effects_r.csv",
     out_posthoc_csv = "data/results/engagement_format_content_lmm_posthoc_pairwise_r.csv",

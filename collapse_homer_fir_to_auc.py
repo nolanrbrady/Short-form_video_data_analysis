@@ -24,7 +24,7 @@ from homer_fir import (
 
 
 INPUT_CSV = "data/tabular/homer3_glm_betas_wide_fir.csv"
-OUTPUT_CSV = "data/tabular/homer3_glm_betas_wide_auc.csv"
+OUTPUT_CSV = "data/tabular/generated_data/homer3_glm_betas_wide_auc.csv"
 SETTINGS_JSON = "data/config/preprocessing_settings.json"
 BASIS_FAMILY = "Homer3 idxBasis=1 Gaussian"
 

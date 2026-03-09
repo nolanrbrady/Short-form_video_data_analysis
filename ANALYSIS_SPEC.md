@@ -25,13 +25,13 @@ Inference is performed **per channel**.
 ## Inputs
 
 Primary CSV inputs (repo-local):
-- `data/tabular/homer3_glm_betas_wide_auc.csv`
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`
   - Subject ID column is named `Subject` (e.g., `sub_0001`)
   - Beta columns are wide and follow the pattern:
     - `S##_D##_Cond##_HbO`
     - `S##_D##_Cond##_HbR`
     - Example: `S01_D01_Cond01_HbO`
-- `data/tabular/combined_sfv_data.csv`
+- `data/tabular/generated_data/combined_sfv_data.csv`
   - Subject ID column is named `subject_id`
   - `subject_id` may be **zero-padded** in some sources (e.g., `0017` vs `17`)
 
@@ -260,7 +260,7 @@ Inference is performed **per ROI**.
 ## Inputs
 
 Primary CSV input:
-- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   - Must include one row per subject (`subject_id`) and Homer beta columns matching:
     - `S##_D##_Cond##_HbO`
     - `S##_D##_Cond##_HbR`
@@ -368,7 +368,7 @@ while accounting for repeated measures (4 within-subject conditions).
 ## Inputs
 
 Primary CSV input:
-- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 
 Required columns:
 - `subject_id`
@@ -483,7 +483,7 @@ while accounting for repeated measures (4 within-subject conditions).
 ## Inputs
 
 Primary CSV input:
-- `data/results/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 
 Required columns:
 - `subject_id`

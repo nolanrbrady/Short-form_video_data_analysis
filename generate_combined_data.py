@@ -13,10 +13,11 @@ from pathlib import Path
 import pandas as pd
 
 
-ENGAGEMENT_CSV = Path("./data/tabular/engagement_data_processed.csv")
-SOCIODEMOGRAPHIC_CSV = Path("./data/tabular/socio_demographic_data_processed.csv")
-RECALL_CSV = Path("./data/tabular/recall_assessment_score_diffs.csv")
-OUTPUT_CSV = Path("./data/tabular/combined_sfv_data.csv")
+GENERATED_TABULAR_DIR = Path("./data/tabular/generated_data")
+ENGAGEMENT_CSV = GENERATED_TABULAR_DIR / "engagement_data_processed.csv"
+SOCIODEMOGRAPHIC_CSV = GENERATED_TABULAR_DIR / "socio_demographic_data_processed.csv"
+RECALL_CSV = GENERATED_TABULAR_DIR / "recall_assessment_score_diffs.csv"
+OUTPUT_CSV = GENERATED_TABULAR_DIR / "combined_sfv_data.csv"
 
 
 def _load_csv(path: Path, *, dataset_name: str) -> pd.DataFrame:

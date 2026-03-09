@@ -3,7 +3,7 @@
 # ROI-wise within-subject inference for Format x Content effects on prefrontal activation.
 #
 # Inputs
-#   - data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv
+#   - data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
 #     (one-row-per-subject merged file with `subject_id` plus Homer beta columns)
 #   - data/config/roi_definition.json
 #     (ROI name -> array of Homer channel IDs, e.g., "S01_D01")
@@ -99,7 +99,7 @@ if (nzchar(env_filter)) {
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    input_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
+    input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     roi_json = "data/config/roi_definition.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",
     out_main_csv = "data/results/format_content_lmm_roi_main_effects_r.csv",
