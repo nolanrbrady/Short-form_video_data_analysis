@@ -30,3 +30,5 @@ demographic/recall_assessment_audit_pre.csv
 data/results/*
 
 data/results/
+
+data/tabular/generated_data/
