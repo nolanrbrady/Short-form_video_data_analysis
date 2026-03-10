@@ -22,11 +22,14 @@ PREPROCESS_DROPPED_IDS_CSV="data/results/preprocess_merge_dropped_ids.csv"
 # Generated Files
 RECALL_DIFFS_CSV="${GENERATED_TABULAR_DIR}/recall_assessment_score_diffs.csv"
 HOMER_AUC_CSV="${GENERATED_TABULAR_DIR}/homer3_glm_betas_wide_auc.csv"
+HOMER_AUC_MASKED_CSV="${GENERATED_TABULAR_DIR}/homer3_glm_betas_wide_auc_outliers_masked.csv"
 COMBINED_TABULAR_CSV="${GENERATED_TABULAR_DIR}/combined_sfv_data.csv"
 MERGED_TABULAR_CSV="${GENERATED_TABULAR_DIR}/homer3_betas_plus_combined_sfv_data_inner_join.csv"
+HOMER_AUC_OUTLIER_AUDIT_CSV="data/results/homer_auc_outlier_audit.csv"
+HOMER_AUC_OUTLIER_SUMMARY_JSON="data/results/homer_auc_outlier_summary.json"
 
 STEP_INDEX=0
-STEP_TOTAL=7
+STEP_TOTAL=8
 
 log() {
   echo "[pipeline] $*"
@@ -93,16 +96,23 @@ run_step "Lint FIR-to-AUC conversion against excluded-channel policy" \
     --auc-csv "$HOMER_AUC_CSV" \
     --settings-json "$PREPROCESS_SETTINGS_JSON"
 
+run_step "Mask between-subject AUC outliers within each channel x condition x chromophore column" \
+  python mask_homer_auc_between_subject_outliers.py \
+    --input-csv "$HOMER_AUC_CSV" \
+    --output-csv "$HOMER_AUC_MASKED_CSV" \
+    --out-audit-csv "$HOMER_AUC_OUTLIER_AUDIT_CSV" \
+    --out-summary-json "$HOMER_AUC_OUTLIER_SUMMARY_JSON"
+
 run_step "Merge Homer3 betas with combined tabular data" \
   Rscript merge_homer3_betas_with_combined_data.R \
-    --homer_csv "$HOMER_AUC_CSV" \
+    --homer_csv "$HOMER_AUC_MASKED_CSV" \
     --combined_csv "$COMBINED_TABULAR_CSV" \
     --out_csv "$MERGED_TABULAR_CSV"
 
 run_step "Certify preprocess+merge integrity" \
   python certify_preprocess_merge_integrity.py \
     --combined_csv "$COMBINED_TABULAR_CSV" \
-    --homer_csv "$HOMER_AUC_CSV" \
+    --homer_csv "$HOMER_AUC_MASKED_CSV" \
     --merged_csv "$MERGED_TABULAR_CSV" \
     --out_json "$PREPROCESS_CERT_JSON" \
     --out_audit_csv "$PREPROCESS_ID_AUDIT_CSV" \

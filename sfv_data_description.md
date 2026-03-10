@@ -13,16 +13,19 @@ This document describes the columns in `data/tabular/generated_data/homer3_betas
   (Condition mapping per `ANALYSIS_SPEC.md`.)
 - **How this file is produced (high level):**
   1) Tabular behavioral + covariate features are merged into `data/tabular/generated_data/combined_sfv_data.csv` by `generate_combined_data.py`.
-  2) Externally-produced Homer3 FIR basis weights in `data/tabular/homer3_glm_betas_wide_fir.csv` are collapsed to baseline-corrected task-window AUC betas in `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` by `collapse_homer_fir_to_auc.py`.
-  3) The derived single-beta table is inner-joined to `combined_sfv_data.csv` by `merge_homer3_betas_with_combined_data.R` (default output path is this file).
-  4) Because the merge is an **inner join**, participants not present in both inputs are dropped from this merged table.
-  5) The derived AUC table also carries a sidecar provenance file `data/tabular/homer3_glm_betas_wide_auc.provenance.json` that must match the raw FIR export and settings JSON used to generate it.
+  2) Externally-produced Homer3 FIR basis weights in `data/tabular/homer3_glm_betas_wide_fir_pca.csv` are collapsed to baseline-corrected task-window AUC betas in `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` by `collapse_homer_fir_to_auc.py`.
+  3) The raw derived AUC table is screened between subjects within each exact `channel x condition x chromophore` column by `mask_homer_auc_between_subject_outliers.py`, which writes `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
+  4) The outlier-masked AUC table is inner-joined to `combined_sfv_data.csv` by `merge_homer3_betas_with_combined_data.R` (default output path is this file).
+  5) Because the merge is an **inner join**, participants not present in both inputs are dropped from this merged table.
+  6) The raw derived AUC table also carries a sidecar provenance file `data/tabular/homer3_glm_betas_wide_auc.provenance.json` that must match the raw FIR export and settings JSON used to generate it.
+  7) The outlier-masking stage also writes `data/results/homer_auc_outlier_audit.csv` and `data/results/homer_auc_outlier_summary.json` for QC traceability.
 
 ## Critical missingness / pruned-channel note (fNIRS betas)
 
 Per repo policy for Homer3 beta imports:
 - The raw FIR basis-weight table can contain **`0` and/or `NaN` values that stand in for pruned channels**.
-- The derived AUC beta table used for merging carries those pruned channels forward as **`NaN`**.
+- The raw derived AUC beta table carries those pruned channels forward as **`NaN`**.
+- The outlier-masked AUC beta table used for merging carries both pruned channels and between-subject `mean +/- 3 SD` censored values as **`NaN`**.
 - Do **not** interpret these as “true zero activation” and do **not** silently impute them; treat them as **missing/pruned** in downstream analyses.
 
 ## Column glossary (non-fNIRS columns)
@@ -34,7 +37,7 @@ Per repo policy for Homer3 beta imports:
   - During merges/analyses, IDs are typically normalized by extracting digits (e.g., `"sub_0051"` → `51`).
 
 - `homer_subject`
-  - The subject identifier as provided in `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` (e.g., `sub_0001`), preserved for traceability after merging.
+  - The subject identifier as provided in the Homer AUC table (e.g., `sub_0001`), preserved for traceability after merging.
 
 ### Engagement (ratings during the fNIRS session)
 
@@ -90,11 +93,11 @@ from the Qualtrics export `qualtrics/final_SF_demographic_data.csv`.
   - “Other (please specify)” responses are encoded as missing (`NaN`) by default (see `process_sociodemographic.py`).
 
 - `phq_total`
-  - Composite sum score over the Qualtrics items labeled `"PHQ-9"` (depression symptom items).
-    In `qualtrics/final_SF_demographic_data.csv` there are 8 such items, so this total is a sum over 8 items (not 9).
+  - Composite sum score for the intentionally administered PHQ-8 depression questionnaire.
+    In the current Qualtrics export, those 8 depression items still carry the label `"PHQ-9"`, so `process_sociodemographic.py` selects the 8 PHQ-labeled items and scores them as PHQ-8.
   - Scoring uses the `0`–`3` response encoding in `process_sociodemographic.py` (`Not at all`→0, …, `Nearly every day`→3),
     and requires at least 75% of items answered to compute a total.
-  - Instrument reference: PHQ-9 (Kroenke et al., 2001; see `CITATIONS.md`).
+  - Instrument reference: PHQ-8 (Kroenke et al., 2009; see `CITATIONS.md`).
 
 - `gad_total`
   - Composite sum score over the Qualtrics items labeled `"GAD"` (anxiety symptom items).
@@ -145,7 +148,7 @@ Columns named like:
 - `S##_D##_Cond##_HbO`
 - `S##_D##_Cond##_HbR`
 
-represent **single-value, baseline-corrected task-window AUC summaries** derived from the raw Homer3 FIR basis-weight export (`data/tabular/homer3_glm_betas_wide_fir.csv`) and carried through the inner join via `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`.
+represent **single-value, baseline-corrected task-window AUC summaries** derived from the raw Homer3 FIR basis-weight export (`data/tabular/homer3_glm_betas_wide_fir_pca.csv`) and carried through the inner join via `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
 
 ### What each part means
 

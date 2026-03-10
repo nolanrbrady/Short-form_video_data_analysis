@@ -3,7 +3,7 @@
 # Merge Homer3 single-beta GLM/AUC betas (wide) with tabular combined dataset (demographics/behavior).
 #
 # This script performs an INNER JOIN between:
-#   - data/tabular/generated_data/homer3_glm_betas_wide_auc.csv (ID column: Subject, e.g. sub_0001)
+#   - data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv (ID column: Subject, e.g. sub_0001)
 #   - data/tabular/generated_data/combined_sfv_data.csv     (ID column: subject_id, sometimes zero-padded)
 #
 # Key behavior:
@@ -21,7 +21,7 @@
 #
 # Usage:
 #   Rscript merge_homer3_betas_with_combined_data.R \
-#     --homer_csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
+#     --homer_csv data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv \
 #     --combined_csv data/tabular/generated_data/combined_sfv_data.csv \
 #     --out_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
 
@@ -35,7 +35,7 @@ parse_args <- function() {
   # *betas_wide.csv -> uses AR-IRLS with a hpf of 0.001 and a lpf of 0.2
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    homer_csv = "data/tabular/generated_data/homer3_glm_betas_wide_auc.csv",
+    homer_csv = "data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv",
     combined_csv = "data/tabular/generated_data/combined_sfv_data.csv",
     out_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv"
   )

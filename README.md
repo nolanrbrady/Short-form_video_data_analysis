@@ -86,7 +86,7 @@ python process_engagement.py
 Output columns include:
 
 - Condition means: `lf_education_engagement`, `lf_entertainment_engagement`, `sf_education_engagement`, `sf_entertainment_engagement`
-- Marginal means: `long_form_engagement`, `short_form_engagement`, `education_engagement`, `entertainment_engagement`
+- Fail-fast checks: required columns, exact condition labels, trigger/category consistency, finite 0-5 ratings, and at least one observation per subject x condition
 
 ### A2) Recall assessment preprocessing
 
@@ -154,7 +154,7 @@ python generate_combined_data.py
 
 This repo does **not** run Homer3. If you run Homer3 elsewhere, copy the exported wide table into:
 
-- `data/tabular/homer3_glm_betas_wide_fir.csv`
+- `data/tabular/homer3_glm_betas_wide_fir_pca.csv`
 
 Current format on disk:
 
@@ -179,7 +179,7 @@ To merge with `data/tabular/generated_data/combined_sfv_data.csv`, you will need
 - Shared settings: `data/config/preprocessing_settings.json`
 
 What it does:
-- Reads `data/tabular/homer3_glm_betas_wide_fir.csv`.
+- Reads `data/tabular/homer3_glm_betas_wide_fir_pca.csv`.
 - Reconstructs the latent HRF from the exported Gaussian basis weights using the shared settings file.
 - Baseline-corrects each HRF by subtracting the configured pre-onset mean.
 - Computes task-window AUC with trapezoidal integration over the configured time window.
@@ -197,18 +197,45 @@ Command:
 
 ```bash
 python collapse_homer_fir_to_auc.py \
-  --input-csv data/tabular/homer3_glm_betas_wide_fir.csv \
+  --input-csv data/tabular/homer3_glm_betas_wide_fir_pca.csv \
   --output-csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
   --settings-json data/config/preprocessing_settings.json
 ```
 
-### A5c) Plot reconstructed FIR HRFs for selected subjects (HbO + HbR on same graph)
+### A5c) Mask between-subject AUC outliers within each beta column
+
+- Python: `mask_homer_auc_between_subject_outliers.py`
+
+What it does:
+- Reads `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`.
+- Treats each `S##_D##_Cond##_HbO/HbR` column independently across subjects.
+- Computes the column mean and sample SD using only observed non-missing subject values.
+- Replaces values outside `mean +/- 3 SD` with `NaN`.
+- Ignores existing `NaN` values from pruned channels when estimating the mean and SD.
+- Writes `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv` for downstream merge/modeling.
+- Writes `data/results/homer_auc_outlier_audit.csv` with one row per censored subject-column cell.
+- Writes `data/results/homer_auc_outlier_summary.json` with per-column screening counts, skipped-column reasons, and input/output hashes.
+
+Important limitation:
+- For a `3 SD` rule, columns with fewer than `11` observed subjects cannot mathematically yield a detected outlier when the sample mean and sample SD are computed from the same data. Those columns are reported as skipped rather than being silently treated as screened.
+
+Command:
+
+```bash
+python mask_homer_auc_between_subject_outliers.py \
+  --input-csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
+  --output-csv data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv \
+  --out-audit-csv data/results/homer_auc_outlier_audit.csv \
+  --out-summary-json data/results/homer_auc_outlier_summary.json
+```
+
+### A5d) Plot reconstructed FIR HRFs for selected subjects (HbO + HbR on same graph)
 
 - Python: `plot_fir_betas_subjects.py`
 - Shared settings: `data/config/preprocessing_settings.json`
 
 What it does:
-- Reads `data/tabular/homer3_glm_betas_wide_fir.csv` in a streaming/selective way.
+- Reads `data/tabular/homer3_glm_betas_wide_fir_pca.csv` in a streaming/selective way.
 - Uses top-of-file variables (no CLI) to choose:
   - `TARGET_SUBJECTS` (default: `sub_0001`, `sub_0002`)
   - `TARGET_CONDITION` (default: `02`)
@@ -250,8 +277,9 @@ What this entry-point does (in order):
    Fails hard if any tabular input violates the one-row-per-subject merge contract.
 5. Runs `collapse_homer_fir_to_auc.py`.
 6. Runs `validate_homer_fir_auc_conversion.py` and fails hard if excluded FIR basis vectors are not represented as `NaN` in the derived AUC table or if the AUC provenance sidecar does not match the current raw FIR export + settings JSON.
-7. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`.
-8. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
+7. Runs `mask_homer_auc_between_subject_outliers.py` and writes a separate outlier-masked AUC table plus audit artifacts.
+8. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
+9. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
 
 Required inputs for this entry-point:
 - `demographic/combined_engagement_data.csv`
@@ -263,6 +291,8 @@ Certification outputs:
 - `data/results/preprocess_merge_certification.json`
 - `data/results/preprocess_merge_id_audit.csv`
 - `data/results/preprocess_merge_dropped_ids.csv`
+- `data/results/homer_auc_outlier_audit.csv`
+- `data/results/homer_auc_outlier_summary.json`
 
 ---
 
@@ -274,16 +304,19 @@ Certification outputs:
 ### C0) Prerequisites / required prior work
 
 Inputs required:
-- `data/tabular/homer3_glm_betas_wide_fir.csv` (externally produced; see “Homer3 FIR basis-weight export” above)
+- `data/tabular/homer3_glm_betas_wide_fir_pca.csv` (externally produced; this is the production FIR export used for downstream results)
 - `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` (generated locally by `collapse_homer_fir_to_auc.py`)
 - `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json` (generated locally by `collapse_homer_fir_to_auc.py`)
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv` (generated locally by `mask_homer_auc_between_subject_outliers.py`)
 - `data/tabular/generated_data/combined_sfv_data.csv` (produced by the tabular preprocessing pipeline)
 
 Requirements / invariants:
 - `combined_sfv_data.csv` must contain **exactly one row per subject** (unique `subject_id`).
 - `homer3_glm_betas_wide_auc.csv` must contain **exactly one row per subject** (unique `Subject` after normalization).
 - `homer3_glm_betas_wide_auc.provenance.json` must match the current raw FIR export and `data/config/preprocessing_settings.json`.
-- In the derived AUC table, pruned channels are carried forward as `NaN`; downstream modeling treats these as missing (do not impute).
+- `homer3_glm_betas_wide_auc_outliers_masked.csv` must contain **exactly one row per subject** and preserve the same beta schema as the raw AUC table.
+- In the raw derived AUC table, pruned channels are carried forward as `NaN`.
+- In the outlier-masked AUC table, pruned channels and between-subject `mean +/- 3 SD` censored values are both encoded as `NaN`; downstream modeling treats both as missing (do not impute).
 
 Recommended prior step (if you haven’t generated it yet):
 - Run `bash pipeline_preprocess_merge.sh` for end-to-end preprocessing + merge + certification.
@@ -306,7 +339,7 @@ Example (R):
 
 ```bash
 Rscript merge_homer3_betas_with_combined_data.R \
-  --homer_csv data/tabular/generated_data/homer3_glm_betas_wide_auc.csv \
+  --homer_csv data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv \
   --combined_csv data/tabular/generated_data/combined_sfv_data.csv \
   --out_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
 ```
@@ -337,7 +370,7 @@ Example:
 
 ```bash
 python fnirs_analysis/homer_betas_qc.py \
-  --input-csv data/tabular/homer3_glm_betas_wide_fir.csv \
+  --input-csv data/tabular/homer3_glm_betas_wide_fir_pca.csv \
   --output-csv data/results/homer3_betas_qc_subject_level.csv \
   --summary-csv data/results/homer3_betas_qc_cohort_summary.csv
 ```
@@ -560,6 +593,65 @@ Validation:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
+### C4b) Targeted Pearson correlations for selected channel/ROI follow-up
+
+- R: `analyze_correlational_relationships.R`
+
+Purpose:
+- Run targeted follow-up Pearson correlations between selected sociodemographic variables and raw-condition neural values from:
+  - `S04_D02` for both `HbO` and `HbR`
+  - `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, `L_DMPFC (HbO)`
+- Use the same merged input table and subject-exclusion manifest as the other R analyses.
+
+Predictors:
+- `age`
+- `sfv_daily_duration`
+- `sfv_frequency`
+- `phq_total`
+- `asrs_total`
+- `gad_total`
+- `yang_pu_total`
+- `yang_mot_total`
+- all `diff_*` columns
+- all `*_engagement` columns
+
+Neural target construction:
+- Channel targets are the raw merged beta columns for `S04_D02`, split by chromophore and condition.
+- ROI targets are arithmetic means across available non-missing channels in the ROI for each `subject x chrom x condition`.
+- ROI channel membership is read from `data/config/roi_definition.json`.
+
+Missingness policy:
+- Pairwise complete cases only: for each `predictor x neural target` correlation, drop subjects missing either value for that pair.
+- Do not impute pruned channels or missing covariates.
+- Subjects excluded in `data/config/excluded_subjects.json` are removed before any pairwise filtering.
+
+Multiple testing:
+- BH-FDR is applied within each configured neural-target x chromophore family.
+- Family membership and the explicit predictor list are declared in `data/config/correlational_analysis_plan.json`.
+- Output includes both raw `p_unc` and adjusted `p_fdr`.
+
+Example:
+
+```bash
+Rscript analyze_correlational_relationships.R \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --roi_json data/config/roi_definition.json \
+  --analysis_plan_json data/config/correlational_analysis_plan.json \
+  --exclude_subjects_json data/config/excluded_subjects.json \
+  --out_csv data/results/correlational_relationships/pairwise_correlations_r.csv \
+  --out_fig_dir data/results/correlational_relationships/figures
+```
+
+Outputs:
+- `data/results/correlational_relationships/pairwise_correlations_r.csv`
+- `data/results/correlational_relationships/figures/` (one scatterplot with linear fit per tested pair)
+
+Validation:
+
+```bash
+Rscript tests/validate_correlational_relationships_r.R
+```
+
 ### C5) Monte Carlo type-I error calibration (all inferential pipelines)
 
 - Script: `tests/calibrate_type1_error_r.R`
@@ -723,12 +815,16 @@ Methodology notes / planned improvements live in:
 - `process_engagement.py`: per-subject engagement condition means → `data/tabular/generated_data/engagement_data_processed.csv`
 - `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
 - `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/generated_data/combined_sfv_data.csv`
-- `data/tabular/homer3_glm_betas_wide_fir.csv`: externally produced Homer3 FIR basis-weight table (wide table; copied into this repo; contains `0` and `NaN` as stand-ins for pruned channels)
+- `data/tabular/homer3_glm_betas_wide_fir_pca.csv`: externally produced production Homer3 FIR basis-weight table (wide table; copied into this repo; contains `0` and `NaN` as stand-ins for pruned channels)
 - `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`: locally derived single-beta table produced by `collapse_homer_fir_to_auc.py` from the FIR basis weights
-- `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json`: sidecar provenance record for the derived AUC table
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json`: sidecar provenance record for the raw derived AUC table
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`: between-subject outlier-masked AUC table consumed by merge/modeling
+- `data/results/homer_auc_outlier_audit.csv`: row-level audit of censored subject-column AUC cells
+- `data/results/homer_auc_outlier_summary.json`: machine-readable summary of between-subject AUC screening
 - `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
+- `analyze_correlational_relationships.R`: targeted Pearson follow-up correlations for selected raw-condition channel/ROI neural targets, with per-pair figures
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model

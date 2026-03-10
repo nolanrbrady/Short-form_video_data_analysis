@@ -1,5 +1,5 @@
 # ANALYSIS_SPEC — Homer3 betas + Format×Content (channelwise)
-Last updated: 2026-01-30
+Last updated: 2026-03-09
 
 This document captures the exact specifications agreed **before** implementation of the merge and
 channelwise statistical analysis scripts.
@@ -25,12 +25,14 @@ Inference is performed **per channel**.
 ## Inputs
 
 Primary CSV inputs (repo-local):
-- `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`
   - Subject ID column is named `Subject` (e.g., `sub_0001`)
   - Beta columns are wide and follow the pattern:
     - `S##_D##_Cond##_HbO`
     - `S##_D##_Cond##_HbR`
     - Example: `S01_D01_Cond01_HbO`
+- `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`
+  - Raw post-collapse AUC table retained for provenance and pre-mask validation
 - `data/tabular/generated_data/combined_sfv_data.csv`
   - Subject ID column is named `subject_id`
   - `subject_id` may be **zero-padded** in some sources (e.g., `0017` vs `17`)
@@ -50,12 +52,12 @@ Join type:
 - **INNER JOIN** between Homer3 and combined tabular datasets.
 
 ID handling:
-- Both `combined_sfv_data.csv:subject_id` and `homer3_glm_betas_wide_auc.csv:Subject` are treated as **numeric IDs**
+- Both `combined_sfv_data.csv:subject_id` and `homer3_glm_betas_wide_auc_outliers_masked.csv:Subject` are treated as **numeric IDs**
   (even if stored as strings).
 - IDs are normalized by **extracting digits** and converting to integer (handles `0017` vs `17`, and `sub_0017`).
 
 Expected row structure:
-- `homer3_glm_betas_wide_auc.csv` contains **one row per subject**.
+- `homer3_glm_betas_wide_auc_outliers_masked.csv` contains **one row per subject**.
 - Result of merge is **one row per subject** containing:
   - all relevant combined tabular columns (demographics/behavior)
   - all Homer beta columns
@@ -72,20 +74,25 @@ Implementation scripts:
 ## Missingness / pruned-channel policy (critical)
 
 Per repo policy, Homer betas can include values that stand in for **pruned channels**:
-- in the raw FIR export (`homer3_glm_betas_wide_fir.csv`), `0` values may indicate a pruned channel
-- in the raw FIR export (`homer3_glm_betas_wide_fir.csv`), `NaN` values may indicate a pruned channel
+- in the raw FIR export (`homer3_glm_betas_wide_fir_pca.csv`), `0` values may indicate a pruned channel
+- in the raw FIR export (`homer3_glm_betas_wide_fir_pca.csv`), `NaN` values may indicate a pruned channel
 
 Required handling:
 - In the derived single-beta AUC table (`homer3_glm_betas_wide_auc.csv`), carry pruned channels forward as **`NaN`**.
+- In the between-subject outlier-masked AUC table (`homer3_glm_betas_wide_auc_outliers_masked.csv`), carry both pruned channels and censored outlier values as **`NaN`**.
 - Do **not** treat these values as true zero activation.
 - Do **not** silently impute these values.
 
 Downstream modeling must handle this explicitly as missingness.
 
 Upstream derivation note:
-- `homer3_glm_betas_wide_auc.csv` is produced from the raw FIR export `data/tabular/homer3_glm_betas_wide_fir.csv`
+- `homer3_glm_betas_wide_auc.csv` is produced from the raw FIR export `data/tabular/homer3_glm_betas_wide_fir_pca.csv`
   by reconstructing the latent HRF from the Gaussian basis weights and computing a baseline-corrected
   task-window AUC. The merged/statistical analysis scripts consume the derived single-beta table, not the raw FIR table.
+- `homer3_glm_betas_wide_auc_outliers_masked.csv` is produced from `homer3_glm_betas_wide_auc.csv` by screening each exact
+  channel x condition x chromophore column across subjects and masking values outside `mean +/- 3 SD`.
+- Because sample mean/SD screening cannot detect a `3 SD` outlier when fewer than 11 observed subjects are available,
+  undersized columns are reported as skipped rather than silently treated as screened.
 - Production settings are:
   - `idxBasis = 1`
   - reconstruction support `[-10, 130]`
