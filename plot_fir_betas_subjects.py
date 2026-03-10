@@ -29,7 +29,7 @@ from homer_fir import (
 # User-editable configuration (no CLI by request)
 # -----------------------------------------------------------------------------
 
-INPUT_CSV = "data/tabular/homer3_glm_betas_wide_fir.csv"
+INPUT_CSV = "data/tabular/homer3_glm_betas_wide_fir_pca.csv"
 OUTPUT_DIR = "data/results/fir_beta_plots"
 SETTINGS_JSON = "data/config/preprocessing_settings.json"
 TARGET_SUBJECTS = ["sub_0001", "sub_0002"]

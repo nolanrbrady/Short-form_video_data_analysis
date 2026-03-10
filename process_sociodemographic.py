@@ -4,7 +4,7 @@ Covariate preprocessing for the Short Form Video (SFV) study.
 This script is intentionally conservative and paper-friendly:
 - Loads a Qualtrics export that has 3 header rows (QID, label, ImportId) into a DataFrame with MultiIndex columns.
 - Encodes text responses into numeric (ordinal) values for correlations.
-- Computes per-participant composite totals for multi-item scales (PHQ-9, GAD, ASRS, Yang PU, Yang Motivation).
+- Computes per-participant composite totals for multi-item scales (PHQ-8, GAD, ASRS, Yang PU, Yang Motivation).
 - Outputs a clean covariate dataset (correlation diagnostics are handled in `covariate_correlation_analysis.py`).
 
 Input (currently):
@@ -173,7 +173,7 @@ def compute_scale_scores(
 ) -> pd.DataFrame:
     """
     Compute per-participant composite scores for a multi-item scale.
-    These are items like PHQ-9, GAD, ASRS, Yang Problematic Use, and Yang Motivation.
+    These are items like PHQ-8, GAD, ASRS, Yang Problematic Use, and Yang Motivation.
 
     Returns a DataFrame with:
     - total: sum across items (requires >= ceil(p * n_items) non-missing)
@@ -298,11 +298,18 @@ def main() -> None:
     # -------------------------
     # Multi-item scale scores
     # -------------------------
+    # The current study intentionally administers the 8-item PHQ-8, but the
+    # exported Qualtrics label on those items is still "PHQ-9".
     phq_items = cols_by_label(df, "PHQ-9")
     gad_items = cols_by_label(df, "GAD")
     asrs_items = cols_by_label(df, "ASRS")
     yang_pu_items = cols_by_label(df, "Yang Problematic Use")
     yang_mot_items = cols_by_label(df, "Yang Motivation")
+
+    if len(phq_items) != 8:
+        raise ValueError(
+            f"Expected 8 PHQ-8 items in the Qualtrics export, found {len(phq_items)} PHQ-labeled items."
+        )
 
     phq = compute_scale_scores(df, phq_items, LIKERT_0_TO_3).add_prefix("phq_")
     gad = compute_scale_scores(df, gad_items, LIKERT_0_TO_3).add_prefix("gad_")
@@ -320,7 +327,7 @@ def main() -> None:
             "sfv_frequency": [sfv_freq_col],
             "sfv_daily_duration": [sfv_dur_col],
             "sfv_daily_duration_other_text": [sfv_dur_other_col],
-            "PHQ-9 items": phq_items,
+            "PHQ-8 items (Qualtrics label: PHQ-9)": phq_items,
             "GAD items": gad_items,
             "ASRS items": asrs_items,
             "Yang Problematic Use items": yang_pu_items,
@@ -372,7 +379,7 @@ def main() -> None:
     print(
         pd.Series(
             {
-                "PHQ-9 items": len(phq_items),
+                "PHQ-8 items (Qualtrics label: PHQ-9)": len(phq_items),
                 "GAD items": len(gad_items),
                 "ASRS items": len(asrs_items),
                 "Yang PU items": len(yang_pu_items),
