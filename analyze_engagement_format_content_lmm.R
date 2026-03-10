@@ -70,6 +70,26 @@ source_exclusion_helpers <- function() {
 }
 source_exclusion_helpers()
 
+source_posthoc_helpers <- function() {
+  args_all <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args_all, value = TRUE)
+  script_dir <- if (length(file_arg) > 0) {
+    dirname(normalizePath(sub("^--file=", "", file_arg[[1]])))
+  } else {
+    getwd()
+  }
+  candidates <- c(
+    file.path(getwd(), "r_emmeans_posthoc_helpers.R"),
+    file.path(script_dir, "r_emmeans_posthoc_helpers.R")
+  )
+  helper_path <- candidates[file.exists(candidates)][1]
+  if (is.na(helper_path)) {
+    stop("Could not locate r_emmeans_posthoc_helpers.R. Run from repo root or place helper beside the script.")
+  }
+  source(helper_path, local = parent.frame())
+}
+source_posthoc_helpers()
+
 REQUIRED_ENG_COLS <- c(
   "sf_education_engagement",
   "sf_entertainment_engagement",
@@ -353,23 +373,11 @@ main <- function() {
     model_cond <- fit_condition_lmm(df_cc)
     em <- emmeans::emmeans(model_cond, ~ condition)
     pw <- emmeans::contrast(em, method = "pairwise", adjust = "none") %>% as.data.frame()
-    stat_type <- if ("t.ratio" %in% names(pw)) "t" else if ("z.ratio" %in% names(pw)) "z" else NA_character_
-    if (is.na(stat_type)) stop("Expected 't.ratio' or 'z.ratio' in emmeans pairwise output.")
-    if (stat_type == "z") {
-      pw[["t.ratio"]] <- pw[["z.ratio"]]
-      cat("[warn] emmeans returned z.ratio (asymptotic). Recording as t.\n")
-    }
-    if (!("df" %in% names(pw))) pw[["df"]] <- NA_real_
-
-    posthoc_df <- pw %>%
-      mutate(
-        stat_type = stat_type,
-        condition_a = stringr::str_trim(stringr::str_split_fixed(.data$contrast, " - ", 2)[, 1]),
-        condition_b = stringr::str_trim(stringr::str_split_fixed(.data$contrast, " - ", 2)[, 2])
-      ) %>%
-      select(condition_a, condition_b, stat_type, estimate, SE, df, t.ratio, p.value)
-    names(posthoc_df) <- c("condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
-    posthoc_df <- posthoc_df %>% arrange(.data$condition_a, .data$condition_b)
+    posthoc_df <- standardize_emmeans_pairwise_output(
+      pw,
+      context_label = "engagement format x content posthoc"
+    ) %>%
+      arrange(.data$condition_a, .data$condition_b)
   }
 
   dir.create(dirname(args$out_main_csv), recursive = TRUE, showWarnings = FALSE)
