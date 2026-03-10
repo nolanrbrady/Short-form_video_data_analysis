@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "Single source of truth for the engagement trigger-to-condition mapping used in preprocessing.",
+  "conditions": [
+    {
+      "trigger": 1,
+      "category": "Short-Form Education",
+      "output_column": "sf_education_engagement",
+      "condition_code": "SF_Edu"
+    },
+    {
+      "trigger": 2,
+      "category": "Short-Form Entertainment",
+      "output_column": "sf_entertainment_engagement",
+      "condition_code": "SF_Ent"
+    },
+    {
+      "trigger": 3,
+      "category": "Long-Form Entertainment",
+      "output_column": "lf_entertainment_engagement",
+      "condition_code": "LF_Ent"
+    },
+    {
+      "trigger": 4,
+      "category": "Long-Form Educational",
+      "output_column": "lf_education_engagement",
+      "condition_code": "LF_Edu"
+    }
+  ]
+}

@@ -251,6 +251,9 @@ write_analysis_plan_json <- function(path) {
     multiple_testing = list(
       adjust_method = "BH",
       family_grouping = c("neural_level", "neural_name", "chrom")
+    ),
+    figures = list(
+      policy = "significant_only"
     )
   )
   jsonlite::write_json(plan_obj, path = path, auto_unbox = TRUE, pretty = TRUE)
@@ -472,12 +475,17 @@ main <- function() {
     "family-wise BH-FDR values do not match manual implementation"
   )
 
-  # 10) Every analyzed row must point to an existing plot artifact.
-  assert_true(all(!is.na(analyzed$plot_file)), "all analyzed rows should have a plot file path")
-  assert_true(all(file.exists(analyzed$plot_file)), "one or more analyzed plot files do not exist")
+  # 10) Figures should be created only for FDR-significant analyzed rows under the configured policy.
+  plotted <- analyzed %>% filter(!is.na(.data$plot_file))
+  significant <- analyzed %>% filter(is.finite(.data$p_fdr), .data$p_fdr < 0.05)
+  non_significant <- analyzed %>% filter(!is.finite(.data$p_fdr) | .data$p_fdr >= 0.05)
+  assert_true(nrow(significant) > 0, "synthetic fixture should yield at least one significant analyzed row")
+  assert_true(all(!is.na(significant$plot_file)), "all significant analyzed rows should have a plot file path")
+  assert_true(all(file.exists(significant$plot_file)), "one or more significant analyzed plot files do not exist")
+  assert_true(all(is.na(non_significant$plot_file)), "non-significant analyzed rows should not create plots under significant_only policy")
 
   png_files <- list.files(out_fig_dir, pattern = "\\.png$", full.names = TRUE)
-  assert_true(length(png_files) == nrow(analyzed), "expected one PNG per analyzed row")
+  assert_true(length(png_files) == nrow(plotted), "expected one PNG per plotted analyzed row")
 
   # 11) Duplicate subject IDs must fail hard.
   input_dup <- bind_rows(input, input[1, , drop = FALSE])

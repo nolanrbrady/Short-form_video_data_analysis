@@ -26,6 +26,9 @@
 #   - BH-FDR within each configured neural-target x chromophore family.
 #   - By default, one family pools all condition x predictor pairs for a given
 #     `(neural_level, neural_name, chrom)` combination.
+# Figures
+#   - Plot emission is controlled by `data/config/correlational_analysis_plan.json`.
+#   - Default policy: generate figures only for FDR-significant tested results.
 #
 # Citations (see CITATIONS.md)
 #   - Pearson (1896): product-moment correlation.
@@ -192,11 +195,32 @@ load_analysis_plan <- function(plan_json_path) {
     )
   }
 
+  figures_obj <- plan_obj$figures
+  if (is.null(figures_obj)) {
+    stop("Correlation analysis plan must define a 'figures' object.")
+  }
+  if (!is.list(figures_obj)) {
+    stop("Correlation analysis plan field 'figures' must be a JSON object.")
+  }
+  figure_policy <- as.character(figures_obj$policy %||% NA_character_)
+  supported_figure_policies <- c("all_tested", "significant_only")
+  if (!nzchar(figure_policy) || !(figure_policy %in% supported_figure_policies)) {
+    stop(
+      paste0(
+        "Unsupported figures.policy '", figure_policy,
+        "'. Supported policies: ", paste(supported_figure_policies, collapse = ", ")
+      )
+    )
+  }
+
   list(
     predictors = predictors,
     multiple_testing = list(
       adjust_method = adjust_method,
       family_grouping = family_grouping
+    ),
+    figures = list(
+      policy = figure_policy
     )
   )
 }
@@ -619,13 +643,14 @@ compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
 
   lm_fit <- stats::lm(neural_value ~ predictor_value, data = sub_complete)
   lm_coef <- stats::coef(lm_fit)
+  lm_summary <- summary(lm_fit)
 
   list(
     status = "tested",
     skip_reason = NA_character_,
     n_complete = n_complete,
     pearson_r = unname(cor_fit$estimate),
-    r_squared = unname(cor_fit$estimate)^2,
+    r_squared = unname(lm_summary$r.squared),
     p_unc = cor_fit$p.value,
     ci95_low = if (!is.null(cor_fit$conf.int)) cor_fit$conf.int[[1]] else NA_real_,
     ci95_high = if (!is.null(cor_fit$conf.int)) cor_fit$conf.int[[2]] else NA_real_,
@@ -783,7 +808,15 @@ main <- function() {
     }
   }
 
-  for (idx in tested_idx) {
+  plot_idx <- if (analysis_plan$figures$policy == "all_tested") {
+    tested_idx
+  } else if (analysis_plan$figures$policy == "significant_only") {
+    which(results$analysis_status == "tested" & is.finite(results$p_fdr) & results$p_fdr < args$alpha)
+  } else {
+    stop(paste0("Unhandled figures.policy: ", analysis_plan$figures$policy))
+  }
+
+  for (idx in plot_idx) {
     row <- results[idx, , drop = FALSE]
     pair_key <- make_pair_key(
       neural_level = row$neural_level[[1]],
@@ -812,9 +845,11 @@ main <- function() {
   cat("[data] predictors analyzed:", length(predictor_cols), "\n")
   cat("[data] neural targets analyzed:", target_count, "\n")
   cat("[data] multiple-testing families:", length(unique(results$family_id)), "\n")
+  cat("[data] figure policy:", analysis_plan$figures$policy, "\n")
   cat("[out] results CSV:", args$out_csv, "\n")
   cat("[out] figures:", args$out_fig_dir, "\n")
   cat("[summary] tested pairs:", sum(results$analysis_status == "tested"), "\n")
+  cat("[summary] plotted pairs:", length(plot_idx), "\n")
   cat("[summary] skipped pairs:", sum(results$analysis_status != "tested"), "\n")
 }
 
