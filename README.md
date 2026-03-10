@@ -10,6 +10,8 @@ This repo contains two primary analysis “tracks”:
 ### Trigger markers (task conditions)
 
 These are the stimulus/trigger codes used in the fNIRS recordings and the analysis code.
+The single source of truth for the engagement preprocessing mapping is
+`data/config/engagement_condition_map.json`.
 
 - **Short-Form Education**: `1`
 - **Short-Form Entertainment**: `2`
@@ -75,6 +77,7 @@ Outputs:
 
 - Script: `process_engagement.py`
 - Input: `demographic/combined_engagement_data.csv`
+- Condition map: `data/config/engagement_condition_map.json`
 - Output: `data/tabular/generated_data/engagement_data_processed.csv`
 
 Command:
