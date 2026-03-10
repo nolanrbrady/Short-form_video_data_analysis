@@ -30,6 +30,8 @@ assert_true <- function(cond, msg) {
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
+source("r_emmeans_posthoc_helpers.R", local = TRUE)
+
 holm_adjust_manual <- function(p_values) {
   # Manual Holm adjusted p-values.
   # Reference: Holm (1979), see `CITATIONS.md`.
@@ -111,6 +113,35 @@ main <- function() {
   writeLines("[]", exclude_none)
   writeLines('["sub_0001"]', exclude_one)
   writeLines('["sub_9999"]', exclude_absent)
+
+  # 0) Posthoc formatting helper must preserve t-vs-z semantics.
+  helper_t <- standardize_emmeans_pairwise_output(
+    tibble::tibble(
+      contrast = "SF_Edu - SF_Ent",
+      estimate = 1.25,
+      SE = 0.40,
+      df = 18,
+      t.ratio = 3.125,
+      p.value = 0.006
+    ),
+    context_label = "retention helper t-branch"
+  )
+  assert_true(helper_t$stat_type[[1]] == "t", "expected t.ratio helper branch to record stat_type=t")
+  assert_true(helper_t$t[[1]] == "3.125", "t.ratio helper branch should preserve the reported t statistic")
+
+  helper_z <- standardize_emmeans_pairwise_output(
+    tibble::tibble(
+      contrast = "LF_Edu - LF_Ent",
+      estimate = 0.75,
+      SE = 0.20,
+      z.ratio = 3.75,
+      p.value = 0.001
+    ),
+    context_label = "retention helper z-branch"
+  )
+  assert_true(helper_z$stat_type[[1]] == "z", "expected z.ratio helper branch to record stat_type=z")
+  assert_true(helper_z$t[[1]] == "t can't be calculated", "z.ratio helper branch should not relabel z as t")
+  assert_true(is.na(helper_z$df[[1]]), "z.ratio helper branch should fill missing df with NA")
 
   # 1) Deterministic analytic ground truth (no noise): exact algebra checks.
   det <- generate_retention(

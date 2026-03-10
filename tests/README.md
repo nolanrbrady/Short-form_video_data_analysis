@@ -74,6 +74,24 @@ Command:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
+## Correlation Follow-up Pipeline (R): targeted pairwise validation
+
+Runs `analyze_correlational_relationships.R` on a synthetic merged dataset and verifies:
+- Requested predictor discovery (`sfv_daily_duration`, `sfv_frequency`, `diff_*`, `*_engagement`)
+- Requested neural target coverage for `S04_D02` and the specified ROI/chrom pairs across all 4 conditions
+- Pairwise-complete-case behavior only for the affected correlation, with no imputation
+- ROI averaging across available non-missing channels
+- Explicit positive/negative/null correlation cases
+- BH-FDR correctness within each configured neural-target x chromophore family
+- Output artifact creation (CSV plus one figure per tested pair)
+- Fail-hard behavior for malformed ROI JSON, duplicate IDs, and non-numeric required inputs
+
+Command:
+
+```bash
+Rscript tests/validate_correlational_relationships_r.R
+```
+
 ## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines
 
 Runs repeated null-effect synthetic datasets through all four inferential scripts:
