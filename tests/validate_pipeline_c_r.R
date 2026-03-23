@@ -6,6 +6,7 @@
 # - Verify that `analyze_format_content_lmm_channelwise.R` adheres to `ANALYSIS_SPEC.md`:
 #   - Subject ID normalization (`sub_0001` aligns with `0001`/`1`)
 #   - Condition mapping + ±0.5 effect coding
+#   - Age-adjusted omnibus model (`+ age`) with fail-hard covariate validation
 #   - Pruned-channel policy: treat NA as missing
 #   - Complete-case within channel×chrom (all 4 conditions required)
 #   - BH-FDR families per chrom × effect across channels
@@ -65,6 +66,10 @@ make_subject_ids <- function(n_subjects) {
   )
 }
 
+make_age_years <- function(n_subjects) {
+  seq(18, by = 1, length.out = n_subjects)
+}
+
 cond_grid <- function() {
   tibble::tibble(
     cond = c("01", "02", "03", "04"),
@@ -84,7 +89,9 @@ generate_homer3_wide <- function(
   chroms,
   # named list: channel -> chrom -> list(b0,bF,bC,bI)
   true_effects,
-  noise_sd
+  noise_sd,
+  age_years,
+  age_beta = 0.12
 ) {
   ids <- make_subject_ids(n_subjects)
   grid <- cond_grid()
@@ -93,6 +100,7 @@ generate_homer3_wide <- function(
   set.seed(123)
   subj_re <- rnorm(n_subjects, mean = 0, sd = 0.6)
   names(subj_re) <- ids$homer_subject
+  age_centered <- age_years - mean(age_years)
 
   out <- tibble::tibble(Subject = ids$homer_subject)
 
@@ -110,7 +118,7 @@ generate_homer3_wide <- function(
           grid$content_c[[i]]
         )
         # generate per-subject observations
-        vals <- mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
+        vals <- mu + age_beta * age_centered + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
         col <- paste0(ch, "_Cond", cond, "_", chrom)
         out[[col]] <- vals
       }
@@ -119,13 +127,39 @@ generate_homer3_wide <- function(
   out
 }
 
-generate_combined <- function(n_subjects) {
+generate_combined <- function(n_subjects, age_years = make_age_years(n_subjects)) {
   ids <- make_subject_ids(n_subjects)
   tibble::tibble(
     subject_id = ids$combined_subject,
-    age = rep(20, n_subjects),
+    age = age_years,
     pd_status = rep(0, n_subjects)
   )
+}
+
+build_reference_long <- function(merged, channel_name, chrom_name) {
+  merged %>%
+    transmute(
+      subject_id = as.integer(str_extract(.data$subject_id, "\\d+")),
+      age = .data$age,
+      SF_Edu = .data[[paste0(channel_name, "_Cond01_", chrom_name)]],
+      SF_Ent = .data[[paste0(channel_name, "_Cond02_", chrom_name)]],
+      LF_Ent = .data[[paste0(channel_name, "_Cond03_", chrom_name)]],
+      LF_Edu = .data[[paste0(channel_name, "_Cond04_", chrom_name)]]
+    ) %>%
+    pivot_longer(cols = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu"), names_to = "condition", values_to = "beta") %>%
+    mutate(
+      format_c = case_when(
+        condition %in% c("SF_Edu", "SF_Ent") ~ -0.5,
+        condition %in% c("LF_Ent", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      ),
+      content_c = case_when(
+        condition %in% c("SF_Ent", "LF_Ent") ~ -0.5,
+        condition %in% c("SF_Edu", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      )
+    ) %>%
+    filter(!is.na(.data$beta))
 }
 
 build_merged_input <- function(homer, combined) {
@@ -195,6 +229,7 @@ main <- function() {
   n_subjects <- 12
   channels <- c("S01_D01", "S02_D01")
   chroms <- c("HbO", "HbR")
+  age_years <- make_age_years(n_subjects)
 
   # Channel 1: strong interaction; Channel 2: no interaction.
   true_effects <- list(
@@ -213,9 +248,10 @@ main <- function() {
     channels = channels,
     chroms = chroms,
     true_effects = true_effects,
-    noise_sd = 0.15
+    noise_sd = 0.15,
+    age_years = age_years
   )
-  combined <- generate_combined(n_subjects)
+  combined <- generate_combined(n_subjects, age_years = age_years)
 
   # Inject a pruned channel (NA) for one subject in one condition: should force complete-case drop
   # for that channel×chrom only.
@@ -284,6 +320,21 @@ main <- function() {
     assert_true(abs(est_fmt[[1]] - pars$bF) < tol, paste0("format estimate off for S01_D01 ", chrom_name))
     assert_true(abs(est_cnt[[1]] - pars$bC) < tol, paste0("content estimate off for S01_D01 ", chrom_name))
     assert_true(abs(est_int[[1]] - pars$bI) < tol, paste0("interaction estimate off for S01_D01 ", chrom_name))
+  }
+
+  # 3a) Direct reference-model agreement for one representative channel/chrom with age adjustment.
+  ref_long <- build_reference_long(merged, channel_name = "S01_D01", chrom_name = "HbO") %>%
+    group_by(subject_id) %>%
+    filter(n_distinct(condition) == 4) %>%
+    ungroup()
+  ref_model <- lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = ref_long, REML = TRUE)
+  ref_anova <- anova(ref_model, ddf = "Kenward-Roger", type = 3)
+  ref_coefs <- summary(ref_model)$coefficients
+  for (term_map in list(c("format", "format_c"), c("content", "content_c"), c("interaction", "format_c:content_c"))) {
+    out_row <- main_tidy %>% filter(channel == "S01_D01", chrom == "HbO", effect == term_map[[1]])
+    assert_true(nrow(out_row) == 1, paste0("missing output row for reference term ", term_map[[1]]))
+    assert_true(abs(out_row$estimate[[1]] - ref_coefs[term_map[[2]], "Estimate"]) < 1e-10, paste0("estimate mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$p_unc[[1]] - ref_anova[term_map[[2]], "Pr(>F)"]) < 1e-10, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
   }
 
   # 3b) Channel subsetting check: S01_D01 and S02_D01 should not produce identical estimates.
@@ -384,6 +435,52 @@ main <- function() {
     all(main_abs$n_subjects == main_tidy$n_subjects),
     "absent exclusion ID should not change per-row n_subjects"
   )
+
+  # 6d) Age is required and must be complete/numeric after exclusions.
+  merged_missing_age_col <- merged %>% select(-age)
+  merged_missing_age_col_csv <- file.path(tmp, "merged_missing_age_col.csv")
+  write_csv(merged_missing_age_col, merged_missing_age_col_csv)
+  status_missing_age_col <- run_analysis(
+    input_csv = merged_missing_age_col_csv,
+    out_main = file.path(tmp, "main_missing_age_col.csv"),
+    out_main_tidy = file.path(tmp, "main_missing_age_col_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_missing_age_col.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_missing_age_col != 0, "expected failure on missing age column")
+
+  merged_age_na <- merged
+  merged_age_na$age[[3]] <- NA_real_
+  merged_age_na_csv <- file.path(tmp, "merged_age_na.csv")
+  write_csv(merged_age_na, merged_age_na_csv)
+  status_age_na <- run_analysis(
+    input_csv = merged_age_na_csv,
+    out_main = file.path(tmp, "main_age_na.csv"),
+    out_main_tidy = file.path(tmp, "main_age_na_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_age_na.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_age_na != 0, "expected failure on missing age values")
+
+  merged_age_bad <- merged
+  merged_age_bad$age <- as.character(merged_age_bad$age)
+  merged_age_bad$age[[4]] <- "not_numeric"
+  merged_age_bad_csv <- file.path(tmp, "merged_age_bad.csv")
+  write_csv(merged_age_bad, merged_age_bad_csv)
+  status_age_bad <- run_analysis(
+    input_csv = merged_age_bad_csv,
+    out_main = file.path(tmp, "main_age_bad.csv"),
+    out_main_tidy = file.path(tmp, "main_age_bad_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_age_bad.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_age_bad != 0, "expected failure on non-numeric age values")
 
   # 7) Duplicate subject_id should fail hard (data integrity)
   merged_dup <- bind_rows(merged, merged %>% slice(1))

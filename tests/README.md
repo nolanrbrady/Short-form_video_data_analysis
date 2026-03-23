@@ -6,12 +6,14 @@ This folder contains lightweight validation harnesses that aim to verify scienti
 
 Runs `analyze_format_content_lmm_channelwise.R` on a synthetic dataset that:
 - Uses Homer-style subject IDs (`sub_0001`) and combined IDs (`0001`)
+- Uses varying subject ages and checks the age-adjusted omnibus model against a direct reference fit
 - Includes both HbO/HbR and multiple channels
 - Includes a pruned beta (`0`) to verify pruned-channel missingness + complete-case logic
 - Verifies coefficient recovery (within tolerance) for known ground-truth fixed effects
 - Verifies explicit inferential TP/TN outcomes (known significant interaction channel vs known null channel)
 - Verifies post-hoc gating only triggers for interaction-FDR-significant channels
 - Verifies duplicate `subject_id` fails hard
+- Verifies missing/non-numeric `age` fails hard
 
 Command:
 
@@ -23,6 +25,7 @@ Rscript tests/validate_pipeline_c_r.R
 
 Runs `analyze_format_content_lmm_roi.R` on a synthetic dataset that:
 - Uses Homer-style subject IDs (`sub_0001`) and combined IDs (`0001`)
+- Uses varying subject ages and checks the age-adjusted omnibus model against a direct reference fit
 - Defines ROIs from a strict JSON ROI map (`ROI -> [channels]`)
 - Verifies ROI mean aggregation over available channels (`0` treated as pruned/missing)
 - Verifies complete-case behavior when all ROI channels are pruned for a condition
@@ -30,7 +33,7 @@ Runs `analyze_format_content_lmm_roi.R` on a synthetic dataset that:
 - Verifies explicit inferential TP/TN outcomes (known significant ROI interaction vs known null ROI interaction)
 - Verifies BH-FDR correctness across ROIs (per chrom/effect family)
 - Verifies interaction-gated post-hoc behavior
-- Verifies fail-hard behavior for invalid JSON, missing ROI channels, and overlapping ROI assignments
+- Verifies fail-hard behavior for invalid JSON, missing/non-numeric `age`, missing ROI channels, and overlapping ROI assignments
 
 Command:
 
@@ -43,12 +46,13 @@ Rscript tests/validate_pipeline_c_roi_r.R
 Runs `analyze_retention_format_content_lmm.R` on generated retention datasets and verifies:
 - Deterministic analytic ground truth for Length/Content/Interaction contrasts
 - End-to-end coefficient recovery for known generating parameters
+- Direct agreement with an age-adjusted reference omnibus fit
 - Explicit TP/TN inferential checks using strong-effect and null-effect synthetic datasets
 - Holm-correction correctness across the 3 omnibus effects
 - Interaction-gated post-hoc behavior (on/off cases)
 - Zero-as-valid retention handling (not treated as missing)
 - Complete-case subject drop only for true `NA`
-- Fail-hard integrity checks (duplicate IDs, missing required columns, non-numeric retention values)
+- Fail-hard integrity checks (duplicate IDs, missing required columns, missing/non-numeric `age`, non-numeric retention values)
 
 Command:
 
@@ -61,12 +65,13 @@ Rscript tests/validate_retention_pipeline_r.R
 Runs `analyze_engagement_format_content_lmm.R` on generated engagement datasets and verifies:
 - Deterministic analytic ground truth for Length/Content/Interaction contrasts
 - End-to-end coefficient recovery for known generating parameters
+- Direct agreement with an age-adjusted reference omnibus fit
 - Explicit TP/TN inferential checks using strong-effect and null-effect synthetic datasets
 - Holm-correction correctness across the 3 omnibus effects
 - Interaction-gated post-hoc behavior (on/off cases)
 - Zero-as-valid engagement handling (not treated as missing)
 - Complete-case subject drop only for true `NA`
-- Fail-hard integrity checks (duplicate IDs, missing required columns, non-numeric engagement values)
+- Fail-hard integrity checks (duplicate IDs, missing required columns, missing/non-numeric `age`, non-numeric engagement values)
 
 Command:
 
@@ -82,7 +87,7 @@ Runs `analyze_correlational_relationships.R` on a synthetic merged dataset and v
 - Pairwise-complete-case behavior only for the affected correlation, with no imputation
 - ROI averaging across available non-missing channels
 - Explicit positive/negative/null correlation cases
-- BH-FDR correctness within each configured neural-target x chromophore family
+- BH-FDR correctness within each configured family (default study config: neural-target x chromophore x predictor, i.e. across the 4 conditions)
 - Output artifact creation (CSV plus one figure per tested pair)
 - Fail-hard behavior for malformed ROI JSON, duplicate IDs, and non-numeric required inputs
 
@@ -102,6 +107,7 @@ Runs repeated null-effect synthetic datasets through all four inferential script
 
 It estimates empirical false-positive rates from adjusted p-values (`p_fdr`) and fails when any
 pipeline/effect exceeds a configured upper bound.
+The synthetic generators now include varying `age` so the required omnibus covariate path is exercised during calibration.
 
 Command:
 
@@ -129,6 +135,7 @@ Runs repeated non-null synthetic datasets through all four inferential scripts:
 
 It estimates empirical power and type-II error from adjusted p-values (`p_fdr`) and fails when any
 pipeline/effect exceeds a configured type-II upper bound.
+The synthetic generators now include varying `age` so the required omnibus covariate path is exercised during calibration.
 
 Command:
 

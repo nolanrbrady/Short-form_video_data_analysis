@@ -7,6 +7,7 @@
 #   - strict ROI JSON parsing and channel-map validation
 #   - subject ID normalization (`sub_0001` aligns with `0001`/`1`)
 #   - condition mapping + ±0.5 effect coding
+#   - age-adjusted omnibus model (`+ age`) with fail-hard covariate validation
 #   - pruned-channel policy: treat NA as missing
 #   - ROI beta aggregation as mean across available channels
 #   - complete-case within ROI×chrom (all 4 conditions required)
@@ -66,6 +67,10 @@ make_subject_ids <- function(n_subjects) {
   )
 }
 
+make_age_years <- function(n_subjects) {
+  seq(18, by = 1, length.out = n_subjects)
+}
+
 cond_grid <- function() {
   tibble::tibble(
     cond = c("01", "02", "03", "04"),
@@ -84,7 +89,9 @@ generate_homer3_wide <- function(
   channels,
   chroms,
   true_effects,
-  noise_sd
+  noise_sd,
+  age_years,
+  age_beta = 0.12
 ) {
   ids <- make_subject_ids(n_subjects)
   grid <- cond_grid()
@@ -92,6 +99,7 @@ generate_homer3_wide <- function(
   set.seed(123)
   subj_re <- rnorm(n_subjects, mean = 0, sd = 0.6)
   names(subj_re) <- ids$homer_subject
+  age_centered <- age_years - mean(age_years)
 
   out <- tibble::tibble(Subject = ids$homer_subject)
 
@@ -108,7 +116,7 @@ generate_homer3_wide <- function(
           grid$format_c[[i]],
           grid$content_c[[i]]
         )
-        vals <- mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
+        vals <- mu + age_beta * age_centered + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
         col <- paste0(ch, "_Cond", cond, "_", chrom)
         out[[col]] <- vals
       }
@@ -117,13 +125,49 @@ generate_homer3_wide <- function(
   out
 }
 
-generate_combined <- function(n_subjects) {
+generate_combined <- function(n_subjects, age_years = make_age_years(n_subjects)) {
   ids <- make_subject_ids(n_subjects)
   tibble::tibble(
     subject_id = ids$combined_subject,
-    age = rep(20, n_subjects),
+    age = age_years,
     pd_status = rep(0, n_subjects)
   )
+}
+
+build_reference_roi_long <- function(merged, roi_channels, chrom_name, roi_name) {
+  conds <- c("01", "02", "03", "04")
+  cond_labels <- c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")
+
+  rows <- lapply(seq_along(conds), function(i) {
+    cond <- conds[[i]]
+    cond_label <- cond_labels[[i]]
+    beta_cols <- paste0(roi_channels, "_Cond", cond, "_", chrom_name)
+    beta_mat <- as.matrix(merged[, beta_cols, drop = FALSE])
+    beta_mean <- apply(beta_mat, 1, function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE))
+    tibble::tibble(
+      subject_id = as.integer(str_extract(merged$subject_id, "\\d+")),
+      age = merged$age,
+      roi = roi_name,
+      chrom = chrom_name,
+      condition = cond_label,
+      beta = beta_mean
+    )
+  })
+
+  bind_rows(rows) %>%
+    mutate(
+      format_c = case_when(
+        condition %in% c("SF_Edu", "SF_Ent") ~ -0.5,
+        condition %in% c("LF_Ent", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      ),
+      content_c = case_when(
+        condition %in% c("SF_Ent", "LF_Ent") ~ -0.5,
+        condition %in% c("SF_Edu", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      )
+    ) %>%
+    filter(!is.na(.data$beta))
 }
 
 build_merged_input <- function(homer, combined) {
@@ -194,6 +238,7 @@ main <- function() {
   n_subjects <- 12
   channels <- c("S01_D01", "S01_D02", "S02_D01", "S02_D02")
   chroms <- c("HbO", "HbR")
+  age_years <- make_age_years(n_subjects)
 
   # ROI 1 channels have strong interaction; ROI 2 channels have null interaction.
   true_effects <- list(
@@ -220,7 +265,8 @@ main <- function() {
     channels = channels,
     chroms = chroms,
     true_effects = true_effects,
-    noise_sd = 0.15
+    noise_sd = 0.15,
+    age_years = age_years
   )
 
   # Pruning injections for ROI mean/complete-case checks:
@@ -232,7 +278,7 @@ main <- function() {
   # Inject one literal zero beta in a non-pruned ROI channel; this should remain valid data.
   homer[["S02_D01_Cond01_HbO"]][[3]] <- 0
 
-  combined <- generate_combined(n_subjects)
+  combined <- generate_combined(n_subjects, age_years = age_years)
   merged <- build_merged_input(homer, combined)
   write_csv(merged, input_csv)
 
@@ -327,6 +373,26 @@ main <- function() {
     }
   }
 
+  # Direct reference-model agreement for one representative ROI/chrom with age adjustment.
+  ref_long <- build_reference_roi_long(
+    merged,
+    roi_channels = c("S01_D01", "S01_D02"),
+    chrom_name = "HbO",
+    roi_name = "VMPFC"
+  ) %>%
+    group_by(subject_id) %>%
+    filter(n_distinct(condition) == 4) %>%
+    ungroup()
+  ref_model <- lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = ref_long, REML = TRUE)
+  ref_anova <- anova(ref_model, ddf = "Kenward-Roger", type = 3)
+  ref_coefs <- summary(ref_model)$coefficients
+  for (term_map in list(c("format", "format_c"), c("content", "content_c"), c("interaction", "format_c:content_c"))) {
+    out_row <- main_tidy %>% filter(roi == "VMPFC", chrom == "HbO", effect == term_map[[1]])
+    assert_true(nrow(out_row) == 1, paste0("missing output row for reference term ", term_map[[1]]))
+    assert_true(abs(out_row$estimate[[1]] - ref_coefs[term_map[[2]], "Estimate"]) < 1e-10, paste0("estimate mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$p_unc[[1]] - ref_anova[term_map[[2]], "Pr(>F)"]) < 1e-10, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
+  }
+
   # Explicit inferential TP/TN checks:
   # - True positive: VMPFC interaction should be FDR-significant.
   # - True negative: DLPFC interaction should remain non-significant.
@@ -357,6 +423,55 @@ main <- function() {
       assert_true(max_abs_diff < 1e-10, paste0("BH-FDR mismatch for ", chrom_name, " / ", eff))
     }
   }
+
+  # Age is required and must be complete/numeric after exclusions.
+  merged_missing_age_col <- merged %>% select(-age)
+  merged_missing_age_col_csv <- file.path(tmp, "merged_missing_age_col.csv")
+  write_csv(merged_missing_age_col, merged_missing_age_col_csv)
+  status_missing_age_col <- run_analysis(
+    input_csv = merged_missing_age_col_csv,
+    roi_json = roi_json,
+    out_main = file.path(tmp, "main_missing_age_col.csv"),
+    out_main_tidy = file.path(tmp, "main_tidy_missing_age_col.csv"),
+    out_posthoc = file.path(tmp, "posthoc_missing_age_col.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_missing_age_col != 0, "missing age column should fail fast")
+
+  merged_age_na <- merged
+  merged_age_na$age[[3]] <- NA_real_
+  merged_age_na_csv <- file.path(tmp, "merged_age_na.csv")
+  write_csv(merged_age_na, merged_age_na_csv)
+  status_age_na <- run_analysis(
+    input_csv = merged_age_na_csv,
+    roi_json = roi_json,
+    out_main = file.path(tmp, "main_age_na.csv"),
+    out_main_tidy = file.path(tmp, "main_tidy_age_na.csv"),
+    out_posthoc = file.path(tmp, "posthoc_age_na.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_age_na != 0, "missing age values should fail fast")
+
+  merged_age_bad <- merged
+  merged_age_bad$age <- as.character(merged_age_bad$age)
+  merged_age_bad$age[[4]] <- "not_numeric"
+  merged_age_bad_csv <- file.path(tmp, "merged_age_bad.csv")
+  write_csv(merged_age_bad, merged_age_bad_csv)
+  status_age_bad <- run_analysis(
+    input_csv = merged_age_bad_csv,
+    roi_json = roi_json,
+    out_main = file.path(tmp, "main_age_bad.csv"),
+    out_main_tidy = file.path(tmp, "main_tidy_age_bad.csv"),
+    out_posthoc = file.path(tmp, "posthoc_age_bad.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_age_bad != 0, "non-numeric age values should fail fast")
 
   # Strict JSON parsing should fail on invalid JSON syntax.
   writeLines("{'VMPFC': ['S01_D01', 'S01_D02']}", roi_json_invalid)

@@ -91,6 +91,10 @@ make_subject_ids <- function(n_subjects) {
   )
 }
 
+make_age_years <- function(n_subjects) {
+  seq(18, by = 1, length.out = n_subjects)
+}
+
 cond_grid <- function() {
   tibble::tibble(
     cond = c("01", "02", "03", "04"),
@@ -108,12 +112,15 @@ generate_homer3_wide_alt <- function(
   bC,
   bI,
   noise_sd,
-  seed
+  seed,
+  age_years,
+  age_beta = 0.10
 ) {
   set.seed(seed)
   ids <- make_subject_ids(n_subjects)
   grid <- cond_grid()
   subj_re <- rnorm(n_subjects, mean = 0, sd = 0.6)
+  age_centered <- age_years - mean(age_years)
 
   out <- tibble::tibble(Subject = ids$homer_subject)
   for (ch in channels) {
@@ -126,7 +133,8 @@ generate_homer3_wide_alt <- function(
         mu <- b0 +
           bF_j * grid$format_c[[i]] +
           bC_j * grid$content_c[[i]] +
-          bI_j * (grid$format_c[[i]] * grid$content_c[[i]])
+          bI_j * (grid$format_c[[i]] * grid$content_c[[i]]) +
+          age_beta * age_centered
         col_name <- paste0(ch, "_Cond", grid$cond[[i]], "_", chrom)
         out[[col_name]] <- mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
       }
@@ -135,11 +143,11 @@ generate_homer3_wide_alt <- function(
   out
 }
 
-generate_combined <- function(n_subjects) {
+generate_combined <- function(n_subjects, age_years = make_age_years(n_subjects)) {
   ids <- make_subject_ids(n_subjects)
   tibble::tibble(
     subject_id = ids$combined_subject,
-    age = rep(20, n_subjects),
+    age = age_years,
     pd_status = rep(0, n_subjects)
   )
 }
@@ -156,18 +164,20 @@ build_merged_input <- function(homer, combined) {
     select(-subject_id_norm)
 }
 
-generate_retention_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed) {
+generate_retention_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed, age_years = make_age_years(n_subjects), age_beta = 0.10) {
   set.seed(seed)
   sid <- sprintf("%04d", seq_len(n_subjects))
   subj_re <- rnorm(n_subjects, mean = 0, sd = 0.35)
   b0 <- 0.30
   grid <- cond_grid()
+  age_centered <- age_years - mean(age_years)
   make_cell <- function(format_c, content_c) {
-    mu <- b0 + bL * format_c + bC * content_c + bI * (format_c * content_c)
+    mu <- b0 + bL * format_c + bC * content_c + bI * (format_c * content_c) + age_beta * age_centered
     mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
   }
   tibble::tibble(
     subject_id = sid,
+    age = age_years,
     diff_short_form_education = make_cell(grid$format_c[[1]], grid$content_c[[1]]),
     diff_short_form_entertainment = make_cell(grid$format_c[[2]], grid$content_c[[2]]),
     diff_long_form_entertainment = make_cell(grid$format_c[[3]], grid$content_c[[3]]),
@@ -175,18 +185,20 @@ generate_retention_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed) {
   )
 }
 
-generate_engagement_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed) {
+generate_engagement_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed, age_years = make_age_years(n_subjects), age_beta = 0.10) {
   set.seed(seed)
   sid <- sprintf("%04d", seq_len(n_subjects))
   subj_re <- rnorm(n_subjects, mean = 0, sd = 0.50)
   b0 <- 3.0
   grid <- cond_grid()
+  age_centered <- age_years - mean(age_years)
   make_cell <- function(format_c, content_c) {
-    mu <- b0 + bL * format_c + bC * content_c + bI * (format_c * content_c)
+    mu <- b0 + bL * format_c + bC * content_c + bI * (format_c * content_c) + age_beta * age_centered
     mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
   }
   tibble::tibble(
     subject_id = sid,
+    age = age_years,
     sf_education_engagement = make_cell(grid$format_c[[1]], grid$content_c[[1]]),
     sf_entertainment_engagement = make_cell(grid$format_c[[2]], grid$content_c[[2]]),
     lf_entertainment_engagement = make_cell(grid$format_c[[3]], grid$content_c[[3]]),
@@ -249,6 +261,7 @@ main <- function() {
       cat("[progress] replicate ", rep_idx, "/", args$n_reps, "\n", sep = "")
     }
     seed_rep <- args$seed + rep_idx
+    age_years <- make_age_years(args$n_subjects)
 
     homer <- generate_homer3_wide_alt(
       n_subjects = args$n_subjects,
@@ -258,9 +271,10 @@ main <- function() {
       bC = args$effect_channel_content,
       bI = args$effect_channel_interaction,
       noise_sd = args$noise_sd_channel,
-      seed = seed_rep
+      seed = seed_rep,
+      age_years = age_years
     )
-    combined <- generate_combined(args$n_subjects)
+    combined <- generate_combined(args$n_subjects, age_years = age_years)
     merged <- build_merged_input(homer, combined)
     merged_csv <- file.path(tmp, sprintf("merged_rep_%03d.csv", rep_idx))
     write_csv(merged, merged_csv)
@@ -323,7 +337,8 @@ main <- function() {
       bC = args$effect_retention_content,
       bI = args$effect_retention_interaction,
       noise_sd = args$noise_sd_retention,
-      seed = seed_rep + 100000L
+      seed = seed_rep + 100000L,
+      age_years = age_years
     )
     retention_csv <- file.path(tmp, sprintf("retention_%03d.csv", rep_idx))
     ret_main <- file.path(tmp, sprintf("ret_main_%03d.csv", rep_idx))
@@ -355,7 +370,8 @@ main <- function() {
       bC = args$effect_engagement_content,
       bI = args$effect_engagement_interaction,
       noise_sd = args$noise_sd_engagement,
-      seed = seed_rep + 200000L
+      seed = seed_rep + 200000L,
+      age_years = age_years
     )
     engagement_csv <- file.path(tmp, sprintf("engagement_%03d.csv", rep_idx))
     eng_main <- file.path(tmp, sprintf("eng_main_%03d.csv", rep_idx))

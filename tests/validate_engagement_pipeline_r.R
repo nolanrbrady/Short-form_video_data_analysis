@@ -6,6 +6,7 @@
 # - Verify `analyze_engagement_format_content_lmm.R` implements:
 #   - Required-column and subject_id integrity checks (fail hard)
 #   - 2x2 condition mapping and +/-0.5 effect coding
+#   - age-adjusted omnibus model (`+ age`) with fail-hard covariate validation
 #   - Complete-case rule (subject must have all 4 engagement values)
 #   - Engagement zero handling as valid data (not missing)
 #   - Holm correction across the 3 planned omnibus effects
@@ -32,6 +33,10 @@ assert_true <- function(cond, msg) {
 
 source("r_emmeans_posthoc_helpers.R", local = TRUE)
 
+make_age_years <- function(n_subjects) {
+  seq(18, by = 1, length.out = n_subjects)
+}
+
 holm_adjust_manual <- function(p_values) {
   # Manual Holm adjusted p-values.
   # Reference: Holm (1979), see `CITATIONS.md`.
@@ -57,18 +62,20 @@ holm_adjust_manual <- function(p_values) {
   out
 }
 
-generate_engagement <- function(n_subjects, b0, bL, bC, bI, noise_sd = 0.0, seed = 123) {
+generate_engagement <- function(n_subjects, b0, bL, bC, bI, b_age = 0.10, noise_sd = 0.0, seed = 123, age_years = make_age_years(n_subjects)) {
   set.seed(seed)
   sid <- sprintf("%04d", seq_len(n_subjects))
   subj_re <- seq(-0.50, 0.50, length.out = n_subjects)
+  age_centered <- age_years - mean(age_years)
 
   make_cell <- function(length_c, content_c) {
-    mu <- b0 + bL * length_c + bC * content_c + bI * (length_c * content_c)
+    mu <- b0 + bL * length_c + bC * content_c + bI * (length_c * content_c) + b_age * age_centered
     mu + subj_re + rnorm(n_subjects, mean = 0, sd = noise_sd)
   }
 
   tibble::tibble(
     subject_id = sid,
+    age = age_years,
     sf_education_engagement = make_cell(-0.5, +0.5),
     sf_entertainment_engagement = make_cell(-0.5, -0.5),
     lf_education_engagement = make_cell(+0.5, +0.5),
@@ -150,6 +157,7 @@ main <- function() {
     bL = -0.20,
     bC = 0.35,
     bI = 0.80,
+    b_age = 0.12,
     noise_sd = 0.0,
     seed = 1
   )
@@ -161,14 +169,17 @@ main <- function() {
   # 2) End-to-end run with stochastic noise and known generating parameters.
   n_subjects <- 24
   truth <- list(length = -0.25, content = 0.30, interaction = 0.75)
+  age_years <- make_age_years(n_subjects)
   df <- generate_engagement(
     n_subjects = n_subjects,
     b0 = 3.0,
     bL = truth$length,
     bC = truth$content,
     bI = truth$interaction,
+    b_age = 0.14,
     noise_sd = 0.08,
-    seed = 42
+    seed = 42,
+    age_years = age_years
   )
   input_csv <- file.path(tmp, "engagement.csv")
   out_main <- file.path(tmp, "main.csv")
@@ -208,12 +219,49 @@ main <- function() {
   assert_true(abs(est_content[[1]] - truth$content) < tol, "content estimate not close to generating truth")
   assert_true(abs(est_inter[[1]] - truth$interaction) < tol, "interaction estimate not close to generating truth")
 
-  # 2a) Explicit inferential TP check on strong-effect synthetic data.
+  # 2a) Direct reference-model agreement for the age-adjusted omnibus fit.
+  ref_long <- df %>%
+    select(subject_id, age, sf_education_engagement, sf_entertainment_engagement, lf_education_engagement, lf_entertainment_engagement) %>%
+    pivot_longer(
+      cols = c(sf_education_engagement, sf_entertainment_engagement, lf_education_engagement, lf_entertainment_engagement),
+      names_to = "eng_col",
+      values_to = "engagement"
+    ) %>%
+    mutate(
+      condition = case_when(
+        eng_col == "sf_education_engagement" ~ "SF_Edu",
+        eng_col == "sf_entertainment_engagement" ~ "SF_Ent",
+        eng_col == "lf_entertainment_engagement" ~ "LF_Ent",
+        eng_col == "lf_education_engagement" ~ "LF_Edu",
+        TRUE ~ NA_character_
+      ),
+      length_c = case_when(
+        condition %in% c("SF_Edu", "SF_Ent") ~ -0.5,
+        condition %in% c("LF_Ent", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      ),
+      content_c = case_when(
+        condition %in% c("SF_Ent", "LF_Ent") ~ -0.5,
+        condition %in% c("SF_Edu", "LF_Edu") ~ +0.5,
+        TRUE ~ NA_real_
+      )
+    )
+  ref_model <- lmerTest::lmer(engagement ~ length_c * content_c + age + (1 | subject_id), data = ref_long, REML = TRUE)
+  ref_coefs <- summary(ref_model)$coefficients
+  for (term_map in list(c("length", "length_c"), c("content", "content_c"), c("interaction", "length_c:content_c"))) {
+    out_row <- main_df %>% filter(effect == term_map[[1]])
+    assert_true(nrow(out_row) == 1, paste0("missing output row for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$estimate[[1]] - ref_coefs[term_map[[2]], "Estimate"]) < 1e-10, paste0("estimate mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$se[[1]] - ref_coefs[term_map[[2]], "Std. Error"]) < 1e-10, paste0("SE mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$p_unc[[1]] - ref_coefs[term_map[[2]], "Pr(>|t|)"]) < 1e-10, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
+  }
+
+  # 2b) Explicit inferential TP check on strong-effect synthetic data.
   p_inter <- main_df %>% filter(effect == "interaction") %>% pull(p_fdr)
   assert_true(length(p_inter) == 1, "missing interaction p_fdr row in TP run")
   assert_true(p_inter[[1]] < 0.05, "expected interaction to be significant in TP synthetic dataset")
 
-  # 2b) Central exclusion list: excluding one present subject should reduce analyzed N by exactly 1.
+  # 2c) Central exclusion list: excluding one present subject should reduce analyzed N by exactly 1.
   out_main_excl <- file.path(tmp, "main_excluded_one.csv")
   out_posthoc_excl <- file.path(tmp, "posthoc_excluded_one.csv")
   run_excl <- run_analysis(
@@ -228,7 +276,7 @@ main <- function() {
   main_excl <- read_csv(out_main_excl, show_col_types = FALSE)
   assert_true(all(main_excl$n_subjects == (n_subjects - 1)), "one excluded subject should reduce n_subjects by 1")
 
-  # 2c) Missing exclusion IDs should warn/continue and preserve N.
+  # 2d) Missing exclusion IDs should warn/continue and preserve N.
   out_main_abs <- file.path(tmp, "main_excluded_absent.csv")
   out_posthoc_abs <- file.path(tmp, "posthoc_excluded_absent.csv")
   run_abs <- run_analysis(
@@ -243,13 +291,14 @@ main <- function() {
   main_abs <- read_csv(out_main_abs, show_col_types = FALSE)
   assert_true(all(main_abs$n_subjects == n_subjects), "absent exclusion ID should not change n_subjects")
 
-  # 2d) Explicit inferential TN check with a null-effect synthetic dataset.
+  # 2e) Explicit inferential TN check with a null-effect synthetic dataset.
   df_null <- generate_engagement(
     n_subjects = 30,
     b0 = 3.0,
     bL = 0.00,
     bC = 0.00,
     bI = 0.00,
+    b_age = 0.14,
     noise_sd = 0.12,
     seed = 888
   )
@@ -365,7 +414,44 @@ main <- function() {
   )
   assert_true(run_missing$status != 0, "expected failure on missing required column")
 
-  # 11) Fail hard on non-numeric engagement entry.
+  # 11) Age is required and must be complete/numeric after exclusions.
+  df_missing_age <- df %>% select(-age)
+  input_missing_age <- file.path(tmp, "engagement_missing_age.csv")
+  write_csv(df_missing_age, input_missing_age)
+  run_missing_age <- run_analysis(
+    input_missing_age,
+    file.path(tmp, "main_missing_age.csv"),
+    file.path(tmp, "posthoc_missing_age.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_missing_age$status != 0, "expected failure on missing age column")
+
+  df_age_na <- df
+  df_age_na$age[[3]] <- NA_real_
+  input_age_na <- file.path(tmp, "engagement_age_na.csv")
+  write_csv(df_age_na, input_age_na)
+  run_age_na <- run_analysis(
+    input_age_na,
+    file.path(tmp, "main_age_na.csv"),
+    file.path(tmp, "posthoc_age_na.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_age_na$status != 0, "expected failure on missing age values")
+
+  df_age_bad <- df
+  df_age_bad$age <- as.character(df_age_bad$age)
+  df_age_bad$age[[2]] <- "not_numeric"
+  input_age_bad <- file.path(tmp, "engagement_age_bad.csv")
+  write_csv(df_age_bad, input_age_bad)
+  run_age_bad <- run_analysis(
+    input_age_bad,
+    file.path(tmp, "main_age_bad.csv"),
+    file.path(tmp, "posthoc_age_bad.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_age_bad$status != 0, "expected failure on non-numeric age values")
+
+  # 12) Fail hard on non-numeric engagement entry.
   df_bad <- df
   df_bad$sf_education_engagement <- as.character(df_bad$sf_education_engagement)
   df_bad$sf_education_engagement[[2]] <- "not_numeric"

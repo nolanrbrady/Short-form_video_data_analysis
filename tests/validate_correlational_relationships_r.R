@@ -229,7 +229,7 @@ write_roi_missing_channel_json <- function(path) {
 write_analysis_plan_json <- function(path) {
   plan_obj <- list(
     version = 1,
-    description = "Synthetic validation fixture for analyze_correlational_relationships.R",
+    description = "Synthetic validation fixture for analyze_correlational_relationships.R using BH families over the four conditions for each neural target x chromophore x predictor combination.",
     predictors = c(
       "age",
       "sfv_daily_duration",
@@ -250,7 +250,7 @@ write_analysis_plan_json <- function(path) {
     ),
     multiple_testing = list(
       adjust_method = "BH",
-      family_grouping = c("neural_level", "neural_name", "chrom")
+      family_grouping = c("neural_level", "neural_name", "chrom", "predictor")
     ),
     figures = list(
       policy = "significant_only"
