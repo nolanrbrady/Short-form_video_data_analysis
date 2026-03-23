@@ -411,8 +411,10 @@ Order / dependencies:
   so covariates and beta columns are available in one file.
 
 Model (per channel × chromophore):
-- LMM: `beta ~ format_c * content_c + (1 | subject_id)`
+- Omnibus LMM: `beta ~ format_c * content_c + age + (1 | subject_id)`
 - Coding: `format_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 
 Pruned channels / missingness policy:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as **`NaN`** (do **not** impute).
@@ -476,8 +478,10 @@ ROI beta construction:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as `NaN` and are not imputed.
 
 Model / inference:
-- LMM (per ROI × chrom): `beta ~ format_c * content_c + (1 | subject_id)`
+- Omnibus LMM (per ROI × chrom): `beta ~ format_c * content_c + age + (1 | subject_id)`
 - Same coding and interaction-gated post-hoc policy as C2.
+- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - BH-FDR is applied separately per chromophore and per effect across ROIs.
 
 Example:
@@ -506,13 +510,15 @@ Rscript tests/validate_pipeline_c_roi_r.R
 
 Input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
-  (must contain `subject_id` and:
+  (must contain `subject_id`, `age`, and:
   `diff_short_form_education`, `diff_short_form_entertainment`,
   `diff_long_form_education`, `diff_long_form_entertainment`)
 
 Model:
-- LMM: `retention_diff ~ length_c * content_c + (1 | subject_id)`
+- Omnibus LMM: `retention_diff ~ length_c * content_c + age + (1 | subject_id)`
 - Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 
 Missingness policy:
 - Complete-case by subject across the 4 retention conditions.
@@ -554,13 +560,15 @@ Rscript tests/validate_retention_pipeline_r.R
 
 Input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
-  (must contain `subject_id` and:
+  (must contain `subject_id`, `age`, and:
   `sf_education_engagement`, `sf_entertainment_engagement`,
   `lf_education_engagement`, `lf_entertainment_engagement`)
 
 Model:
-- LMM: `engagement ~ length_c * content_c + (1 | subject_id)`
+- Omnibus LMM: `engagement ~ length_c * content_c + age + (1 | subject_id)`
 - Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
+- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 
 Missingness policy:
 - Complete-case by subject across the 4 engagement conditions.
@@ -596,15 +604,16 @@ Validation:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
-### C4b) Targeted Pearson correlations for selected channel/ROI follow-up
+### C4b) Exploratory Pearson correlations for selected channel/ROI follow-up
 
 - R: `analyze_correlational_relationships.R`
 
 Purpose:
-- Run targeted follow-up Pearson correlations between selected sociodemographic variables and raw-condition neural values from:
+- Run exploratory targeted follow-up Pearson correlations between selected sociodemographic variables and raw-condition neural values from:
   - `S04_D02` for both `HbO` and `HbR`
   - `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, `L_DMPFC (HbO)`
 - Use the same merged input table and subject-exclusion manifest as the other R analyses.
+- Interpret these results as exploratory rather than confirmatory when the channel/ROI target set was selected from this same dataset.
 
 Predictors:
 - `age`
@@ -629,7 +638,8 @@ Missingness policy:
 - Subjects excluded in `data/config/excluded_subjects.json` are removed before any pairwise filtering.
 
 Multiple testing:
-- BH-FDR is applied within each configured neural-target x chromophore family.
+- BH-FDR is applied within each configured neural-target x chromophore x predictor family.
+- Under the current default config, that means one BH correction across the four condition-specific tests for a given `neural target x chromophore x predictor` combination.
 - Family membership and the explicit predictor list are declared in `data/config/correlational_analysis_plan.json`.
 - Output includes both raw `p_unc` and adjusted `p_fdr`.
 
@@ -647,7 +657,7 @@ Rscript analyze_correlational_relationships.R \
 
 Outputs:
 - `data/results/correlational_relationships/pairwise_correlations_r.csv`
-- `data/results/correlational_relationships/figures/` (one scatterplot with linear fit per tested pair)
+- `data/results/correlational_relationships/figures/` (scatterplots only for rows allowed by `figures.policy` in `data/config/correlational_analysis_plan.json`; current default is FDR-significant tested pairs only)
 
 Validation:
 
@@ -827,7 +837,7 @@ Methodology notes / planned improvements live in:
 - `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
-- `analyze_correlational_relationships.R`: targeted Pearson follow-up correlations for selected raw-condition channel/ROI neural targets, with per-pair figures
+- `analyze_correlational_relationships.R`: targeted Pearson follow-up correlations for selected raw-condition channel/ROI neural targets, with figure generation controlled by the analysis-plan config
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model

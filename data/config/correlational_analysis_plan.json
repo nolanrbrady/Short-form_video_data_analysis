@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Targeted follow-up correlation plan for the SFV study. Each neural target x chromophore family pools all configured condition x predictor tests for that target/chrom combination.",
+  "description": "Exploratory targeted follow-up correlation plan for the SFV study. Each neural target x chromophore x predictor family pools the four condition-specific tests for that target/chrom/predictor combination.",
   "predictors": [
     "age",
     "sfv_daily_duration",
@@ -24,7 +24,8 @@
     "family_grouping": [
       "neural_level",
       "neural_name",
-      "chrom"
+      "chrom",
+      "predictor"
     ]
   },
   "figures": {
