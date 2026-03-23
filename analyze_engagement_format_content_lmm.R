@@ -14,7 +14,7 @@
 #       Content: Education vs Entertainment
 #
 # Model
-#   - LMM: engagement ~ length_c * content_c + (1|subject_id)
+#   - Omnibus LMM: engagement ~ length_c * content_c + age + (1|subject_id)
 #     with numeric sum coding:
 #       length_c  = -0.5 (Short), +0.5 (Long)
 #       content_c = -0.5 (Entertainment), +0.5 (Education)
@@ -23,6 +23,7 @@
 #   - Complete-case within subject for engagement outcomes:
 #     retain only subjects with all 4 engagement condition values present.
 #   - IMPORTANT: engagement zeros are treated as valid values (not missing).
+#   - Age is a required omnibus covariate and must be complete after subject exclusions.
 #
 # Multiple testing correction
 #   - Holm correction across the 3 planned omnibus effects:
@@ -177,13 +178,29 @@ coerce_numeric_strict <- function(df, cols) {
   out
 }
 
+assert_covariate_complete <- function(df, covariate_col, context_label) {
+  missing_rows <- which(is.na(df[[covariate_col]]))
+  if (length(missing_rows) > 0) {
+    subject_examples <- unique(df$subject_id[missing_rows])
+    subject_examples <- head(subject_examples, 10)
+    stop(
+      paste0(
+        "Required covariate '", covariate_col, "' contains missing values after subject exclusions in ",
+        context_label, ". Example subject_id values: ",
+        paste(subject_examples, collapse = ", "),
+        ". Resolve the covariate upstream before running this analysis."
+      )
+    )
+  }
+}
+
 load_engagement_input <- function(input_csv, exclude_subjects_json) {
   df <- read_csv(input_csv, show_col_types = FALSE)
-  assert_required_columns(df, c("subject_id", REQUIRED_ENG_COLS), input_csv)
+  assert_required_columns(df, c("subject_id", "age", REQUIRED_ENG_COLS), input_csv)
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
-  df <- coerce_numeric_strict(df, REQUIRED_ENG_COLS)
+  df <- coerce_numeric_strict(df, c("age", REQUIRED_ENG_COLS))
 
   dup <- df %>%
     count(subject_id, name = "n_rows") %>%
@@ -207,12 +224,14 @@ load_engagement_input <- function(input_csv, exclude_subjects_json) {
     exclude_json_path = exclude_subjects_json,
     context_label = "engagement"
   )
-  excluded$data
+  df_excluded <- excluded$data
+  assert_covariate_complete(df_excluded, "age", "engagement")
+  df_excluded
 }
 
 reshape_to_long <- function(df) {
   df %>%
-    select(subject_id, all_of(REQUIRED_ENG_COLS)) %>%
+    select(subject_id, age, all_of(REQUIRED_ENG_COLS)) %>%
     pivot_longer(cols = all_of(REQUIRED_ENG_COLS), names_to = "eng_col", values_to = "engagement") %>%
     mutate(
       condition = case_when(
@@ -257,8 +276,9 @@ complete_case_subjects <- function(df_long) {
 }
 
 fit_factorial_lmm <- function(df_cc) {
+  # Age enters additively as a subject-level omnibus covariate.
   lmerTest::lmer(
-    engagement ~ length_c * content_c + (1 | subject_id),
+    engagement ~ length_c * content_c + age + (1 | subject_id),
     data = df_cc,
     REML = TRUE
   )
@@ -303,6 +323,7 @@ main <- function() {
   cat("[data] input subjects:", n_subjects_raw, "\n")
   cat("[data] complete-case subjects:", n_subjects_cc, "\n")
   cat("[data] complete-case observations:", n_obs_cc, "\n")
+  cat("[model] omnibus covariate adjustment: age\n")
 
   if (n_subjects_cc < args$min_subjects) {
     stop(

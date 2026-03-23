@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Pairwise Pearson correlations between selected sociodemographic variables and
-# selected raw-condition neural summaries from the merged SFV dataset.
+# Exploratory pairwise Pearson correlations between selected
+# sociodemographic variables and selected raw-condition neural summaries from
+# the merged SFV dataset.
 #
 # Inputs
 #   - data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
@@ -22,15 +23,23 @@
 #     exclude any subject missing either value for that pair.
 #   - Pruned channels remain missing; do not impute.
 #
+# Interpretation
+#   - These follow-up correlations are exploratory because the channel/ROI
+#     target set may be data-informed from this same dataset; do not report the
+#     resulting p-values as independent confirmatory tests.
+#
 # Multiple testing correction
-#   - BH-FDR within each configured neural-target x chromophore family.
-#   - By default, one family pools all condition x predictor pairs for a given
-#     `(neural_level, neural_name, chrom)` combination.
+#   - BH-FDR within each configured neural-target x chromophore x predictor
+#     family.
+#   - By default, one family pools the four condition-specific tests for a
+#     given `(neural_level, neural_name, chrom, predictor)` combination.
 # Figures
 #   - Plot emission is controlled by `data/config/correlational_analysis_plan.json`.
 #   - Default policy: generate figures only for FDR-significant tested results.
 #
 # Citations (see CITATIONS.md)
+#   - Kriegeskorte et al. (2009): circular analysis / selective-inference
+#     caution for data-informed target selection.
 #   - Pearson (1896): product-moment correlation.
 #   - Fisher (1921): Fisher z transformation for confidence intervals on r.
 #   - Benjamini & Hochberg (1995): BH-FDR.

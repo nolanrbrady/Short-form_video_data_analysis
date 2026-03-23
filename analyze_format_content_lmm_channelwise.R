@@ -17,7 +17,7 @@
 #       Cond04 = Long-Form Education
 #
 # Model (per channel x chromophore)
-#   - LMM: beta ~ format_c * content_c + (1|subject_id)
+#   - Omnibus LMM: beta ~ format_c * content_c + age + (1|subject_id)
 #     with numeric sum coding:
 #       format_c  = -0.5 (Short), +0.5 (Long)
 #       content_c = -0.5 (Entertainment), +0.5 (Education)
@@ -25,6 +25,7 @@
 # Missingness / pruned channels (repo policy)
 #   - Derived FIR-to-AUC beta tables encode pruned channels as NA (do not impute).
 #   - Default: complete-case within channel/chrom (subject must have all 4 conditions present).
+#   - Age is a required omnibus covariate and must be complete after subject exclusions.
 #
 # Multiple testing correction
 #   - BH-FDR separately per chromophore and per effect across channels.
@@ -143,13 +144,61 @@ normalize_subject_id <- function(x, column_name) {
   as.integer(extracted)
 }
 
+assert_required_columns <- function(df, required_cols, file_label) {
+  missing <- setdiff(required_cols, names(df))
+  if (length(missing) > 0) {
+    stop(
+      paste0(
+        "Missing required columns in ", file_label, ": ",
+        paste(sort(missing), collapse = ", ")
+      )
+    )
+  }
+}
+
+coerce_numeric_strict <- function(df, cols) {
+  out <- df
+  for (col_name in cols) {
+    raw <- out[[col_name]]
+    raw_chr <- as.character(raw)
+    suppressWarnings(num <- as.numeric(raw_chr))
+    bad <- is.na(num) & !is.na(raw) & nzchar(trimws(raw_chr))
+    if (any(bad)) {
+      examples <- unique(raw_chr[bad])
+      examples <- head(examples, 10)
+      stop(
+        paste0(
+          "Column '", col_name, "' contains non-numeric values. ",
+          "Examples: ", paste(examples, collapse = ", ")
+        )
+      )
+    }
+    out[[col_name]] <- num
+  }
+  out
+}
+
+assert_covariate_complete <- function(df, covariate_col, context_label) {
+  missing_rows <- which(is.na(df[[covariate_col]]))
+  if (length(missing_rows) > 0) {
+    subject_examples <- unique(df$subject_id[missing_rows])
+    subject_examples <- head(subject_examples, 10)
+    stop(
+      paste0(
+        "Required covariate '", covariate_col, "' contains missing values after subject exclusions in ",
+        context_label, ". Example subject_id values: ",
+        paste(subject_examples, collapse = ", "),
+        ". Resolve the covariate upstream before running this analysis."
+      )
+    )
+  }
+}
+
 load_merged_input <- function(input_csv) {
   # Preferred path for channelwise analysis:
   # consume pre-merged wide table so covariates and beta columns are already co-located.
   df <- read_csv(input_csv, show_col_types = FALSE)
-  if (!("subject_id" %in% names(df))) {
-    stop(paste0("Expected column 'subject_id' in merged input: ", input_csv))
-  }
+  assert_required_columns(df, c("subject_id", "age"), input_csv)
   beta_cols <- names(df)[str_detect(names(df), "^S\\d+_D\\d+_Cond\\d{2}_(HbO|HbR)$")]
   if (length(beta_cols) == 0) {
     stop(
@@ -162,6 +211,7 @@ load_merged_input <- function(input_csv) {
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
+  df <- coerce_numeric_strict(df, "age")
 
   dup <- df %>%
     count(subject_id, name = "n_rows") %>%
@@ -194,7 +244,7 @@ reshape_to_long <- function(df_merged) {
   if (length(beta_cols) == 0) stop("No beta columns matched pattern like 'S01_D01_Cond01_HbO'.")
 
   df_merged %>%
-    select(subject_id, all_of(beta_cols)) %>%
+    select(subject_id, age, all_of(beta_cols)) %>%
     pivot_longer(cols = all_of(beta_cols), names_to = "beta_col", values_to = "beta") %>%
     extract(
       col = "beta_col",
@@ -250,9 +300,10 @@ complete_case_subjects <- function(sub) {
 fit_factorial_lmm <- function(sub_complete) {
   # Per-channel × chrom LMM with random intercept for subject (within-subject design).
   # References: Laird & Ware (1982); Bates et al. (2015), see `CITATIONS.md`.
+  # Age enters additively as a subject-level omnibus covariate.
   # Inference: fixed-effect tests are extracted with Kenward-Roger denominator df
   # via lmerTest + pbkrtest (Kenward & Roger, 1997; Halekoh & Højsgaard, 2014).
-  lmerTest::lmer(beta ~ format_c * content_c + (1 | subject_id), data = sub_complete, REML = TRUE)
+  lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = sub_complete, REML = TRUE)
 }
 
 fit_condition_lmm <- function(sub_complete) {
@@ -323,6 +374,7 @@ main <- function() {
     context_label = "format_content_channelwise"
   )
   df_merged <- excluded$data
+  assert_covariate_complete(df_merged, "age", "format_content_channelwise")
   df_long <- reshape_to_long(df_merged)
 
   channels <- sort(unique(df_long$channel))
@@ -331,6 +383,7 @@ main <- function() {
   cat("[data] merged subjects:", length(unique(df_merged$subject_id)), "\n")
   cat("[data] channels detected:", length(channels), "\n")
   cat("[data] chromophores detected:", paste(sort(unique(df_long$chrom)), collapse = ", "), "\n")
+  cat("[model] omnibus covariate adjustment: age\n")
 
   main_rows <- list()
   gated_count <- 0
