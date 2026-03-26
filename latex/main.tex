@@ -1,0 +1,240 @@
+\documentclass[10pt, twocolumn]{article}
+
+% --- Essential Packages ---
+\usepackage[margin=0.75in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb, amsthm} % Standard math packages
+\usepackage{booktabs} % For professional quality tables
+\usepackage{microtype} % Improves character protrusion and font expansion (fixes "weird spaces")
+\usepackage{url} % Better handling of URLs in citations
+\usepackage[hidelinks]{hyperref} % Clickable links without ugly boxes
+
+% --- Formatting ---
+\usepackage{times} % Standard academic serif font (similar to IEEE/ACM)
+\usepackage[style=numeric, backend=biber, sortcites=true]{biblatex}
+\usepackage{authblk}
+
+\addbibresource{references.bib}
+
+% --- Customizing Section Appearance (Optional but professional) ---
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+
+% --- Metadata ---
+\title{\textbf{Short-form Video Format Impact on Prefrontal Cortex Activation and Short-term Information Retention}}
+
+\author[1]{Nolan Brady}
+\author[2]{Elizabeth Smith}
+\author[2]{Ellie Mestek}
+\author[1, 4]{Tom Yeh}
+\author[4]{Sujin Yang}
+\author[3, 4]{Pilyoung Kim}
+
+\affil[1]{Department of Computer Science, University of Colorado Boulder}
+\affil[2]{Department of Neuroscience and Psychology, University of Colorado Boulder}
+\affil[3]{Department of Psychology, University of Denver}
+\affil[4]{Department of Psychology, Ewha University}
+
+\date{} % Usually left blank for conference submissions
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+    We will insert the abstract here.
+\end{abstract}
+
+\section{Introduction}
+Short-form video platforms have rapidly reshaped the modern sensory landscape by introducing fast-paced, high-novelty content streams optimized for engagement. These systems increasingly mediate how people encounter information, including educational material; however, their cognitive and neurobehavioral consequences remain contested. In particular, short-form delivery may amplify perceived salience and attentional capture while simultaneously fragmenting sustained processing through frequent context switching.
+
+To date, the empirical findings have been mixed. Survey evidence suggests that short-form video (SFV) use is common across age groups \cite{mcclain_eddy_2026_tiktok_facts}. The trend of use across all reported demographics also shows a clear sign of increase as time goes on \cite{mcclain_eddy_2026_tiktok_facts}. Adolescents also report using platforms such as TikTok for both entertainment and learning, with many viewing them as potentially educational \cite{Adelhardt_Eberle_2024}. At the outcome level, some studies report negative associations between SFV consumption and academic performance \cite{Haliti-Sylaj_Sadiku}, while other studies on micro-learning report higher engagement and improved test performance relative to long lectures \cite{Zhu_Yuan_Zhang_Huang_Wang_Duan_Lei_Lim_Song_2022}. These contradictions suggest that ``SFV vs.\ learning'' may not be a single effect, but rather the interaction of content type, format length, attentional dynamics, and measurement of retention.
+
+Mechanistically, learning and retention depend on the allocation of attention and the balance between stimulation and information overload. Short-form formats may exploit salience cues (pace, graphics, voiceover, rapid novelty) that increase attentional engagement, but these same features may elevate working memory demands and increase context-switching costs. We focused on the prefrontal cortex (PFC) as a key cortical substrate supporting top-down attention and valuation-related processing during viewing \cite{Miller2001AnIT, Buschman2007TopDownVB, Lavie_Hirst_de_Fockert_Viding_2004}.
+
+To test these ideas, we propose a within-subject 2$\times$2 study crossing content length (short-form vs. long-form) and content type (entertainment vs. educational). We measured prefrontal hemodynamics using fNIRS during video viewing and assessed retention using a delayed recall-style test. Our central question is whether salience-linked engagement in short-form content can overcome (or is outweighed by) the costs of rapid context switching for retention purposes.
+
+\paragraph{Hypotheses}
+Based on the literature, we hypothesized that short-form videos would increase activation in the prefrontal regions implicated in attentional engagement and valuation. Specifically, we expect the short-form entertainment condition to produce robust increases in medial PFC activation, consistent with accounts linking the medial PFC to reward/valuation and salience processing \cite{Bartra2013TheVS, Euston2012TheRO, Rushworth2011FrontalCA}. We also anticipate higher self-reported engagement for short-form relative to long-form content, accompanied by increased lateral PFC activation, reflecting attentional control demands \cite{Miller2001AnIT, Buschman2007TopDownVB}. For retention, we hypothesized that despite elevated engagement, short-form conditions would show impaired retention relative to long-form conditions, with comparatively better retention for short-form entertainment than for short-form educational content.
+
+\section{Related Work}
+
+\subsection{Engagement vs. retention in short-form video and learning}
+Like many new technologies, the societal impact of SFVs varies by use cases and demographics. Although SFVs are often associated with younger users, recent surveys suggest substantial adoption across generations \cite{mcclain_eddy_2026_tiktok_facts}. Importantly for educational relevance, a cohort study of teenagers found that 44\% view platforms such as TikTok as suited for both entertainment and educational purposes, and 29\% consider them potentially useful as supplementary educational media \cite{Adelhardt_Eberle_2024}.
+
+Research on learning outcomes has been conflicting. One study reported a strong negative association between SFV consumption and GPA, with SFV consumption explaining 25\% of the GPA variance \cite{Haliti-Sylaj_Sadiku}. In contrast, a micro-learning study reported that short-form educational content elicited 24.7\% more engagement and 9\% higher test scores than a standard 55-minute lecture \cite{Zhu_Yuan_Zhang_Huang_Wang_Duan_Lei_Lim_Song_2022}. These mixed findings motivate mechanistic accounts that explicitly consider attentional capture, cognitive load, and retention measurement rather than treating SFVs as uniformly beneficial or harmful.
+
+\subsection{Attention, cognitive load, and episodic encoding under rapid content turnover}
+Classic models emphasize that memory is not monolithic but is composed of interacting systems, often summarized as sensory, short-term, and long-term memory \cite{Atkinson_Shiffrin_1968}. Consolidation from early stage representations to durable long-term memory depends on multiple factors, with salience and attention being especially relevant in video-based learning contexts. Attention is commonly described as comprising alerting, orienting, and executive control components \cite{Posner1990TheAS}, and evidence suggests that attention gates the information selected for deeper processing.
+
+Cognitive load theories help explain why stimulation can both help and hinder learning. Lavie et al. proposed that selective attention can be understood in terms of perceptual and working memory loads \cite{Lavie_Hirst_de_Fockert_Viding_2004}. High perceptual load may reduce distractor processing by exhausting perceptual resources, whereas high working memory load can impair attentional control by taxing executive mechanisms \cite{Lavie_Hirst_de_Fockert_Viding_2004}. In the context of SFVs, these findings highlight a delicate balance: salient, fast-paced cues may increase attention and engagement, but excessive demands or rapid topic shifts may undermine integration and episodic encoding, potentially contributing to the conflicting learning outcomes reported across studies.
+
+\subsection{Role of the prefrontal cortex in salience, control, and valuation}
+A comprehensive account of attention and encoding benefits from specifying candidate neural systems. The prefrontal cortex is centrally implicated in top-down attentional control and flexible allocation of processing resources \cite{Miller2001AnIT, Buschman2007TopDownVB, Lavie_Hirst_de_Fockert_Viding_2004}. Within the PFC, distinct subregions are linked to partially dissociable roles relevant to SFV viewing.
+
+\paragraph{Medial prefrontal cortex}
+The medial prefrontal cortex (mPFC), including the ventromedial PFC (vmPFC), is strongly linked to valuation and reward-related processing \cite{Bartra2013TheVS}. The mPFC also interacts with hippocampal systems during memory-dependent tasks \cite{Euston2012TheRO, Hyman2005MedialPC, Siapas2005PrefrontalPL}, and some studies suggest that mPFC involvement immediately after task engagement is important for effective long-term memory retrieval \cite{Euston2012TheRO}. Related accounts link the mPFC to reinforcement learning-like updating processes, where reward signals can modulate synaptic changes supporting future behavior \cite{Euston2012TheRO, Holroyd2002TheNB}. mPFC responses have also been associated with salient events and perceived rewards, making it a plausible cortical target for salience-driven engagement effects during SFV consumption \cite{Euston2012TheRO, Rushworth2011FrontalCA}.
+
+% \paragraph{Dorsolateral prefrontal cortex}
+% The dorsolateral PFC (dlPFC) is frequently implicated in working memory and executive control, including maintaining task goals and biasing attention in line with those goals \cite{Miller2001AnIT, Buschman2007TopDownVB}. In SFV contexts, dlPFC engagement may reflect the control demands required to maintain task-relevant processing (e.g., learning goals) in the face of salient, rapidly changing, and potentially distracting information, consistent with evidence that dlPFC supports top-down maintenance of relevant information under distraction and is recruited more strongly when task-irrelevant information competes for priority in processing \cite{Feredoes2011CausalEF, Milham2003CompetitionFP}. 
+
+% \paragraph{Ventrolateral prefrontal cortex}
+% The ventrolateral PFC (vlPFC) is often linked to the selection of task-relevant representations, controlled retrieval, and inhibitory control processes that help regulate attention and memory \cite{Badre2007LeftVP, Aron2014InhibitionAT}. During SFVs, vlPFC recruitment may reflect the need to bias processing toward relevant content while resolving interference from rapidly changing, salient, and potentially distracting input. Such demands may be especially pronounced during short-form entertainment, where novelty and attentional capture are likely to increase competition among representations and thereby increase the need for top-down selection and control \cite{Glaser2013NeuralBO, Jefferies2013TheNB}.
+
+\paragraph{Dorsolateral prefrontal cortex}
+The dorsolateral PFC (dlPFC) is frequently implicated in working memory and executive control, including the maintenance of task goals and the top-down biasing of attention in accordance with those goals \cite{Miller2001AnIT, Buschman2007TopDownVB}. Consistent with this role, dlPFC has also been associated with maintaining task-relevant information in the presence of distraction and with increased recruitment when task-irrelevant information competes for priority in processing \cite{Feredoes2011CausalEF, Milham2003CompetitionFP}. Together, this literature suggests that dlPFC engagement is closely related to control demands that arise when goal-directed processing must be sustained under conditions of interference or competing attentional demands.
+
+\paragraph{Ventrolateral prefrontal cortex}
+The ventrolateral PFC (vlPFC) is often linked to the selection of task-relevant representations, controlled retrieval, and inhibitory control processes that support the regulation of attention and memory \cite{Badre2007LeftVP, Aron2014InhibitionAT}. Prior work has further distinguished roles within this broader region, with left vlPFC commonly associated with controlled retrieval and post-retrieval selection among competing representations, and right inferior frontal/vlPFC regions more consistently implicated in inhibitory control \cite{Badre2007LeftVP, Aron2014InhibitionAT}. Related evidence also connects vlPFC to resolving semantic or representational competition during comprehension and memory-guided processing \cite{Glaser2013NeuralBO, Jefferies2013TheNB}. This prior work characterizes the vlPFC as an important component of the control systems that help prioritize relevant information and resolve interference among competing representations.
+
+% \subsection{Short-form videos and context switching}
+% Short-form videos introduce rapid topic changes and frequent transitions that may impose context-switching costs. Despite attention being integral to consolidation, frequent switching can disrupt the sustained elaboration and integration of information over time. In combination with the load account above, SFVs may create a regime where salience increases moment-to-moment engagement, yet switching and executive demands reduce retention for content requiring integration \textbf{(TODO: expand and add citations on task switching/context switching costs)}.
+
+\subsection{Short-form videos and context switching}
+Short-form videos are characterized by rapid transitions and frequent shifts in topic or context, features that may increase cognitive control demands and impose context-switching costs. In the broader literature, switching is associated with interference from prior task sets, reconfiguration costs, and the segmentation of experience into discrete memory episodes, sometimes at the expense of temporal order memory and cross-boundary integration \cite{Monsell2003TaskS, Kiesel2010ControlAI, Wang2021SwitchingTS}. Emerging work on short-form video has raised similar concerns, suggesting that rapid swiping and frequent context changes may impair prospective memory or reduce cue-based task preparation, although this evidence remains preliminary \cite{Barton2025ContextswitchingIS, Luo2025SwipingDS}.
+
+% NOTE: This seems a little forced. Leaving it out unless there is a clear reason why we need it
+% \subsection{Neuroimaging of media consumption and educational video}
+% Neuroimaging methods provide a way to test mechanistic accounts of engagement and retention during video viewing under relatively naturalistic conditions. Functional near-infrared spectroscopy (fNIRS) is a useful modality for this work because it noninvasively measures cortical hemodynamics, is portable, and robust to head motion and environmental noise in learning settings \cite{Tinga2021MeasuresPFNIRS, Soltanlou2018ApplicationsFNIRS}. Recent work has further shown that fNIRS can be applied to naturalistic audiovisual stimuli, including movie-watching and social-media-related paradigms, while related studies in observational learning and educational neuroscience suggest that it is well suited to ecologically valid investigations of learning-related cortical responses \cite{Somech2022NaturalisticComedyMovie, Aitken2025NaturalisticSocialMedia, Yang2026TaiChiObservationalLearning, Soltanlou2018ApplicationsFNIRS}. At the same time, because fNIRS primarily measures superficial cortical activity, its strongest inferences concern cortical systems such as the prefrontal cortex rather than deeper or whole-brain mechanisms \cite{Gao2025PredictingWholeBrainFromPFCfNIRS}. Taken together, this literature supports the use of fNIRS for examining prefrontal engagement during short-form versus long-form video viewing, even though the literature directly focused on educational short-form video remains limited.
+
+
+\section{Methods}
+\subsection{Data Collection}
+This section introduces the ways in which videos were selected for the study, how the evaluations were developed, how the fNIRs protocol was designed, and how the study was structured with the participants.
+
+\subsubsection{Video Curation}
+Videos were curated manually and determined to fit a specific set of criteria. All videos were first evaluated for their fit in an academic setting. We ensured that each selected video was PG and suitable for participants of all ages. Entertainment videos were sourced from the YouTube Shorts main page without personalization. This ensured that the content was generally recommendable and did not prioritize any specific demographic. Our criteria for educational content centered on infrequently spoken languages in the continental United States. While other subjects would have worked, we decided that this provided the lowest likelihood of confounding pre-existing knowledge during retention tasks. The educational content was isolated as containing grammatical or spoken information in one of four languages: Arabic, Swedish, Russian, and Hawaiian. Lastly, all videos were screened to ensure that at least one key fact could be discerned during the video's viewable window (15 seconds for short-form and 2 minutes for long-form). All videos were selected with the intention of being played from the start.
+
+\subsubsection{Recall Assessment}
+To measure the participants short-term memory recall, we used a recall assessment survey. This survey was presented to the participants once before they watched the videos and again after they watched the videos. The survey involved 32 questions, with each video segment in each block assigned two questions. Each survey thus contained eight questions for each category (Long-form Entertainment, Long-form Educational, Short-form Entertainment, and Short-form Educational). Short-form video questions were randomly selected from two of the eight videos within the video segment, and long-form video questions used two facts from a single video. Educational content questions were centered around the theme of the video, which was limited to grammar, vocabulary, or pronunciation tips. Questions for the entertainment videos targeted key details in the video that would be obvious if the video was clearly remembered (such as the type of animal involved in the video).
+
+Recall was evaluated as the difference between pre-task and post-task recall for each category and each subject. The result is a total recall score ranging from -1 to 1, where positive values indicate better performance on post-task recall and negative scores indicate worse performance.
+
+
+\subsubsection{fNIRS Protocol Design}
+\label{section:fnirs_protocol}
+%=========================================
+% Include a figure of the block flow here
+%=========================================
+The stimuli were presented in a custom browser-based application using embedded YouTube videos with the YouTube IFrame player. After reading the on-screen instructions, the participants initiated the task by pressing the spacebar; thereafter, the videos were displayed centrally on a black background within a fixed viewing window (1280 × 720 px), with audio enabled and auto-play. The experiment comprised four blocks, and the order of the blocks was randomized for each participant in the experiment. Within each block, the four video categories were presented in a randomized order (short-form education, short-form entertainment, long-form entertainment, and long-form education). Each category was presented for a fixed duration of two minutes. For long-form categories, a single video was played continuously for the full 2-min interval (terminated automatically regardless of the original length). For short-form categories, the 2-min interval was filled by sequentially rotating through a predefined set of short-form videos, switching to a new video every 15 s (eight segments per category, looping through the set as required). A 30-s rest screen was presented between successive categories (with an additional rest interval separating the blocks). Videos that were unavailable or could not be embedded were automatically skipped to preserve the timing structure of the protocol. Two additional videos were added to each category within each block to ensure that the total duration remained constant, even when a video was skipped. At random intervals during each two-minute video segment, the participant was presented with a modal asking them to rate their engagement with the content on a 1-5 Likert scale.
+
+\subsubsection{Study Orchestration}
+Participants began the study by completing a sociodemographic survey. This survey evaluated the participants' demographic information, such as age, race, gender, sex, income level, and relationship status. We also collected evaluations regarding affective disorders, such as GAD, ASRS, and PHQ-8. To better understand the participants' relationship with short-form videos, we also evaluated historical short-form video use, as well as motivation and problematic use, using the Yang Short-form Video Scale (CITE THIS). Upon completion of the sociodemographic survey, the participant was instructed to take the pre-task recall assessment. This assessment was identical to the post-task assessment and was intended as a control for pre-existing knowledge or easily guessable answers. Once both the sociodemographic survey and the pre-task recall assessment were completed, the participants began the fNIRs portion of the study (Refer to Section \ref{section:fnirs_protocol} for more information). Finally, upon completion of the fNIRs portion of the study, participants took the post-task recall assessment to evaluate their short-term information retention.
+
+%% TEST SECTION STARTS HERE
+
+\subsection{Data Preprocessing}
+\subsubsection{Survey Data}
+% All survey and behavioral data were collected via Qualtrics and preprocessed using custom
+% Python scripts prior to statistical modeling. Each preprocessing step is described below.
+
+Survey and behavioral data were collected via Qualtrics and preprocessed using custom Python scripts. Engagement ratings, recall assessment scores, and sociodemographic covariates were each processed independently and then merged into a single analysis-ready dataset keyed on a unique participant
+identifier.
+
+\paragraph{Engagement}
+% Preprocessing: combine_engagement.py -> process_engagement.py
+% Analysis: analyze_engagement_format_content_lmm.R
+
+Engagement ratings were collected at a random time per task during the fNIRS sessions. Ratings were averaged within each participant for each of the four experimental conditions (short-form education, short-form entertainment, long-form education, long-form entertainment), producing one condition-mean engagement score per participant per condition.
+
+For inferential analysis, the wide-format engagement scores were reshaped into a repeated-measures long format with two within-subject factors: \textit{Length} (short, long) and \textit{Content} (education, entertainment). Both factors were coded using sum-to-zero contrast codes ($\text{length}_c = -0.5$ for short, $+0.5$ for long; $\text{content}_c = -0.5$ for entertainment, $+0.5$ for education). A linear mixed-effects model (LMM) was fit using restricted maximum likelihood (REML) estimation via the \texttt{lme4} package in R \cite{Bates2014FittingLM}:
+
+\begin{equation}
+\text{engagement} \sim \text{length}_c \times \text{content}_c + (1 \mid \text{subject\_id})
+\end{equation}
+
+\noindent with a random intercept for participant. Only participants
+with complete engagement values across all four conditions were included.
+
+The three omnibus fixed effects (Length, Content, and the Length $\times$ Content interaction)
+were corrected for multiple comparisons using the Holm step-down procedure
+\cite{Holm1979ASS}. Post-hoc pairwise contrasts among the four condition means were computed
+using estimated marginal means only if the
+interaction effect reached significance after Holm correction ($p < .05$); pairwise
+$p$-values were reported without additional correction \cite{emmeansR, Searle1980PopulationMM} .
+
+\paragraph{Retention}
+% Preprocessing: process_recall_assessment.py
+% Analysis: analyze_retention_format_content_lmm.R
+
+Retention was assessed using a multiple choice quiz administered both before (pre-task) and
+after (post-task) the video watching portion of the experiment. For each participant, mean accuracy was computed within each of the four experimental conditions (short-form education, short-form entertainment, long-form education, long-form entertainment) separately for the pre-task and post-task assessments. The retention outcome was defined as the post-task minus pre-task difference score per condition, yielding a within-subject improvement metric for each condition.
+
+Inferential analysis of retention followed the same 2 $\times$ 2 within-subjects design used
+for engagement. Difference scores were reshaped into a repeated-measures long format with
+sum-coded factors for \textit{Length} and \textit{Content}, and a LMM with a random intercept
+for participant was fit via REML \cite{Bates2014FittingLM}:
+
+\begin{equation}
+\text{retention\_$\Delta$} \sim \text{length}_c \times \text{content}_c + (1 \mid \text{subject\_id})
+\end{equation}
+
+Only participants with all four condition difference scores present were used in the statistical analysis. Participants listed in the centralized exclusion manifest were removed prior to modeling. The three omnibus effects were Holm-corrected, and interaction-gated post-hoc pairwise contrasts were computed via estimated marginal means without additional correction \cite{Holm1979ASS, emmeansR, Searle1980PopulationMM}.
+
+\paragraph{Covariates}
+% Preprocessing: process_sociodemographic.py
+
+Sociodemographic and individual-difference covariates were captured using a Qualtrics survey completed by participants prior to starting the video watching task. Single-item covariates included age (continuous), prior diagnosis status (binary), short-form video viewing frequency (ordinal: never, a few times per week, daily, multiple times per day), and daily short-form video duration (ordinal: $<$30 min, 30--60 min, 1--2 h, 2--3 h).
+
+Multi-item psychological scales were scored as composite totals: the Patient Health
+Questionnaire-8 (PHQ-8; 8 items, 0--3 Likert scale), the Generalized Anxiety Disorder scale (GAD; 7 items, 0--3 Likert scale), the Adult ADHD Self-Report Scale (ASRS; 6 items, 0--4 scale), and two subscales from Yang's Internet Addiction instrument adapted for short-form video use: Problematic Use and Motivation (each scored on a 1--5 Likert scale). For each multi-item scale, a participant's total score was computed only if at least 75\% of items were answered; otherwise, the score was coded as missing.
+
+\subsubsection{fNIRs Data}
+% Preprocessing: Homer3 (external), PREPROCESS_NOTES.md
+% QC: fnirs_analysis/homer_betas_qc.py
+% Analysis: analyze_format_content_lmm_channelwise.R
+
+fNIRS data were acquired using an 8 $\times$ 8 channel montage (NIRSport, NIRx Medical Technologies, LLC) covering the prefrontal cortex. Here we outline the preprocessing and subject level GLM carried out in Homer3 \cite{Huppert2009HomERAR}. We then discuss the group level analysis using the lme4 package in R \cite{Bates2014FittingLM}.
+
+\paragraph{Subject Level Analysis}
+% Homer3 ProcStream: see PREPROCESS_NOTES.md
+
+All subject-level fNIRS preprocessing was performed using Homer3 \cite{Huppert2009HomERAR}. Our pipeline begins with channel pruning. Here we use a `dRange` of 0.1 - 5000 (based on analysis of our fNIRs data), an SNR threshold of 2 and an SDrange of 25 - 50. We then convert the raw intensity values to optical density. Motion artifact detection was done per channel with values of tMotion = 1, tMask = 1, STDEVthresh = 50, AMPthresh = 0.4. Motion correction used a Wavelet filter with an IQR of 1.5. Bandpass filtering was done using a high-pass filter of 0.001 and a low-pass filter of 0.2. Post-filtering the optical density values were converted into concentration measurements using the modified Beer-Lambert law with a path length of 6 \cite{BeerLambertLaw}. Block averages were then calculated using 10 seconds prior to the task start to 20 seconds after the task ended to capture the full hemodynamic response. Lastly we carried out a subject level analysis using a Generalized Linear Model (GLM). Here we used the same interval as our block averages for the task duration. We also used a iWLS approach for the GLM solver with a modified gamma function (idxBasis = 2). For the GLM, per Homer3 documentation, the drift order was set to 0. We also used default parameters for the basis function for the modified gamma function.
+
+\paragraph{Group Level Analysis}
+% Analysis: analyze_format_content_lmm_channelwise.R
+
+Group-level inference was conducted channel-wise using a within-subjects 2 $\times$ 2 factorial design with \textit{Length} (short vs.\ long) and \textit{Content} (education vs.\ entertainment) as fixed factors. For each channel $\times$ chromophore (HbO, HbR) combination, an LMM was fit via REML using \texttt{lme4} \cite{Bates2014FittingLM}:
+
+\begin{equation}
+\beta \sim \text{format}_c \times \text{content}_c + (1 \mid \text{subject\_id})
+\end{equation}
+
+\noindent with sum-coded contrasts ($\text{format}_c = -0.5$ for short, $+0.5$ for long; $\text{content}_c = -0.5$ for entertainment, $+0.5$ for education) \cite{Kuznetsova2017lmerTestPT}. A complete-case policy was applied within each channel whereby a participant contributed to a given channel's model only if non-missing beta values were available for all four conditions. Models were fit only for channel $\times$ chromophore pairs with at least six complete-case participants. Exact test wise values for participant count for each result is provided in the results section (see Section \ref{results:fnirs}).
+
+Multiple comparison correction was applied separately per chromophore and per effect (Format, Content, Format $\times$ Content interaction) across channels using the Benjamini--Hochberg false discovery rate (FDR) procedure \cite{Benjamini1995ControllingTF}. Post-hoc pairwise contrasts among the four conditions (six comparisons) were computed via estimated marginal means \cite{emmeansR, Searle1980PopulationMM} only for channel $\times$ chromophore pairs where the interaction survived FDR correction at $q < .05$; post-hoc $p$-values were not further corrected.
+
+Participants listed in the centralized exclusion manifest were removed from all analyses prior to model fitting.
+
+% \subsection{Data Preprocessing}
+% \subsubsection{Survey Data}
+% Breakdown of the tabular data preprocessing
+
+% \paragraph{Engagement}
+% How we preprocess the engagement (see the R script)
+
+% \paragraph{Retention}
+% How we preprocess the retention data (process_recall_assessment.py) and then how we structure the statistical analysis (see the R script).
+
+% \paragraph{Covariates}
+% Probably need to discuss what we do with the covariates here. I'm still not sure so we'll leave this one for the end.
+
+% \subsubsection{fNIRs Data}
+% Subject level fNIRs preprocessing was done using Homer3 \cite{Huppert2009HomERAR}.
+
+% \paragraph{Subject Level Analysis}
+
+
+% \paragraph{Group Level Analysis} 
+
+\section{Results}
+\subsection{Demographic}
+\subsection{Behavioral Findings}
+\subsection{Neurological Findings}
+\label{results:fnirs}
+This section will focus on the 2x2 ANOVA that is being done to see if there is a significant difference between the 
+\section{Discussion}
+\section{Conclusion}
+
+\printbibliography % This command displays the full list of references
+\end{document}

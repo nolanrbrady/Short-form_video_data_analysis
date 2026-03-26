@@ -97,6 +97,21 @@ Command:
 Rscript tests/validate_correlational_relationships_r.R
 ```
 
+## Beta Discrepancy Plotting (Python): channel-vs-ROI descriptive validation
+
+Runs `plot_beta_discrepancy_dynamics.py` on a synthetic merged beta table and verifies:
+- shared subject exclusions are applied before plotting
+- exact-zero betas are treated as pruned/missing when configured
+- ROI means use the available non-missing member channels rather than filling missing values
+- complete-case panel counts match the intended channel-vs-ROI comparison logic
+- the composite PNG and audit CSV are both created
+
+Command:
+
+```bash
+python tests/validate_beta_discrepancy_plot_py.py
+```
+
 ## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines
 
 Runs repeated null-effect synthetic datasets through all four inferential scripts:
