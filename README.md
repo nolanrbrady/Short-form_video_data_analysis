@@ -43,6 +43,27 @@ Common dependencies across scripts:
 - fNIRS: `mne`, `mne-nirs`, `numpy`, `pandas`
 - Stats models (engagement + LME): `statsmodels`, `scipy`
 
+## LaTeX manuscript workflow
+
+The manuscript source lives in `latex/main.tex` with bibliography entries in
+`latex/references.bib`. Generated LaTeX artifacts are redirected into
+`latex/build/` so the source directory stays stable while you edit.
+
+From the repository root:
+
+```bash
+make -C latex pdf
+make -C latex watch
+make -C latex tidy
+```
+
+`make -C latex watch` runs `latexmk -pvc`, which continuously rebuilds
+`latex/build/main.pdf` whenever `latex/main.tex` or `latex/references.bib`
+changes. Open `latex/build/main.pdf` in a PDF viewer that auto-reloads on file
+changes to get live preview while editing. `make -C latex tidy` removes the
+legacy flat-layout artifacts that were previously written directly into
+`latex/`.
+
 ---
 
 ## Pipeline A — Tabular preprocessing (demographics + engagement + recall)
@@ -257,6 +278,41 @@ Command:
 python plot_fir_betas_subjects.py
 ```
 
+### A5e) Plot channel-vs-ROI beta dynamics for confusing findings
+
+- Python: `plot_beta_discrepancy_dynamics.py`
+- Inputs:
+  - `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  - `data/config/roi_definition.json`
+  - `data/config/excluded_subjects.json`
+
+What it does:
+- Reads the merged wide beta table and compares one selected channel against one selected ROI.
+- Defaults to the current discrepancy discussed in this repo:
+  - channel: `S04_D02` `HbR`
+  - ROI: `L_DMPFC` `HbO`
+- Applies the shared subject-exclusion manifest by default so plotted subjects match the inferential analyses.
+- Treats `0` and `NaN` beta values as pruned/missing by default (no beta imputation).
+- Computes ROI means from the pre-specified member channels in `data/config/roi_definition.json`.
+- Produces a composite figure with:
+  - a channel panel across the 4 conditions
+  - an ROI-mean panel across the 4 conditions
+  - an optional ROI-decomposition panel showing the member channels plus the ROI mean
+- Supports selectable styles:
+  - `raw_means`
+  - `means_only`
+  - `raw_only`
+- Writes a tidy CSV of the plotted raw values and summary means/intervals alongside the figure for auditability.
+
+Default output directory:
+- `data/results/beta_discrepancy_plots/`
+
+Command:
+
+```bash
+python plot_beta_discrepancy_dynamics.py
+```
+
 ### A6) Single entry-point preprocessing + merge + certification
 
 If you already have the required upstream inputs on disk and want one command to
@@ -415,6 +471,7 @@ Model (per channel × chromophore):
 - Coding: `format_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
 - `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 
 Pruned channels / missingness policy:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as **`NaN`** (do **not** impute).
@@ -483,6 +540,7 @@ Model / inference:
 - `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - BH-FDR is applied separately per chromophore and per effect across ROIs.
+- For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 
 Example:
 
@@ -839,6 +897,7 @@ Methodology notes / planned improvements live in:
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
 - `analyze_correlational_relationships.R`: targeted Pearson follow-up correlations for selected raw-condition channel/ROI neural targets, with figure generation controlled by the analysis-plan config
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
+- `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
 

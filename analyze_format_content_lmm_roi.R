@@ -82,6 +82,18 @@ source_exclusion_helpers <- function() {
 }
 source_exclusion_helpers()
 
+# Fixed response-unit scaling used only inside the neural mixed-model fits.
+#
+# The ROI/channel neural beta values are very small numerically, and certain
+# cells show optimizer/Hessian conditioning warnings at the native scale despite
+# otherwise interpretable data structure. We therefore fit in a fixed scaled
+# response unit and back-transform all reported estimates/CIs/mean differences
+# into the original beta space before writing outputs.
+#
+# Bates et al. (2015) motivate checking and addressing convergence/conditioning
+# issues in mixed models rather than treating every returned fit as trustworthy.
+NEURAL_LMM_RESPONSE_SCALE <- 1e6
+
 # Output filtering toggle (main-effects CSVs only)
 #
 # If TRUE, the script writes only rows with FDR-significant p-values (p_fdr < threshold)
@@ -432,13 +444,22 @@ fit_factorial_lmm <- function(sub_complete) {
   # Age enters additively as a subject-level omnibus covariate.
   # Inference: fixed-effect tests are extracted with Kenward-Roger denominator df
   # via lmerTest + pbkrtest (Kenward & Roger, 1997; Halekoh & Højsgaard, 2014).
+  sub_complete <- sub_complete %>% mutate(beta = .data$beta * NEURAL_LMM_RESPONSE_SCALE)
   lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = sub_complete, REML = TRUE)
 }
 
 fit_condition_lmm <- function(sub_complete) {
   # Condition-coded model used only for post-hoc estimated marginal means / pairwise contrasts.
-  sub_complete <- sub_complete %>% mutate(condition = factor(condition, levels = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")))
+  sub_complete <- sub_complete %>%
+    mutate(
+      beta = .data$beta * NEURAL_LMM_RESPONSE_SCALE,
+      condition = factor(condition, levels = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu"))
+    )
   lmerTest::lmer(beta ~ condition + (1 | subject_id), data = sub_complete, REML = TRUE)
+}
+
+back_transform_neural_metric <- function(x) {
+  as.numeric(x) / NEURAL_LMM_RESPONSE_SCALE
 }
 
 extract_fixed <- function(model, term, anova_kr) {
@@ -468,9 +489,17 @@ extract_fixed <- function(model, term, anova_kr) {
   p <- as.numeric(anova_kr[term, "Pr(>F)"])
 
   ci <- suppressMessages(confint(model, parm = term, method = "Wald"))
-  ci_low <- as.numeric(ci[1])
-  ci_high <- as.numeric(ci[2])
-  list(estimate = est, se = se, df = df, stat = t, p_unc = p, ci95_low = ci_low, ci95_high = ci_high)
+  ci_low <- back_transform_neural_metric(ci[1])
+  ci_high <- back_transform_neural_metric(ci[2])
+  list(
+    estimate = back_transform_neural_metric(est),
+    se = back_transform_neural_metric(se),
+    df = df,
+    stat = t,
+    p_unc = p,
+    ci95_low = ci_low,
+    ci95_high = ci_high
+  )
 }
 
 main <- function() {
@@ -519,6 +548,7 @@ main <- function() {
   cat("[data] ROIs detected:", length(rois), "\n")
   cat("[data] chromophores detected:", paste(sort(unique(df_roi$chrom)), collapse = ", "), "\n")
   cat("[model] omnibus covariate adjustment: age\n")
+  cat("[model] internal neural response scaling: beta * ", NEURAL_LMM_RESPONSE_SCALE, " for fitting; outputs are back-transformed to original beta units\n", sep = "")
 
   main_rows <- list()
   gated_count <- 0
@@ -633,6 +663,11 @@ main <- function() {
       # Use contrast(..., method="pairwise") for compatibility across emmeans versions.
       # Reference for EMMs/contrasts: Lenth (2016); Searle et al. (1980), see `CITATIONS.md`.
       pw <- emmeans::contrast(em, method = "pairwise", adjust = "none") %>% as.data.frame()
+      pw <- pw %>%
+        mutate(
+          estimate = back_transform_neural_metric(.data$estimate),
+          SE = back_transform_neural_metric(.data$SE)
+        )
       stat_type <- if ("t.ratio" %in% names(pw)) "t" else if ("z.ratio" %in% names(pw)) "z" else NA_character_
       if (is.na(stat_type)) stop("Expected 't.ratio' or 'z.ratio' in emmeans pairwise contrast output.")
       if (stat_type == "z") {

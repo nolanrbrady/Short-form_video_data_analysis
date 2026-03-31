@@ -1,5 +1,5 @@
 # ANALYSIS_SPEC — Homer3 betas + Format×Content (channelwise)
-Last updated: 2026-03-16
+Last updated: 2026-03-30
 
 This document captures the exact specifications agreed **before** implementation of the merge and
 channelwise statistical analysis scripts.
@@ -164,6 +164,7 @@ Significance threshold:
 R implementation notes:
 - LMM via `lme4::lmer`, with fixed-effect p-values/df from Kenward-Roger Type-III tests via `lmerTest` + `pbkrtest`.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Post-hoc via `emmeans`, using the existing condition-only follow-up model.
 
 Python implementation notes:
@@ -251,7 +252,7 @@ Console reporting:
 ---
 
 # ANALYSIS_SPEC — Homer3 betas + Format×Content (ROI-wise)
-Last updated: 2026-03-16
+Last updated: 2026-03-30
 
 ## Scope
 
@@ -329,6 +330,7 @@ Primary model (per ROI × chrom):
 Inference and post-hoc:
 - Main effects reported for Format, Content, and Interaction.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Post-hoc pairwise condition contrasts (6 total) run only when ROI/chrom interaction
   is FDR-significant.
 - Post-hoc p-values are uncorrected (`adjust = "none"`).

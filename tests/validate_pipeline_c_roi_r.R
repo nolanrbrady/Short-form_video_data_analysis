@@ -390,7 +390,7 @@ main <- function() {
     out_row <- main_tidy %>% filter(roi == "VMPFC", chrom == "HbO", effect == term_map[[1]])
     assert_true(nrow(out_row) == 1, paste0("missing output row for reference term ", term_map[[1]]))
     assert_true(abs(out_row$estimate[[1]] - ref_coefs[term_map[[2]], "Estimate"]) < 1e-10, paste0("estimate mismatch for ", term_map[[1]], " reference fit"))
-    assert_true(abs(out_row$p_unc[[1]] - ref_anova[term_map[[2]], "Pr(>F)"]) < 1e-10, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$p_unc[[1]] - ref_anova[term_map[[2]], "Pr(>F)"]) < 1e-7, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
   }
 
   # Explicit inferential TP/TN checks:
