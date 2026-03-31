@@ -82,6 +82,26 @@ source_exclusion_helpers <- function() {
 }
 source_exclusion_helpers()
 
+source_lmm_convergence_helpers <- function() {
+  args_all <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args_all, value = TRUE)
+  script_dir <- if (length(file_arg) > 0) {
+    dirname(normalizePath(sub("^--file=", "", file_arg[[1]])))
+  } else {
+    getwd()
+  }
+  candidates <- c(
+    file.path(getwd(), "r_lmm_convergence_helpers.R"),
+    file.path(script_dir, "r_lmm_convergence_helpers.R")
+  )
+  helper_path <- candidates[file.exists(candidates)][1]
+  if (is.na(helper_path)) {
+    stop("Could not locate r_lmm_convergence_helpers.R. Run from repo root or place helper beside the script.")
+  }
+  source(helper_path, local = parent.frame())
+}
+source_lmm_convergence_helpers()
+
 # Fixed response-unit scaling used only inside the neural mixed-model fits.
 #
 # The ROI/channel neural beta values are very small numerically, and certain
@@ -502,6 +522,19 @@ extract_fixed <- function(model, term, anova_kr) {
   )
 }
 
+record_warning_example <- function(examples, label, messages, max_examples = 10) {
+  if (length(examples) >= max_examples) {
+    return(examples)
+  }
+
+  msg <- if (length(messages) > 0) {
+    paste(messages, collapse = " | ")
+  } else {
+    "non-convergence warning captured"
+  }
+  c(examples, paste0(label, " [", msg, "]"))
+}
+
 main <- function() {
   args <- parse_args()
   if (!requireNamespace("pbkrtest", quietly = TRUE)) {
@@ -553,6 +586,8 @@ main <- function() {
   main_rows <- list()
   gated_count <- 0
   gated_examples <- c()
+  nonconverged_count <- 0
+  nonconverged_examples <- c()
 
   for (chrom_name in chroms) {
     for (roi_name in rois) {
@@ -571,7 +606,16 @@ main <- function() {
       }
       n_obs <- nrow(sub_cc)
 
-      model <- fit_factorial_lmm(sub_cc)
+      fit_result <- capture_lmm_fit(function() fit_factorial_lmm(sub_cc))
+      model <- fit_result$model
+      if (!fit_result$converged) {
+        nonconverged_count <- nonconverged_count + 1
+        nonconverged_examples <- record_warning_example(
+          examples = nonconverged_examples,
+          label = paste0(chrom_name, " ", roi_name),
+          messages = fit_result$nonconvergence_messages
+        )
+      }
       anova_kr <- anova(model, ddf = "Kenward-Roger", type = 3)
       singular_fit <- lme4::isSingular(model, tol = 1e-4)
       fmt <- extract_fixed(model, "format_c", anova_kr)
@@ -583,6 +627,7 @@ main <- function() {
         chrom = chrom_name,
         n_subjects = n_subj,
         n_obs = n_obs,
+        converged = fit_result$converged,
         singular_fit = singular_fit,
         estimate_format = fmt$estimate,
         se_format = fmt$se,
@@ -647,18 +692,38 @@ main <- function() {
       sep = ""
     )
   }
+  if (nonconverged_count > 0) {
+    cat(
+      "[warn] ", nonconverged_count,
+      " ROI/chrom models emitted mixed-model non-convergence warnings; rows were retained with converged=FALSE. Examples: ",
+      paste(nonconverged_examples, collapse = "; "),
+      "\n",
+      sep = ""
+    )
+  }
 
   sig_inter <- main_df %>% filter(.data$p_interaction_fdr < args$alpha)
   cat("[results] interaction FDR-significant (q<", args$alpha, "): ", nrow(sig_inter), " ROI/chrom pairs\n", sep = "")
 
   posthoc_rows <- list()
+  posthoc_nonconverged_count <- 0
+  posthoc_nonconverged_examples <- c()
   if (nrow(sig_inter) > 0) {
     for (i in seq_len(nrow(sig_inter))) {
       chrom_name <- sig_inter$chrom[[i]]
       roi_name <- sig_inter$roi[[i]]
       sub <- df_roi %>% filter(.data$chrom == chrom_name, .data$roi == roi_name)
       sub_cc <- complete_case_subjects(sub) %>% mutate(condition = factor(condition, levels = c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")))
-      model_cond <- fit_condition_lmm(sub_cc)
+      fit_result <- capture_lmm_fit(function() fit_condition_lmm(sub_cc))
+      model_cond <- fit_result$model
+      if (!fit_result$converged) {
+        posthoc_nonconverged_count <- posthoc_nonconverged_count + 1
+        posthoc_nonconverged_examples <- record_warning_example(
+          examples = posthoc_nonconverged_examples,
+          label = paste0(chrom_name, " ", roi_name),
+          messages = fit_result$nonconvergence_messages
+        )
+      }
       em <- emmeans::emmeans(model_cond, ~ condition, lmer.df = "kenward-roger")
       # Use contrast(..., method="pairwise") for compatibility across emmeans versions.
       # Reference for EMMs/contrasts: Lenth (2016); Searle et al. (1980), see `CITATIONS.md`.
@@ -666,7 +731,8 @@ main <- function() {
       pw <- pw %>%
         mutate(
           estimate = back_transform_neural_metric(.data$estimate),
-          SE = back_transform_neural_metric(.data$SE)
+          SE = back_transform_neural_metric(.data$SE),
+          converged = fit_result$converged
         )
       stat_type <- if ("t.ratio" %in% names(pw)) "t" else if ("z.ratio" %in% names(pw)) "z" else NA_character_
       if (is.na(stat_type)) stop("Expected 't.ratio' or 'z.ratio' in emmeans pairwise contrast output.")
@@ -686,15 +752,25 @@ main <- function() {
         mutate(
           roi = roi_name,
           chrom = chrom_name,
+          converged = .data$converged,
           stat_type = stat_type,
           condition_a = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 1]),
           condition_b = str_trim(str_split_fixed(.data$contrast, " - ", 2)[, 2])
         ) %>%
-        select(roi, chrom, condition_a, condition_b, stat_type, estimate, SE, df, t_display, p.value)
+        select(roi, chrom, converged, condition_a, condition_b, stat_type, estimate, SE, df, t_display, p.value)
 
-      names(pw) <- c("roi", "chrom", "condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
+      names(pw) <- c("roi", "chrom", "converged", "condition_a", "condition_b", "stat_type", "mean_diff", "se", "df", "t", "p_unc")
       posthoc_rows[[length(posthoc_rows) + 1]] <- pw
     }
+  }
+  if (posthoc_nonconverged_count > 0) {
+    cat(
+      "[warn] ", posthoc_nonconverged_count,
+      " posthoc ROI/chrom fits emitted mixed-model non-convergence warnings; rows were retained with converged=FALSE. Examples: ",
+      paste(posthoc_nonconverged_examples, collapse = "; "),
+      "\n",
+      sep = ""
+    )
   }
 
   dir.create(dirname(args$out_main_csv), showWarnings = FALSE, recursive = TRUE)
@@ -728,6 +804,7 @@ main <- function() {
         effect = "format",
         n_subjects = .data$n_subjects,
         n_obs = .data$n_obs,
+        converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_format,
         ci95_low = .data$ci95_format_low,
@@ -742,6 +819,7 @@ main <- function() {
         effect = "content",
         n_subjects = .data$n_subjects,
         n_obs = .data$n_obs,
+        converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_content,
         ci95_low = .data$ci95_content_low,
@@ -756,6 +834,7 @@ main <- function() {
         effect = "interaction",
         n_subjects = .data$n_subjects,
         n_obs = .data$n_obs,
+        converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_interaction,
         ci95_low = .data$ci95_interaction_low,
@@ -764,7 +843,7 @@ main <- function() {
         p_fdr = .data$p_interaction_fdr
       )
   ) %>%
-    arrange(chrom, effect, roi)
+    arrange(.data$p_unc, .data$chrom, .data$effect, .data$roi)
 
   main_tidy_out <- main_tidy
   if (isTRUE(FILTER_MAIN_EFFECTS_TO_FDR_SIG_ONLY)) {
@@ -787,6 +866,7 @@ main <- function() {
     empty <- tibble(
       roi = character(),
       chrom = character(),
+      converged = logical(),
       condition_a = character(),
       condition_b = character(),
       stat_type = character(),

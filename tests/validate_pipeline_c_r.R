@@ -286,6 +286,7 @@ main <- function() {
     "effect",
     "n_subjects",
     "n_obs",
+    "converged",
     "singular_fit",
     "estimate",
     "ci95_low",
@@ -294,6 +295,8 @@ main <- function() {
     "p_fdr"
   )
   assert_true(all(required_main_cols %in% names(main_tidy)), "tidy main output missing required columns")
+  assert_true(all(main_tidy$converged), "expected all synthetic channelwise fits to converge cleanly")
+  assert_true(!is.unsorted(main_tidy$p_unc), "expected tidy main output to be sorted by ascending p_unc")
 
   # 1b) Complete-case invariant: in this pipeline, each subject contributes 4 observations per channel×chrom.
   assert_true(all(main_tidy$n_obs == 4 * main_tidy$n_subjects), "expected n_obs == 4 * n_subjects for all tidy rows")
@@ -361,6 +364,8 @@ main <- function() {
 
   # 4) Post-hoc gating: should only include the channel with strong interaction (S01_D01), not S02_D01
   assert_true(all(posthoc$channel %in% c("S01_D01")), "posthoc contains channels that should not have passed interaction gate")
+  assert_true("converged" %in% names(posthoc), "posthoc output missing converged column")
+  assert_true(all(posthoc$converged), "expected all synthetic posthoc fits to converge cleanly")
 
   # 5) Post-hoc contrast count: 6 contrasts per chrom for one channel
   expected_posthoc_rows <- 6 * length(chroms) * 1

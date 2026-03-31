@@ -313,6 +313,7 @@ main <- function() {
     "effect",
     "n_subjects",
     "n_obs",
+    "converged",
     "singular_fit",
     "estimate",
     "ci95_low",
@@ -321,6 +322,8 @@ main <- function() {
     "p_fdr"
   )
   assert_true(all(required_main_cols %in% names(main_tidy)), "tidy main output missing required columns")
+  assert_true(all(main_tidy$converged), "expected all synthetic ROI fits to converge cleanly")
+  assert_true(!is.unsorted(main_tidy$p_unc), "expected tidy main output to be sorted by ascending p_unc")
 
   # Exactly 2 ROIs x 2 chrom x 3 effects
   assert_true(nrow(main_tidy) == 12, "unexpected number of tidy rows for 2 ROIs x 2 chroms x 3 effects")
@@ -412,6 +415,8 @@ main <- function() {
   # Post-hoc gating: only the interaction-positive ROI should appear.
   assert_true(nrow(posthoc) > 0, "expected non-empty posthoc output")
   assert_true(all(posthoc$roi %in% c("VMPFC")), "posthoc contains ROIs that should not pass interaction gate")
+  assert_true("converged" %in% names(posthoc), "ROI posthoc output missing converged column")
+  assert_true(all(posthoc$converged), "expected all synthetic ROI posthoc fits to converge cleanly")
 
   # BH-FDR checks per chrom × effect across ROIs.
   for (chrom_name in unique(main_tidy$chrom)) {

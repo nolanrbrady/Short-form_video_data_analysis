@@ -165,6 +165,7 @@ R implementation notes:
 - LMM via `lme4::lmer`, with fixed-effect p-values/df from Kenward-Roger Type-III tests via `lmerTest` + `pbkrtest`.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
+- Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
 - Post-hoc via `emmeans`, using the existing condition-only follow-up model.
 
 Python implementation notes:
@@ -331,6 +332,7 @@ Inference and post-hoc:
 - Main effects reported for Format, Content, and Interaction.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
+- Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
 - Post-hoc pairwise condition contrasts (6 total) run only when ROI/chrom interaction
   is FDR-significant.
 - Post-hoc p-values are uncorrected (`adjust = "none"`).

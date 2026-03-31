@@ -8,7 +8,10 @@ Runs `analyze_format_content_lmm_channelwise.R` on a synthetic dataset that:
 - Uses Homer-style subject IDs (`sub_0001`) and combined IDs (`0001`)
 - Uses varying subject ages and checks the age-adjusted omnibus model against a direct reference fit
 - Includes both HbO/HbR and multiple channels
-- Includes a pruned beta (`0`) to verify pruned-channel missingness + complete-case logic
+- Includes a pruned beta (`NA`) to verify pruned-channel missingness + complete-case logic
+- Verifies literal `0` remains a valid observed beta rather than being treated as missing
+- Verifies the output `converged` flag is present and TRUE for the clean synthetic fits
+- Verifies the tidy output is sorted by ascending `p_unc`
 - Verifies coefficient recovery (within tolerance) for known ground-truth fixed effects
 - Verifies explicit inferential TP/TN outcomes (known significant interaction channel vs known null channel)
 - Verifies post-hoc gating only triggers for interaction-FDR-significant channels
@@ -27,7 +30,10 @@ Runs `analyze_format_content_lmm_roi.R` on a synthetic dataset that:
 - Uses Homer-style subject IDs (`sub_0001`) and combined IDs (`0001`)
 - Uses varying subject ages and checks the age-adjusted omnibus model against a direct reference fit
 - Defines ROIs from a strict JSON ROI map (`ROI -> [channels]`)
-- Verifies ROI mean aggregation over available channels (`0` treated as pruned/missing)
+- Verifies ROI mean aggregation over available channels with pruned values represented as `NA`
+- Verifies literal `0` remains a valid observed beta rather than being treated as missing
+- Verifies the output `converged` flag is present and TRUE for the clean synthetic fits
+- Verifies the tidy output is sorted by ascending `p_unc`
 - Verifies complete-case behavior when all ROI channels are pruned for a condition
 - Verifies coefficient recovery for ROI-level known generating effects
 - Verifies explicit inferential TP/TN outcomes (known significant ROI interaction vs known null ROI interaction)
@@ -39,6 +45,19 @@ Command:
 
 ```bash
 Rscript tests/validate_pipeline_c_roi_r.R
+```
+
+## Mixed-model convergence helper (R): warning classification validation
+
+Runs `r_lmm_convergence_helpers.R` through a focused validation that:
+- Verifies canonical `lme4` non-convergence warnings are detected
+- Verifies singular-fit and unrelated warnings are not misclassified as non-convergence
+- Verifies duplicate warnings are deduplicated and the returned `converged` flag behaves as expected
+
+Command:
+
+```bash
+Rscript tests/validate_lmm_convergence_helpers_r.R
 ```
 
 ## Retention Pipeline (R): deterministic + synthetic validation
