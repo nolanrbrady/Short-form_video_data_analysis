@@ -1,0 +1,54 @@
+{
+  "description": "Standalone pooled ROI-mean x pooled behavioral-mean correlation plan for analyze_correlational_relationships_roi_means.R.",
+  "version": 6,
+  "behavior_runs": [
+    {
+      "name": "engagement",
+      "run_type": "pooled_format",
+      "short_columns": [
+        "sf_education_engagement",
+        "sf_entertainment_engagement"
+      ],
+      "long_columns": [
+        "lf_education_engagement",
+        "lf_entertainment_engagement"
+      ]
+    },
+    {
+      "name": "retention",
+      "run_type": "pooled_format",
+      "short_columns": [
+        "diff_short_form_education",
+        "diff_short_form_entertainment"
+      ],
+      "long_columns": [
+        "diff_long_form_education",
+        "diff_long_form_entertainment"
+      ]
+    }
+  ],
+  "association_methods": [
+    "pearson",
+    "spearman"
+  ],
+  "multiple_testing": {
+    "adjust_method": "BH",
+    "family_grouping": [
+      "analysis_tier",
+      "behavior_run",
+      "format_pool",
+      "association_method"
+    ]
+  },
+  "figures": {
+    "policy": "significant_only",
+    "plot_association_methods": [
+      "pearson",
+      "spearman"
+    ]
+  },
+  "beta_missingness": {
+    "zero_is_missing": true,
+    "audit_exact_zero": true
+  }
+}

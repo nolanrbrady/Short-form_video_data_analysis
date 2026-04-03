@@ -1,6 +1,6 @@
 ## Short-form Video Study — Analysis Repo
-Last updated: 03-09-2026
-Updated by: Nolan Brady
+Last updated: 04-01-2026
+Updated by: Codex
 
 This repo contains two primary analysis “tracks”:
 
@@ -472,6 +472,7 @@ Model (per channel × chromophore):
 - `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
+- Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
 
 Pruned channels / missingness policy:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as **`NaN`** (do **not** impute).
@@ -541,6 +542,7 @@ Model / inference:
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - BH-FDR is applied separately per chromophore and per effect across ROIs.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
+- Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
 
 Example:
 
@@ -662,50 +664,70 @@ Validation:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
-### C4b) Exploratory Pearson correlations for selected channel/ROI follow-up
+### C4b) Exploratory pooled long/short ROI/channel correlations with pooled and raw behavioral follow-up
 
 - R: `analyze_correlational_relationships.R`
 
 Purpose:
-- Run exploratory targeted follow-up Pearson correlations between selected sociodemographic variables and raw-condition neural values from:
+- Run exploratory post-hoc associations between:
+  - pooled long-form and pooled short-form behavioral means and the matching pooled long-form and pooled short-form neural means
+  - raw behavioral task-cell values and the matching pooled long-form and pooled short-form neural means
+  from:
   - `S04_D02` for both `HbO` and `HbR`
   - `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, `L_DMPFC (HbO)`
 - Use the same merged input table and subject-exclusion manifest as the other R analyses.
 - Interpret these results as exploratory rather than confirmatory when the channel/ROI target set was selected from this same dataset.
+- The pooled long/short rows are the primary outputs.
+- The raw condition rows are supplementary localization checks and do not directly test whether the long-form association differs from the short-form association.
+- The raw condition rows do not support condition-specific neural statements because the neural side remains pooled within `long` or `short`.
 
-Predictors:
-- `age`
-- `sfv_daily_duration`
-- `sfv_frequency`
-- `phq_total`
-- `asrs_total`
-- `gad_total`
-- `yang_pu_total`
-- `yang_mot_total`
-- all `diff_*` columns
-- all `*_engagement` columns
+Behavior runs:
+- `engagement`
+  - `engagement_long = ((lf_education_engagement + lf_entertainment_engagement) / 2)`
+  - `engagement_short = ((sf_education_engagement + sf_entertainment_engagement) / 2)`
+- `retention`
+  - `retention_long = ((diff_long_form_education + diff_long_form_entertainment) / 2)`
+  - `retention_short = ((diff_short_form_education + diff_short_form_entertainment) / 2)`
+- Supplementary raw-value runs:
+  - engagement: `sf_education_engagement`, `sf_entertainment_engagement`, `lf_entertainment_engagement`, `lf_education_engagement`
+  - retention: `diff_short_form_education`, `diff_short_form_entertainment`, `diff_long_form_entertainment`, `diff_long_form_education`
+- Stored pooled engagement columns such as `long_form_engagement` and `short_form_engagement` are not used because they can differ from the cell-wise arithmetic means implied by the 2x2 design.
 
 Neural target construction:
-- Channel targets are the raw merged beta columns for `S04_D02`, split by chromophore and condition.
-- ROI targets are arithmetic means across available non-missing channels in the ROI for each `subject x chrom x condition`.
+- Channel targets are collapsed to one pooled `long` mean and one pooled `short` mean per subject and chromophore.
+- ROI targets are arithmetic means across available non-missing channels in the ROI for each `subject x chrom x condition`, then collapsed to one pooled `long` mean and one pooled `short` mean per subject and chromophore.
+- Supplementary rows reuse those same pooled neural `long` or `short` means rather than reverting to condition-specific neural values.
 - ROI channel membership is read from `data/config/roi_definition.json`.
 
 Missingness policy:
-- Pairwise complete cases only: for each `predictor x neural target` correlation, drop subjects missing either value for that pair.
-- Do not impute pruned channels or missing covariates.
-- Subjects excluded in `data/config/excluded_subjects.json` are removed before any pairwise filtering.
+- Channel `0` and `NA` beta values are treated as pruned/missing observations for this workflow.
+- A subject contributes a pooled `long` row only when both long-form cells for that pooled mean are present.
+- A subject contributes a pooled `short` row only when both short-form cells for that pooled mean are present.
+- A subject contributes a raw-value row only when that specific behavior cell and its matched pooled neural mean are both present.
+- After effect construction, each `behavior_run x neural target` association uses pairwise complete cases only.
+- Subjects excluded in `data/config/excluded_subjects.json` are removed before any effect construction.
+
+Association methods:
+- Pearson correlation is the primary analysis.
+- Spearman correlation is emitted as a sensitivity analysis for bounded behavioral outcomes.
+- Output includes both uncorrected `p_unc` and BH-adjusted `p_fdr`.
 
 Multiple testing:
-- BH-FDR is applied within each configured neural-target x chromophore x predictor family.
-- Under the current default config, that means one BH correction across the four condition-specific tests for a given `neural target x chromophore x predictor` combination.
-- Family membership and the explicit predictor list are declared in `data/config/correlational_analysis_plan.json`.
-- Output includes both raw `p_unc` and adjusted `p_fdr`.
+- BH-FDR is applied within each configured `analysis_tier x behavior_run x format_pool x association_method` family.
+- Under the current default config, that means:
+  - `6` tests per family, because each family contains the same 6 selected neural targets
+  - `24` families total:
+    - `8` pooled-format families: `2` behavior runs x `2` format pools x `2` association methods
+    - `16` raw-value families: `8` raw behavior runs x `2` association methods
+- Family membership and behavior-run definitions are declared in `data/config/correlational_analysis_plan.json`.
+- Output includes both raw `p_unc` and adjusted `p_fdr` in a single combined CSV.
+- The script clears `data/results/correlational_relationships/` before each run so stale CSVs and PNGs do not persist.
 
 Example:
 
 ```bash
 Rscript analyze_correlational_relationships.R \
-  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --roi_json data/config/roi_definition.json \
   --analysis_plan_json data/config/correlational_analysis_plan.json \
   --exclude_subjects_json data/config/excluded_subjects.json \
@@ -715,12 +737,96 @@ Rscript analyze_correlational_relationships.R \
 
 Outputs:
 - `data/results/correlational_relationships/pairwise_correlations_r.csv`
-- `data/results/correlational_relationships/figures/` (scatterplots only for rows allowed by `figures.policy` in `data/config/correlational_analysis_plan.json`; current default is FDR-significant tested pairs only)
+- `data/results/correlational_relationships/figures/` (scatterplots only for tested rows selected by the current figure policy in `data/config/correlational_analysis_plan.json`; under the current default plan that means FDR-significant Pearson rows)
+
+CSV ordering:
+- the combined CSV is ordered by neural target, condition, and predictor
 
 Validation:
 
 ```bash
 Rscript tests/validate_correlational_relationships_r.R
+```
+
+### C4c) Standalone pooled ROI-mean x behavioral-mean correlations
+
+- R: `analyze_correlational_relationships_roi_means.R`
+
+Purpose:
+- Run only the pooled-format ROI-mean x behavioral-mean subset as its own standalone analysis.
+- Restrict behavioral rows to pooled `engagement` and pooled `retention`.
+- Restrict neural rows to pooled ROI means for `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, and `L_DMPFC (HbO)`.
+- Keep the same missingness rules, Pearson/Spearman metrics, BH-FDR handling, and optional figure generation as the broader correlation workflow.
+- The script clears `data/results/correlational_relationships_roi_means/` before each run so stale CSVs and PNGs do not persist.
+
+Example:
+
+```bash
+Rscript analyze_correlational_relationships_roi_means.R \
+  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --roi_json data/config/roi_definition.json \
+  --analysis_plan_json data/config/correlational_analysis_plan_roi_means.json \
+  --exclude_subjects_json data/config/excluded_subjects.json \
+  --out_csv data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv \
+  --out_fig_dir data/results/correlational_relationships_roi_means/figures
+```
+
+Outputs:
+- `data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv`
+- `data/results/correlational_relationships_roi_means/pairwise_correlations_r_pearson.csv`
+- `data/results/correlational_relationships_roi_means/pairwise_correlations_r_spearman.csv`
+- `data/results/correlational_relationships_roi_means/figures/` (Pearson rows use a linear fit; Spearman rows use a dashed LOESS smoother when `p_unc < 0.05` under the default ROI-means plan)
+
+Validation:
+
+```bash
+Rscript tests/validate_correlational_relationships_roi_means_r.R
+```
+
+### C4c) Exploratory channel-behavior screening across all channel columns
+
+- Python: `analyze_channel_behavior_relationships.py`
+
+Purpose:
+- Screen every channel column matching `S##_D##_Cond##_HbO/HbR` against every non-identifier behavioral variable in the merged CSV.
+- Treat `subject_id` and `homer_subject` as identifiers rather than behavioral predictors.
+- Keep the analysis exploratory and reproducible, with explicit missingness handling and global FDR control.
+
+Input:
+- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+Missingness and quality policy:
+- Channel `0` and `NaN` values are treated as missing/pruned observations, consistent with the repo's Homer beta import note.
+- No imputation is performed.
+- Tests are computed on pairwise complete cases only for each `behavior x channel` pair.
+
+Association methods:
+- Spearman rank correlation for non-binary behavioral variables.
+- Point-biserial correlation for binary behavioral variables such as `pd_status`.
+- Benjamini-Hochberg FDR is applied across the full family of valid tests in the run.
+
+Example:
+
+```bash
+python analyze_channel_behavior_relationships.py \
+  --input-csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --out-dir data/results/channel_behavior_relationships
+```
+
+Outputs:
+- `channel_behavior_pairwise_results.csv`: one row per tested `behavior x channel` pair with method, effect size, `p_uncorrected`, `p_fdr_bh`, and pairwise `n`
+- `channel_behavior_top_hits.csv`: top-ranked results after sorting by FDR, then raw p-value
+- `channel_behavior_condition_matched_top_hits.csv`: subset of results where the behavioral variable and channel condition refer to the same condition family
+- `channel_behavior_behavior_summary.csv`: one summary row per behavioral variable
+- `behavior_variable_profile.csv`: method assignment and missingness profile for each included behavioral variable
+- `channel_missingness_summary.csv`: per-channel counts for raw zero placeholders, raw NaNs, and usable observations after pruning
+- `analysis_metadata.json`: run-level analysis metadata
+- `channel_behavior_summary.md`: concise markdown report with top hits, FDR-significant hits, and pruning summaries
+
+Validation:
+
+```bash
+python tests/validate_channel_behavior_relationships_py.py
 ```
 
 ### C5) Monte Carlo type-I error calibration (all inferential pipelines)
@@ -895,7 +1001,8 @@ Methodology notes / planned improvements live in:
 - `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
-- `analyze_correlational_relationships.R`: targeted Pearson follow-up correlations for selected raw-condition channel/ROI neural targets, with figure generation controlled by the analysis-plan config
+- `analyze_correlational_relationships.R`: targeted exploratory correlations for selected pooled long/short channel/ROI neural targets against pooled long/short and raw behavioral runs, with figure generation controlled by the analysis-plan config
+- `analyze_correlational_relationships_roi_means.R`: standalone pooled ROI-mean x pooled behavioral-mean correlation analysis
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
