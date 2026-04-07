@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Standalone exploratory Pearson pairwise behavioral correlation plan for the SFV merged dataset.",
+  "variables": [
+    "sf_education_engagement",
+    "sf_entertainment_engagement",
+    "lf_entertainment_engagement",
+    "lf_education_engagement",
+    "age",
+    "pd_status",
+    "sfv_frequency",
+    "sfv_daily_duration",
+    "phq_total",
+    "gad_total",
+    "asrs_total",
+    "yang_pu_total",
+    "yang_mot_total",
+    "diff_short_form_education",
+    "diff_short_form_entertainment",
+    "diff_long_form_education",
+    "diff_long_form_entertainment"
+  ],
+  "figures": {
+    "policy": "significant_only"
+  }
+}
