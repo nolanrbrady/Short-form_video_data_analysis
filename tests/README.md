@@ -98,22 +98,55 @@ Command:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
-## Correlation Follow-up Pipeline (R): targeted pairwise validation
+## Correlation Follow-up Pipeline (R): reverted predictor-by-condition validation
 
 Runs `analyze_correlational_relationships.R` on a synthetic merged dataset and verifies:
-- Requested predictor discovery (`sfv_daily_duration`, `sfv_frequency`, `diff_*`, `*_engagement`)
-- Requested neural target coverage for `S04_D02` and the specified ROI/chrom pairs across all 4 conditions
-- Pairwise-complete-case behavior only for the affected correlation, with no imputation
-- ROI averaging across available non-missing channels
-- Explicit positive/negative/null correlation cases
-- BH-FDR correctness within each configured family (default study config: neural-target x chromophore x predictor, i.e. across the 4 conditions)
-- Output artifact creation (CSV plus one figure per tested pair)
-- Fail-hard behavior for malformed ROI JSON, duplicate IDs, and non-numeric required inputs
+- The old predictor-by-condition plan schema still runs cleanly against the reverted script
+- One output CSV is written with the expected predictor x target x condition rows
+- Pearson summary statistics and BH-FDR family bookkeeping are present
+- A known positive synthetic row recovers a perfect Pearson correlation
+- Families are defined across the four condition-specific rows for each predictor x neural target
+- The correlation output folder is rebuilt at run start, removing stale CSVs and PNGs
+- Fail-hard behavior for duplicate IDs and malformed required inputs
 
 Command:
 
 ```bash
 Rscript tests/validate_correlational_relationships_r.R
+```
+
+## Correlation Follow-up ROI Means (R): standalone pooled ROI subset validation
+
+Runs `analyze_correlational_relationships_roi_means.R` and verifies:
+- the standalone ROI-focused script exits cleanly on the study inputs
+- it writes combined, Pearson-only, and Spearman-only CSVs
+- it uses its dedicated ROI-means analysis plan rather than the broader correlation-plan schema
+- it contains only pooled behavioral rows and ROI neural rows
+- it clears stale ROI-means CSV and figure artifacts before rerun
+- it writes figures for uncorrected-significant Pearson or Spearman rows under the default ROI-means plan
+
+Command:
+
+```bash
+Rscript tests/validate_correlational_relationships_roi_means_r.R
+```
+
+## Behavior Pairwise Correlations (R): standalone behavioral screen validation
+
+Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset and verifies:
+- the standalone behavioral-correlation script exits cleanly
+- it writes a full CSV and a significant-only CSV
+- it uses pairwise complete cases for each variable pair
+- known positive and negative synthetic pairs recover the expected Pearson correlations
+- constant-input pairs are skipped with an explicit reason
+- binary-vs-continuous pairs remain analyzable under the Pearson-only policy
+- it clears stale CSV and figure artifacts before rerun
+- uncorrected-significant rows generate figures
+
+Command:
+
+```bash
+Rscript tests/validate_behavior_pairwise_correlations_r.R
 ```
 
 ## Beta Discrepancy Plotting (Python): channel-vs-ROI descriptive validation

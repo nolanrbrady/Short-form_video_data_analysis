@@ -758,3 +758,94 @@ Must verify:
 - manual BH agreement within each configured family
 - figures are emitted only for Pearson rows allowed by the plan
 - fail-hard behavior for malformed ROI/config JSON, duplicate IDs, missing columns, and non-numeric values
+
+# ANALYSIS_SPEC — Standalone Pairwise Behavioral Correlations
+Last updated: 2026-04-03
+
+## Scope
+
+Goal: Screen exploratory pairwise associations among the declared behavioral variables in the same merged subject-level CSV used by `analyze_correlational_relationships.R`, without multiple-testing correction in this dedicated workflow.
+
+Default behavioral variables:
+- `sf_education_engagement`
+- `sf_entertainment_engagement`
+- `lf_entertainment_engagement`
+- `lf_education_engagement`
+- `age`
+- `pd_status`
+- `sfv_frequency`
+- `sfv_daily_duration`
+- `phq_total`
+- `gad_total`
+- `asrs_total`
+- `yang_pu_total`
+- `yang_mot_total`
+- `diff_short_form_education`
+- `diff_short_form_entertainment`
+- `diff_long_form_education`
+- `diff_long_form_entertainment`
+
+## Inputs
+
+Primary CSV input:
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+Required support files:
+- `data/config/behavior_pairwise_correlation_plan.json`
+- `data/config/excluded_subjects.json`
+
+## Missingness and data integrity
+
+- `subject_id` is normalized by extracting digits and converting to integer.
+- Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
+- All declared behavioral variables must exist in the merged CSV; missing columns are a hard error.
+- All declared behavioral variables must be numeric/coercible to numeric; non-numeric values are a hard error.
+- Each tested pair uses pairwise complete cases only.
+- No imputation is allowed.
+
+## Statistical outputs
+
+- One result row per unique unordered behavioral variable pair.
+- Pearson correlation is used for every tested pair.
+- Report:
+  - `var_x`, `var_y`
+  - `analysis_status`, `skip_reason`
+  - `n_complete`
+  - `pearson_r`
+  - `r_squared`
+  - `p_unc`
+  - `ci95_low`, `ci95_high`
+  - `slope`, `intercept`
+  - `plot_file`
+- No multiple-testing correction is applied in this workflow.
+- `pd_status` remains in the same Pearson table; with 0/1 coding, the resulting coefficient is on the point-biserial effect-size scale.
+
+## Figures
+
+- The script clears `data/results/behavior_pairwise_correlations/` before each run so stale result files and figures cannot persist.
+- Under the default plan, plots are emitted only for tested rows with `p_unc < 0.05`.
+- Plots use scatter plus linear fit; if either variable is binary, that axis is jittered visually to reduce overplotting while keeping the same Pearson fit.
+
+## Outputs
+
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv`
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv`
+- `data/results/behavior_pairwise_correlations/figures/`
+
+Output ordering:
+- rows are sorted by ascending `p_unc`
+- ties are broken by descending absolute `pearson_r`
+
+## Validation requirements
+
+Validation script:
+- `tests/validate_behavior_pairwise_correlations_r.R`
+
+Must verify:
+- a known positive synthetic pair recovers a perfect positive Pearson correlation
+- a known negative synthetic pair recovers a perfect negative Pearson correlation
+- pairwise complete-case handling drops only the subjects missing one member of a pair
+- constant-input pairs are skipped with an explicit reason
+- binary-vs-continuous pairs still return finite Pearson estimates
+- the output directory is rebuilt at run start, removing stale CSVs and PNGs
+- significant tested rows generate figures and the significant-only CSV

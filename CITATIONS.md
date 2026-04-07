@@ -34,7 +34,7 @@
   - **Usage:** Best practices for analysis/reporting, including chromophore transparency and explicit quality handling
   - **Reasoning:** Provides peer-reviewed guidance for transparent fNIRS reporting. Used here to justify explicitly plotting both HbO and HbR and preserving pruned-channel placeholders (`0`/`NaN`) as missing values in subject-level FIR visualizations (no imputation).
   - **Link:** https://doi.org/10.1117/1.NPh.8.1.012101
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `README.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `plot_beta_discrepancy_dynamics.py`, `README.md`
 
 - **Ye, J. C., Tak, S., Jang, K. E., Jung, J., & Jang, J. (2009)**
   - **Title:** NIRS-SPM: Statistical parametric mapping for near-infrared spectroscopy
@@ -124,6 +124,24 @@
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC12289916/
   - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
 
+- **Shiffler, R. E. (1988)**
+  - **Title:** Maximum Z Scores and Outliers
+  - **First Author:** Shiffler
+  - **Year:** 1988
+  - **Usage:** Mathematical feasibility bound for sample mean +/- 3 SD outlier screening
+  - **Reasoning:** Shows that the largest attainable sample z-score is bounded by `(n - 1) / sqrt(n)`. Used here to justify fail-fast documentation and skipped-column reporting when fewer than 11 observed subjects are available for a `3 SD` screening rule, because such columns cannot produce a detectable outlier under the chosen method.
+  - **Link:** https://doi.org/10.1080/00031305.1988.10475530
+  - **Source:** `mask_homer_auc_between_subject_outliers.py`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Leys, C., Ley, C., Klein, O., Bernard, P., & Licata, L. (2013)**
+  - **Title:** Detecting outliers: Do not use standard deviation around the mean, use absolute deviation around the median
+  - **First Author:** Leys
+  - **Year:** 2013
+  - **Usage:** Explicit limitation note for mean +/- SD outlier screening
+  - **Reasoning:** Documents that mean-and-SD based outlier rules are common but non-robust because the candidate outlier influences both the mean and SD. Used here to transparently describe the limitation of the project-chosen between-subject `mean +/- 3 SD` censoring rule rather than presenting it as a robust default.
+  - **Link:** https://doi.org/10.1016/j.jesp.2013.03.013
+  - **Source:** `mask_homer_auc_between_subject_outliers.py`, `README.md`, `CITATIONS.md`
+
 - **Fiske et al. (2022)**
   - **Title:** The neural correlates of inhibitory control in 10-month-old infants: A functional near-infrared spectroscopy study
   - **First Author:** Fiske
@@ -135,13 +153,13 @@
 
 # Measures (Questionnaires)
 
-- **Kroenke, K., Spitzer, R. L., & Williams, J. B. W. (2001)**
-  - **Title:** The PHQ-9: Validity of a Brief Depression Severity Measure
+- **Kroenke, K., Strine, T. W., Spitzer, R. L., Williams, J. B. W., Berry, J. T., & Mokdad, A. H. (2009)**
+  - **Title:** The PHQ-8 as a measure of current depression in the general population
   - **First Author:** Kroenke
-  - **Year:** 2001
-  - **Usage:** PHQ-9 depressive symptom severity (sum-score construct)
-  - **Reasoning:** Canonical peer-reviewed reference for the PHQ-9 instrument, cited to justify interpretation of the `phq_total` composite score derived from Qualtrics items labeled “PHQ-9” in this study dataset.
-  - **Link:** https://doi.org/10.1046/j.1525-1497.2001.016009606.x
+  - **Year:** 2009
+  - **Usage:** PHQ-8 depressive symptom severity (sum-score construct)
+  - **Reasoning:** Peer-reviewed validation reference for the PHQ-8 instrument, cited because this study intentionally administered the 8-item version even though the Qualtrics export still labels those items as “PHQ-9”.
+  - **Link:** https://doi.org/10.1007/s00127-009-0113-3
   - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
 
 - **Spitzer, R. L., Kroenke, K., Williams, J. B. W., & Löwe, B. (2006)**
@@ -169,34 +187,34 @@
   - **First Author:** Laird
   - **Year:** 1982
   - **Usage:** Random-effects Models
-  - **Reasoning:** Foundational framework for random-effects models in longitudinal data analysis.
+  - **Reasoning:** Foundational framework for the random-intercept mixed models used across the within-subject neural, retention, and engagement analyses, including the additive age-adjusted omnibus specifications.
   - **Link:** https://pubmed.ncbi.nlm.nih.gov/7168798/
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015)**
   - **Title:** Fitting Linear Mixed-Effects Models Using lme4
   - **First Author:** Bates
   - **Year:** 2015
   - **Usage:** Linear mixed-effects modeling
-  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement LMM analyses in R.
+  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement LMM analyses in R, including the age-adjusted omnibus fits, the use of simple numerically stabilizing unit changes inside the neural fit path while back-transforming reported estimates into the original beta units, and the practice of explicitly auditing optimizer/convergence warnings alongside returned fits.
   - **Link:** https://doi.org/10.18637/jss.v067.i01
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `r_lmm_convergence_helpers.R`, `tests/validate_pipeline_c_r.R`, `tests/validate_lmm_convergence_helpers_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`, `tests/calibrate_type1_error_r.R`, `tests/calibrate_type2_error_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. B. (2017)**
   - **Title:** lmerTest Package: Tests in Linear Mixed Effects Models
   - **First Author:** Kuznetsova
   - **Year:** 2017
   - **Usage:** Fixed-effect tests in linear mixed models
-  - **Reasoning:** Justifies the `lmerTest` implementation used for mixed-model fixed-effect inference across analyses in this repo, including channelwise and ROI scripts that pair `lmerTest` with Kenward-Roger denominator df calculations.
+  - **Reasoning:** Justifies the `lmerTest` implementation used for mixed-model fixed-effect inference across analyses in this repo, including the age-adjusted omnibus models and the channelwise/ROI scripts that pair `lmerTest` with Kenward-Roger denominator df calculations.
   - **Link:** https://doi.org/10.18637/jss.v082.i13
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Kenward, M. G., & Roger, J. H. (1997)**
   - **Title:** Small Sample Inference for Fixed Effects from Restricted Maximum Likelihood
   - **First Author:** Kenward
   - **Year:** 1997
   - **Usage:** Kenward-Roger denominator degrees of freedom and F-test approximation
-  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation now used for fixed-effect tests in the channelwise and ROI format×content LMM scripts.
+  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation used for fixed-effect tests in the channelwise and ROI format×content LMM scripts, including their age-adjusted omnibus models.
   - **Link:** https://doi.org/10.2307/2533558
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
 
@@ -205,7 +223,7 @@
   - **First Author:** Halekoh
   - **Year:** 2014
   - **Usage:** R implementation of Kenward-Roger tests via `pbkrtest`
-  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df and p-values for `lmer` models.
+  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df and p-values for `lmer` models in the age-adjusted channelwise and ROI omnibus analyses.
   - **Link:** https://doi.org/10.18637/jss.v059.i09
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
 
@@ -214,18 +232,90 @@
   - **First Author:** Satterthwaite
   - **Year:** 1946
   - **Usage:** Approximate degrees of freedom (Satterthwaite)
-  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) in retention and engagement LMM analyses.
+  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) in the retention and engagement LMM analyses, including the additive age-adjusted omnibus fits.
   - **Link:** https://doi.org/10.2307/3002019
-  - **Source:** `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Poldrack, R. A. (2007)**
   - **Title:** Region of interest analysis for fMRI
   - **First Author:** Poldrack
   - **Year:** 2007
   - **Usage:** ROI signal extraction strategy
-  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference.
+  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analysis.
   - **Link:** https://doi.org/10.1093/scan/nsm006
-  - **Source:** `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`, `README.md`
+  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `plot_beta_discrepancy_dynamics.py`, `ANALYSIS_SPEC.md`, `README.md`
+
+- **Morey, R. D. (2008)**
+  - **Title:** Confidence intervals from normalized data: A correction to Cousineau (2005)
+  - **First Author:** Morey
+  - **Year:** 2008
+  - **Usage:** Within-subject confidence intervals for repeated-measures summaries
+  - **Reasoning:** Provides the correction factor for Cousineau-normalized confidence intervals in repeated-measures plots. Used here so condition-level beta summaries in the channel-vs-ROI discrepancy visualization reflect the within-subject structure of the design rather than between-subject error bars.
+  - **Link:** https://doi.org/10.20982/tqmp.04.2.p061
+  - **Source:** `plot_beta_discrepancy_dynamics.py`, `README.md`
+
+- **Kriegeskorte, N., Simmons, W. K., Bellgowan, P. S. F., & Baker, C. I. (2009)**
+  - **Title:** Circular analysis in systems neuroscience: the dangers of double dipping
+  - **First Author:** Kriegeskorte
+  - **Year:** 2009
+  - **Usage:** Exploratory interpretation / selective-inference caution for data-informed target selection
+  - **Reasoning:** Documents that reusing the same dataset for feature selection and downstream inference can bias apparent evidence strength. Used here to justify labeling the targeted channel/ROI follow-up correlations as exploratory when the target set is selected from this dataset rather than fixed a priori.
+  - **Link:** https://doi.org/10.1038/nn.2303
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`, `CITATIONS.md`
+
+- **Spearman, C. (1904)**
+  - **Title:** The Proof and Measurement of Association between Two Things
+  - **First Author:** Spearman
+  - **Year:** 1904
+  - **Usage:** Spearman rank correlation for exploratory channel-behavior screening and sensitivity analyses
+  - **Reasoning:** Foundational reference for Spearman's rank correlation. Used here because several behavioral outcomes are bounded or only plausibly monotonic with neural effects, making a rank-based sensitivity check more defensible than assuming linear-normal relationships for every association.
+  - **Link:** https://doi.org/10.2307/1412159
+  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `tests/validate_correlational_relationships_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Bonett, D. G. (2020)**
+  - **Title:** Point-biserial correlation: Interval estimation, hypothesis testing, meta-analysis, and sample size determination
+  - **First Author:** Bonett
+  - **Year:** 2020
+  - **Usage:** Point-biserial correlation for binary behavioral predictors
+  - **Reasoning:** Modern peer-reviewed reference for point-biserial correlation as a standardized effect size and test for dichotomous-vs-continuous associations. Used here for binary behavioral variables such as `pd_status` when screening against continuous channel betas, and to justify interpreting 0/1-coded Pearson behavioral-screen coefficients on the same dichotomous-vs-continuous effect-size scale.
+  - **Link:** https://doi.org/10.1111/bmsp.12189
+  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Pearson, K. (1896)**
+  - **Title:** Mathematical Contributions to the Theory of Evolution. III. Regression, Heredity, and Panmixia
+  - **First Author:** Pearson
+  - **Year:** 1896
+  - **Usage:** Pearson product-moment correlation
+  - **Reasoning:** Foundational source for the product-moment correlation coefficient used in the exploratory post-hoc analysis between continuous pooled long/short neural means and the matching pooled long/short behavioral means, the supplementary raw behavioral task-cell values tested against those same pooled neural means, and the standalone pairwise behavioral screening analysis.
+  - **Link:** https://doi.org/10.1098/rsta.1896.0007
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Fisher, R. A. (1921)**
+  - **Title:** On the "Probable Error" of a Coefficient of Correlation Deduced from a Small Sample
+  - **First Author:** Fisher
+  - **Year:** 1921
+  - **Usage:** Fisher z confidence intervals for Pearson correlation
+  - **Reasoning:** Provides the variance-stabilizing transformation underlying the confidence intervals reported for Pearson correlations in the post-hoc pooled long/short analyses, the supplementary raw-behavior versus pooled-neural association analyses, and the standalone pairwise behavioral screening analysis.
+  - **Link:** http://hdl.handle.net/2440/15169
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Cleveland, W. S. (1979)**
+  - **Title:** Robust Locally Weighted Regression and Smoothing Scatterplots
+  - **First Author:** Cleveland
+  - **Year:** 1979
+  - **Usage:** LOESS trend line for Spearman correlation figures
+  - **Reasoning:** Provides the classic locally weighted smoothing approach used here to visualize monotonic Spearman relationships without imposing the linear model that underlies Pearson plots. This makes the plot annotation consistent with the rank-based inferential target while still showing the local trend in the original measurement scale.
+  - **Link:** https://doi.org/10.1080/01621459.1979.10481038
+  - **Source:** `analyze_correlational_relationships_roi_means.R`, `README.md`, `CITATIONS.md`
+
+- **Bender, R., & Lange, S. (2001)**
+  - **Title:** Adjusting for multiple testing - when and how?
+  - **First Author:** Bender
+  - **Year:** 2001
+  - **Usage:** Multiple-testing family definition for exploratory/post-hoc association analysis
+  - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families at the analysis-tier x behavior-run x format grouping x association-method level for the pooled long/short primary analysis and the supplementary raw-behavior follow-up rows.
+  - **Link:** https://doi.org/10.1016/S0895-4356(00)00314-0
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `tests/validate_correlational_relationships_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Holm, S. (1979)**
   - **Title:** A Simple Sequentially Rejective Multiple Test Procedure
@@ -270,7 +360,7 @@
   - **Usage:** False Discovery Rate (FDR)
   - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_channel_behavior_relationships.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans
@@ -286,7 +376,7 @@
   - **First Author:** Searle
   - **Year:** 1980
   - **Usage:** Estimated marginal means concept
-  - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries.
+  - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries and the equal-weight marginal-mean logic used when collapsing the 2x2 design to a long-vs-short main-effect contrast.
   - **Link:** https://doi.org/10.1080/00031305.1980.10483031
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
 
@@ -324,6 +414,6 @@
   - **First Author:** Sandve
   - **Year:** 2013
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `README.md`, `analyze_format_content_lmm_roi.R`

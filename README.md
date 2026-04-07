@@ -829,6 +829,69 @@ Validation:
 python tests/validate_channel_behavior_relationships_py.py
 ```
 
+### C4d) Standalone pairwise behavioral correlations
+
+- R: `analyze_behavior_pairwise_correlations.R`
+
+Purpose:
+- Screen pairwise associations among the explicitly declared behavioral variables in the same merged CSV used by `analyze_correlational_relationships.R`.
+- Keep the analysis exploratory and uncorrected for multiplicity in this dedicated workflow.
+- Generate scatterplots only for tested rows with `p_unc < 0.05`.
+- Clear `data/results/behavior_pairwise_correlations/` before each run so stale CSVs and PNGs do not persist.
+
+Input:
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/config/behavior_pairwise_correlation_plan.json`
+
+Behavioral variable set under the default plan:
+- `sf_education_engagement`
+- `sf_entertainment_engagement`
+- `lf_entertainment_engagement`
+- `lf_education_engagement`
+- `age`
+- `pd_status`
+- `sfv_frequency`
+- `sfv_daily_duration`
+- `phq_total`
+- `gad_total`
+- `asrs_total`
+- `yang_pu_total`
+- `yang_mot_total`
+- `diff_short_form_education`
+- `diff_short_form_entertainment`
+- `diff_long_form_education`
+- `diff_long_form_entertainment`
+
+Method and missingness policy:
+- Pearson correlation for every tested pair, with Fisher-z confidence intervals.
+- Pairwise complete cases only for each variable pair.
+- No imputation is performed.
+- `pd_status` remains in the same Pearson table; with 0/1 coding this is on the point-biserial effect-size scale.
+
+Example:
+
+```bash
+Rscript analyze_behavior_pairwise_correlations.R \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --analysis_plan_json data/config/behavior_pairwise_correlation_plan.json \
+  --exclude_subjects_json data/config/excluded_subjects.json \
+  --out_dir data/results/behavior_pairwise_correlations
+```
+
+Outputs:
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv`
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv`
+- `data/results/behavior_pairwise_correlations/figures/`
+
+Output ordering:
+- rows are sorted by ascending `p_unc`, then descending absolute `pearson_r`
+
+Validation:
+
+```bash
+Rscript tests/validate_behavior_pairwise_correlations_r.R
+```
+
 ### C5) Monte Carlo type-I error calibration (all inferential pipelines)
 
 - Script: `tests/calibrate_type1_error_r.R`
@@ -1003,6 +1066,7 @@ Methodology notes / planned improvements live in:
 - `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
 - `analyze_correlational_relationships.R`: targeted exploratory correlations for selected pooled long/short channel/ROI neural targets against pooled long/short and raw behavioral runs, with figure generation controlled by the analysis-plan config
 - `analyze_correlational_relationships_roi_means.R`: standalone pooled ROI-mean x pooled behavioral-mean correlation analysis
+- `analyze_behavior_pairwise_correlations.R`: standalone uncorrected Pearson screen across declared behavioral-variable pairs in the merged SFV dataset
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
