@@ -34,3 +34,5 @@ data/results/
 data/tabular/generated_data/
 
 qualtrics/follow_up_demographic_survey_1.csv
+
+.codex-research/*
