@@ -34,7 +34,7 @@
   - **Usage:** Best practices for analysis/reporting, including chromophore transparency and explicit quality handling
   - **Reasoning:** Provides peer-reviewed guidance for transparent fNIRS reporting. Used here to justify explicitly plotting both HbO and HbR and preserving pruned-channel placeholders (`0`/`NaN`) as missing values in subject-level FIR visualizations (no imputation).
   - **Link:** https://doi.org/10.1117/1.NPh.8.1.012101
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `plot_beta_discrepancy_dynamics.py`, `README.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `README.md`
 
 - **Ye, J. C., Tak, S., Jang, K. E., Jung, J., & Jang, J. (2009)**
   - **Title:** NIRS-SPM: Statistical parametric mapping for near-infrared spectroscopy
@@ -243,7 +243,7 @@
   - **Usage:** ROI signal extraction strategy
   - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analysis.
   - **Link:** https://doi.org/10.1093/scan/nsm006
-  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `plot_beta_discrepancy_dynamics.py`, `ANALYSIS_SPEC.md`, `README.md`
+  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Morey, R. D. (2008)**
   - **Title:** Confidence intervals from normalized data: A correction to Cousineau (2005)
@@ -378,7 +378,7 @@
   - **Usage:** Estimated marginal means concept
   - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries and the equal-weight marginal-mean logic used when collapsing the 2x2 design to a long-vs-short main-effect contrast.
   - **Link:** https://doi.org/10.1080/00031305.1980.10483031
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `plot_significant_beta_value_distribution.R`, `README.md`
 
 - **Student (1908)**
   - **Title:** The Probable Error of a Mean
@@ -406,6 +406,17 @@
   - **Reasoning:** Review on the use of the General Linear Model in fNIRS, offering recommendations for filtering, drift handling, and inference.
   - **Link:** https://www.frontiersin.org/articles/10.3389/fnhum.2018.00505/full
   - **Source:** `fnirs_analysis/FNIRS_TODO.md`
+
+# Data Visualization
+
+- **Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015)**
+  - **Title:** Beyond Bar and Line Graphs: Time for a New Data Presentation Paradigm
+  - **First Author:** Weissgerber
+  - **Year:** 2015
+  - **Usage:** Raw-data visualization for group comparisons
+  - **Reasoning:** Argues for plotting the observed data directly so readers can inspect spread, sample size, and unusual values rather than relying on summary-only displays. Used here to justify the subject-level point-distribution plots for significant channelwise and ROI beta effects.
+  - **Link:** https://doi.org/10.1371/journal.pbio.1002128
+  - **Source:** `plot_significant_beta_value_distribution.R`, `tests/validate_significant_beta_distribution_plot_r.R`, `README.md`, `CITATIONS.md`
 
 # Reproducibility
 

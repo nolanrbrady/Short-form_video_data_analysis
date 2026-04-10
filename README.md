@@ -313,6 +313,35 @@ Command:
 python plot_beta_discrepancy_dynamics.py
 ```
 
+### A5f) Plot beta-value distributions for significant channelwise/ROI LMM hits
+
+- R: `plot_significant_beta_value_distribution.R`
+- Inputs:
+  - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  - `data/config/roi_definition.json`
+  - `data/config/excluded_subjects.json`
+  - `data/results/format_content_lmm_main_effects_tidy_r.csv`
+  - `data/results/format_content_lmm_roi_main_effects_tidy_r.csv`
+
+What it does:
+- Reads the tidy LMM result tables and selects rows with `p_fdr < 0.05` by default.
+- Applies the shared subject-exclusion manifest so the plotted subject set matches the inferential analyses.
+- Rebuilds channel-level beta rows from the merged wide beta table and recreates ROI betas as the arithmetic mean across available non-missing member channels.
+- Uses the same complete-case rule as the LMM scripts within each plotted `channel x chrom` or `roi x chrom` unit.
+- Fails hard if literal `0` values appear in beta columns, because this project treats zero placeholders as invalid stand-ins for pruned channels rather than true zero activation.
+- For significant `format` or `content` main effects, plots subject-level marginal means collapsed across the orthogonal factor.
+- For significant `interaction` effects, plots the four raw condition beta distributions (`SF_Edu`, `SF_Ent`, `LF_Ent`, `LF_Edu`) without collapsing.
+- Writes one PNG per significant hit plus a combined audit CSV of the raw rows and plotted values used in each figure.
+
+Default output directory:
+- `data/results/beta_value_distribution/`
+
+Command:
+
+```bash
+Rscript plot_significant_beta_value_distribution.R
+```
+
 ### A6) Single entry-point preprocessing + merge + certification
 
 If you already have the required upstream inputs on disk and want one command to
@@ -1069,6 +1098,7 @@ Methodology notes / planned improvements live in:
 - `analyze_behavior_pairwise_correlations.R`: standalone uncorrected Pearson screen across declared behavioral-variable pairs in the merged SFV dataset
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
+- `plot_significant_beta_value_distribution.R`: plots simple beta-value point distributions for the FDR-significant channelwise and ROI LMM hits, with one audit CSV covering every plotted row
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
 
