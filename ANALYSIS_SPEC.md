@@ -693,8 +693,7 @@ ROI rule:
 ## Primary statistical outputs
 
 Association methods:
-- Primary: Pearson correlation
-- Sensitivity: Spearman correlation
+- Pearson correlation only
 
 Reported quantities per tested row:
 - `behavior_run`
@@ -758,6 +757,138 @@ Must verify:
 - manual BH agreement within each configured family
 - figures are emitted only for Pearson rows allowed by the plan
 - fail-hard behavior for malformed ROI/config JSON, duplicate IDs, missing columns, and non-numeric values
+
+# ANALYSIS_SPEC — Pooled-Mean Neural-Behavior Correlations
+Last updated: 2026-04-13
+
+## Scope
+
+Goal: Evaluate whether pooled neural activation for `short`, `long`, `education`, and `entertainment` tracks pooled engagement and retention for the same pools across subjects in an explicitly exploratory follow-up analysis.
+
+Selection and gating rule:
+- Read `data/results/format_content_lmm_main_effects_tidy_r.csv` and keep rows with `p_fdr < 0.05`.
+- Read `data/results/format_content_lmm_roi_main_effects_tidy_r.csv` and keep rows with `p_fdr < 0.05`.
+- Keep only `format` and `content` effects for this pooled-main-effect follow-up.
+- Gate eligible pools by selected main effect:
+  - `format -> short, long`
+  - `content -> education, entertainment`
+- Exclude pure `interaction` hits from this workflow.
+- Treat the resulting target set as exploratory because the same dataset is used for target selection and pooled follow-up testing.
+
+Modeling target:
+- For each selected `analysis_level x unit_id x chrom x selected_effect x behavior_domain x pool_name`, compute a pooled neural mean and a pooled behavioral mean, then fit a Pearson correlation across subjects.
+
+Behavior domains:
+- `engagement`
+- `retention`
+
+## Inputs
+
+Primary CSV input:
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+
+Required support files:
+- `data/config/roi_definition.json`
+- `data/results/format_content_lmm_main_effects_tidy_r.csv`
+- `data/results/format_content_lmm_roi_main_effects_tidy_r.csv`
+- `data/config/excluded_subjects.json`
+
+Required behavior source columns:
+- `sf_education_engagement`
+- `sf_entertainment_engagement`
+- `lf_entertainment_engagement`
+- `lf_education_engagement`
+- `diff_short_form_education`
+- `diff_short_form_entertainment`
+- `diff_long_form_entertainment`
+- `diff_long_form_education`
+
+## Pooled construction
+
+Condition order:
+- `SF_Edu`
+- `SF_Ent`
+- `LF_Ent`
+- `LF_Edu`
+
+Pools:
+- `short = mean(SF_Edu, SF_Ent)` when both cells are present
+- `long = mean(LF_Edu, LF_Ent)` when both cells are present
+- `education = mean(SF_Edu, LF_Edu)` when both cells are present
+- `entertainment = mean(SF_Ent, LF_Ent)` when both cells are present
+
+ROI rule:
+- ROI condition values are arithmetic means across available non-missing member channels before pooled means are formed.
+
+## Missingness and data integrity
+
+- `subject_id` is normalized by extracting digits and converting to integer.
+- Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
+- Required behavior columns and analyzed beta columns must all exist; missing columns are a hard error.
+- Required behavior and beta columns must be numeric/coercible to numeric; non-numeric values are a hard error.
+- Channel beta value `0` is treated as a pruned/missing observation for this workflow.
+- Channel beta value `NA` is treated as missing/pruned.
+- A subject contributes to a pooled target/domain row only when both constituent neural cells and both constituent behavioral cells for that pool are present.
+- No imputation is allowed.
+
+## Statistical outputs
+
+Reported quantities:
+- `analysis_level`, `unit_id`, `chrom`
+- `target_origin`, `roi_member_count`
+- `selected_effect`
+- `selection_estimate`, `selection_p_fdr`, `selection_source`
+- `behavior_domain`
+- `pool_name`
+- `analysis_status`, `skip_reason`
+- `n_complete`
+- `association_estimate` (Pearson `r`)
+- `r_squared`
+- `p_unc`
+- `ci95_low`, `ci95_high`
+- `slope`, `intercept`
+- `p_fdr`
+- `family_id`, `family_n_tested`
+- `plot_file`
+
+## Multiple testing correction
+
+- Apply **BH-FDR** within each `behavior_domain x pool_name` family across all tested neural targets.
+- Families may differ in size because available targets can differ by chromophore and analysis level.
+
+## Figures
+
+- The script clears `data/results/pooled_mean_correlations/` before each run so stale result files and figures cannot persist.
+- `figure_policy = significant_only` emits one condition-faceted plot per tested target/domain group when any exported row for that group has `p_unc < alpha`.
+- `figure_policy = all_tested` emits one condition-faceted plot per tested target/domain group.
+
+## Outputs
+
+- `data/results/pooled_mean_correlations/selected_pooled_mean_targets_r.csv`
+- `data/results/pooled_mean_correlations/subject_level_pooled_mean_pairs_r.csv`
+- `data/results/pooled_mean_correlations/pooled_mean_correlations_r.csv`
+- `data/results/pooled_mean_correlations/figures/`
+
+Compatibility note:
+- The script filename is retained for continuity, and the main results CSV retains the legacy filename `pooled_mean_correlations_r.csv` even though the workflow exports pooled Pearson correlations.
+
+## Validation requirements
+
+Validation script:
+- `tests/validate_pooled_mean_correlations_r.R`
+
+Must verify:
+- target selection keeps only `p_fdr < 0.05` format/content rows from the channel/ROI tidy LMM outputs
+- pool gating restricts format targets to `short/long` and content targets to `education/entertainment`
+- channel pooled neural values recover exact known values
+- ROI condition means use available member channels when one member is pruned
+- behavioral pooled rows join to the correct target/domain rows
+- channel `0` placeholders are treated as missing rather than as true beta values
+- non-significant and interaction-only targets are excluded from the exported target set
+- the exported Pearson correlations agree with independently known reference cases
+- manual BH agreement within each configured family
+- figures are emitted only for rows permitted by the current figure policy
+- fail-hard behavior for duplicate IDs and malformed required inputs
 
 # ANALYSIS_SPEC — Standalone Pairwise Behavioral Correlations
 Last updated: 2026-04-03

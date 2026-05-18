@@ -187,7 +187,7 @@
   - **First Author:** Laird
   - **Year:** 1982
   - **Usage:** Random-effects Models
-  - **Reasoning:** Foundational framework for the random-intercept mixed models used across the within-subject neural, retention, and engagement analyses, including the additive age-adjusted omnibus specifications.
+  - **Reasoning:** Foundational framework for the random-intercept mixed models used across the within-subject neural, retention, and engagement analyses.
   - **Link:** https://pubmed.ncbi.nlm.nih.gov/7168798/
   - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 
@@ -196,7 +196,7 @@
   - **First Author:** Bates
   - **Year:** 2015
   - **Usage:** Linear mixed-effects modeling
-  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement LMM analyses in R, including the age-adjusted omnibus fits, the use of simple numerically stabilizing unit changes inside the neural fit path while back-transforming reported estimates into the original beta units, and the practice of explicitly auditing optimizer/convergence warnings alongside returned fits.
+  - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement analyses in R, including the practice of explicitly auditing optimizer/convergence warnings alongside returned fits.
   - **Link:** https://doi.org/10.18637/jss.v067.i01
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `r_lmm_convergence_helpers.R`, `tests/validate_pipeline_c_r.R`, `tests/validate_lmm_convergence_helpers_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`, `tests/calibrate_type1_error_r.R`, `tests/calibrate_type2_error_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
@@ -241,9 +241,9 @@
   - **First Author:** Poldrack
   - **Year:** 2007
   - **Usage:** ROI signal extraction strategy
-  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analysis.
+  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analyses.
   - **Link:** https://doi.org/10.1093/scan/nsm006
-  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `ANALYSIS_SPEC.md`, `README.md`
+  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `tests/validate_pooled_mean_correlations_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Morey, R. D. (2008)**
   - **Title:** Confidence intervals from normalized data: A correction to Cousineau (2005)
@@ -261,7 +261,7 @@
   - **Usage:** Exploratory interpretation / selective-inference caution for data-informed target selection
   - **Reasoning:** Documents that reusing the same dataset for feature selection and downstream inference can bias apparent evidence strength. Used here to justify labeling the targeted channel/ROI follow-up correlations as exploratory when the target set is selected from this dataset rather than fixed a priori.
   - **Link:** https://doi.org/10.1038/nn.2303
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`, `CITATIONS.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`, `CITATIONS.md`
 
 - **Spearman, C. (1904)**
   - **Title:** The Proof and Measurement of Association between Two Things
@@ -288,7 +288,7 @@
   - **Usage:** Pearson product-moment correlation
   - **Reasoning:** Foundational source for the product-moment correlation coefficient used in the exploratory post-hoc analysis between continuous pooled long/short neural means and the matching pooled long/short behavioral means, the supplementary raw behavioral task-cell values tested against those same pooled neural means, and the standalone pairwise behavioral screening analysis.
   - **Link:** https://doi.org/10.1098/rsta.1896.0007
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Fisher, R. A. (1921)**
   - **Title:** On the "Probable Error" of a Coefficient of Correlation Deduced from a Small Sample
@@ -297,7 +297,7 @@
   - **Usage:** Fisher z confidence intervals for Pearson correlation
   - **Reasoning:** Provides the variance-stabilizing transformation underlying the confidence intervals reported for Pearson correlations in the post-hoc pooled long/short analyses, the supplementary raw-behavior versus pooled-neural association analyses, and the standalone pairwise behavioral screening analysis.
   - **Link:** http://hdl.handle.net/2440/15169
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Cleveland, W. S. (1979)**
   - **Title:** Robust Locally Weighted Regression and Smoothing Scatterplots
@@ -313,9 +313,9 @@
   - **First Author:** Bender
   - **Year:** 2001
   - **Usage:** Multiple-testing family definition for exploratory/post-hoc association analysis
-  - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families at the analysis-tier x behavior-run x format grouping x association-method level for the pooled long/short primary analysis and the supplementary raw-behavior follow-up rows.
+  - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families at the analysis-tier x behavior-run x grouping level for the pooled-mean and other exploratory follow-up analyses.
   - **Link:** https://doi.org/10.1016/S0895-4356(00)00314-0
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `tests/validate_correlational_relationships_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Holm, S. (1979)**
   - **Title:** A Simple Sequentially Rejective Multiple Test Procedure
@@ -360,7 +360,7 @@
   - **Usage:** False Discovery Rate (FDR)
   - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_channel_behavior_relationships.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans
@@ -369,7 +369,7 @@
   - **Usage:** Post-hoc contrasts / estimated marginal means
   - **Reasoning:** Peer-reviewed reference for least-squares means / estimated marginal means and their use for post-hoc contrasts in linear (mixed) models; emmeans is the modern successor in R used for post-hoc comparisons in this repo.
   - **Link:** https://doi.org/10.18637/jss.v069.i01
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_pooled_mean_correlations_r.R`
 
 - **Searle, S. R., Speed, F. M., & Milliken, G. A. (1980)**
   - **Title:** Population marginal means in the linear model: An alternative to least squares means
@@ -378,7 +378,7 @@
   - **Usage:** Estimated marginal means concept
   - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries and the equal-weight marginal-mean logic used when collapsing the 2x2 design to a long-vs-short main-effect contrast.
   - **Link:** https://doi.org/10.1080/00031305.1980.10483031
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `plot_significant_beta_value_distribution.R`, `README.md`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_pooled_mean_correlations_r.R`, `plot_significant_beta_value_distribution.R`, `README.md`
 
 - **Student (1908)**
   - **Title:** The Probable Error of a Mean
@@ -407,6 +407,24 @@
   - **Link:** https://www.frontiersin.org/articles/10.3389/fnhum.2018.00505/full
   - **Source:** `fnirs_analysis/FNIRS_TODO.md`
 
+- **Lakens, D. (2013)**
+  - **Title:** Calculating and reporting effect sizes to facilitate cumulative science: a practical primer for t-tests and ANOVAs
+  - **First Author:** Lakens
+  - **Year:** 2013
+  - **Usage:** Partial eta-squared effect size calculations
+  - **Reasoning:** Foundational methodology for converting t-statistics and degrees of freedom to partial eta-squared values. Used in LMM reporting for main effects and interactions.
+  - **Link:** https://doi.org/10.3389/fpsyg.2013.00863
+  - **Source:** `analyze_engagement_format_content_lmm.R`
+
+- **Westfall, J., Kenny, D. A., & Judd, C. M. (2014)**
+  - **Title:** Statistical power and optimal design in experiments in which samples of participants and stimuli are crossed
+  - **First Author:** Westfall
+  - **Year:** 2014
+  - **Usage:** Cohen's d for linear mixed models
+  - **Reasoning:** Standardizing the estimate differences by the total standard deviation (random + residual variance) is recommended to make effect sizes in LMMs comparable to classic Cohen's d in between-subject designs.
+  - **Link:** https://doi.org/10.1037/xge0000011
+  - **Source:** `analyze_engagement_format_content_lmm.R`
+
 # Data Visualization
 
 - **Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015)**
@@ -414,9 +432,18 @@
   - **First Author:** Weissgerber
   - **Year:** 2015
   - **Usage:** Raw-data visualization for group comparisons
-  - **Reasoning:** Argues for plotting the observed data directly so readers can inspect spread, sample size, and unusual values rather than relying on summary-only displays. Used here to justify the subject-level point-distribution plots for significant channelwise and ROI beta effects.
+  - **Reasoning:** Argues for plotting the observed data directly so readers can inspect spread, sample size, unusual values, and summary overlays rather than relying on summary-only displays. Used here to justify the subject-level point-distribution plots with mean +/- SD overlays for significant channelwise and ROI beta effects.
   - **Link:** https://doi.org/10.1371/journal.pbio.1002128
   - **Source:** `plot_significant_beta_value_distribution.R`, `tests/validate_significant_beta_distribution_plot_r.R`, `README.md`, `CITATIONS.md`
+
+- **Hintze, J. L., & Nelson, R. D. (1998)**
+  - **Title:** Violin Plots: A Box Plot-Density Trace Synergism
+  - **First Author:** Hintze
+  - **Year:** 1998
+  - **Usage:** Violin density envelopes for beta-value distribution figures
+  - **Reasoning:** Introduces violin plots as a way to combine distribution-density information with familiar grouped-comparison displays. Used here to justify showing beta-value density envelopes behind the raw subject-level points for significant channelwise and ROI effects without connecting independent condition/group points by subject lines.
+  - **Link:** https://doi.org/10.1080/00031305.1998.10480559
+  - **Source:** `plot_significant_beta_value_distribution.R`, `README.md`, `CITATIONS.md`
 
 # Reproducibility
 
@@ -427,4 +454,4 @@
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
   - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`

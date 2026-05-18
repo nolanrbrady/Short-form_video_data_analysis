@@ -331,6 +331,7 @@ What it does:
 - Fails hard if literal `0` values appear in beta columns, because this project treats zero placeholders as invalid stand-ins for pruned channels rather than true zero activation.
 - For significant `format` or `content` main effects, plots subject-level marginal means collapsed across the orthogonal factor.
 - For significant `interaction` effects, plots the four raw condition beta distributions (`SF_Edu`, `SF_Ent`, `LF_Ent`, `LF_Edu`) without collapsing.
+- Uses violin density envelopes with jittered subject-level points plus mean and +/- 1 SD overlays; subject trajectories are not connected by lines.
 - Writes one PNG per significant hit plus a combined audit CSV of the raw rows and plotted values used in each figure.
 
 Default output directory:
@@ -812,7 +813,88 @@ Validation:
 Rscript tests/validate_correlational_relationships_roi_means_r.R
 ```
 
-### C4c) Exploratory channel-behavior screening across all channel columns
+### C4d) Exploratory pooled-mean neural-behavior correlations
+
+- R: `analyze_pooled_mean_correlations.R`
+
+Purpose:
+- Select channel and ROI targets with FDR-significant `format` or `content` main effects from the tidy LMM outputs.
+- Gate eligible pooled follow-up tests by the selected main effect:
+  - `format` targets test `short` and `long`
+  - `content` targets test `education` and `entertainment`
+- Do not carry pure `interaction` hits into this pooled-main-effect follow-up.
+- Reconstruct subject-level pooled neural means for:
+  - `short`
+  - `long`
+  - `education`
+  - `entertainment`
+- Reconstruct the matching pooled engagement and retention means for the same four pools.
+- Correlate matched neural and behavioral pools:
+  - neural `short` vs behavioral `short`
+  - neural `long` vs behavioral `long`
+  - neural `education` vs behavioral `education`
+  - neural `entertainment` vs behavioral `entertainment`
+- Keep the workflow exploratory because the same dataset is used for target selection and pooled follow-up testing.
+- Clear `data/results/pooled_mean_correlations/` before each run so stale CSVs and PNGs do not persist.
+
+Inputs:
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/config/roi_definition.json`
+- `data/results/format_content_lmm_main_effects_tidy_r.csv`
+- `data/results/format_content_lmm_roi_main_effects_tidy_r.csv`
+- `data/config/excluded_subjects.json`
+
+Pool construction:
+- `short = mean(SF_Edu, SF_Ent)` when both cells are present
+- `long = mean(LF_Edu, LF_Ent)` when both cells are present
+- `education = mean(SF_Edu, LF_Edu)` when both cells are present
+- `entertainment = mean(SF_Ent, LF_Ent)` when both cells are present
+- ROI condition values are arithmetic means across available non-missing member channels before pooled averaging.
+
+Missingness and quality policy:
+- Channel `0` and `NA` beta values are treated as pruned/missing observations.
+- A pooled mean requires both constituent condition cells for that subject.
+- ROI condition means may use available member channels when only a subset is pruned.
+- No imputation is performed.
+
+Correlation outputs:
+- `association_estimate`: Pearson `r`
+- `r_squared`: coefficient of determination from `lm(neural_value ~ behavior_value)`
+- `p_unc`, `ci95_low`, `ci95_high`
+- `slope`, `intercept`
+- BH-FDR is applied:
+  - across all tested neural targets within each `behavior_domain x pool_name` family
+- Figure emission under `figure_policy = significant_only` is based on uncorrected `p_unc < alpha`.
+
+Example:
+
+```bash
+Rscript analyze_pooled_mean_correlations.R \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --roi_json data/config/roi_definition.json \
+  --channel_results_csv data/results/format_content_lmm_main_effects_tidy_r.csv \
+  --roi_results_csv data/results/format_content_lmm_roi_main_effects_tidy_r.csv \
+  --exclude_subjects_json data/config/excluded_subjects.json \
+  --out_dir data/results/pooled_mean_correlations
+```
+
+Outputs:
+- `data/results/pooled_mean_correlations/selected_pooled_mean_targets_r.csv`
+- `data/results/pooled_mean_correlations/subject_level_pooled_mean_pairs_r.csv`
+- `data/results/pooled_mean_correlations/pooled_mean_correlations_r.csv`
+- `data/results/pooled_mean_correlations/figures/`
+
+Notes:
+- The script retains only FDR-significant `format` and `content` hits as pooled follow-up targets and gates each target to the matching pool family.
+- The results CSV stores pooled Pearson correlations despite the legacy filename `pooled_mean_correlations_r.csv`.
+
+Validation:
+
+```bash
+Rscript tests/validate_pooled_mean_correlations_r.R
+```
+
+### C4f) Exploratory channel-behavior screening across all channel columns
 
 - Python: `analyze_channel_behavior_relationships.py`
 
@@ -858,7 +940,7 @@ Validation:
 python tests/validate_channel_behavior_relationships_py.py
 ```
 
-### C4d) Standalone pairwise behavioral correlations
+### C4f) Standalone pairwise behavioral correlations
 
 - R: `analyze_behavior_pairwise_correlations.R`
 
