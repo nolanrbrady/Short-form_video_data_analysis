@@ -144,10 +144,15 @@ main <- function() {
   pairs <- read_csv(file.path(out_dir, "subject_level_pooled_mean_pairs_r.csv"), show_col_types = FALSE)
   results <- read_csv(file.path(out_dir, "pooled_mean_correlations_r.csv"), show_col_types = FALSE)
 
-  assert_true(nrow(targets) == 3, "expected exactly three selected pooled-mean targets")
-  assert_true(all(targets$selection_p_fdr < 0.05), "selected pooled-mean targets should all be significant")
+  assert_true(nrow(targets) == 2, "expected exactly two selected pooled-mean main-effect targets")
+  assert_true(setequal(targets$selected_effect, c("format", "content")), "pooled targets should retain only significant main effects")
   assert_true(identical(unique(results$association_method), "pearson"), "pooled-mean script should be Pearson-only")
   assert_true(setequal(unique(results$pool_name), c("short", "long", "education", "entertainment")), "unexpected pool names")
+
+  gated_out <- results %>%
+    filter((selected_effect == "format" & pool_name %in% c("education", "entertainment")) |
+             (selected_effect == "content" & pool_name %in% c("short", "long")))
+  assert_true(nrow(gated_out) == 0, "pooled rows should be gated to the matching main-effect pool family")
 
   short_pair <- pairs %>%
     filter(analysis_level == "channel", unit_id == "S01_D01", chrom == "HbO", behavior_domain == "engagement", pool_name == "short", subject_id == 1)
@@ -164,6 +169,7 @@ main <- function() {
     filter(analysis_level == "roi", unit_id == "R_DLPFC", chrom == "HbO", behavior_domain == "engagement", pool_name == "education", subject_id == 4)
   assert_true(nrow(roi_edu) == 1, "missing expected ROI education row")
   assert_true(abs(roi_edu$neural_value[[1]] - 48) < 1e-12, "ROI education mean should use available member channels when one entertainment cell is pruned")
+  assert_true(roi_edu$roi_member_count[[1]] == 2, "ROI member count metadata should reflect both ROI channels")
 
   known_positive <- results %>%
     filter(analysis_level == "channel", unit_id == "S01_D01", chrom == "HbO", behavior_domain == "engagement", pool_name == "short")
@@ -172,11 +178,23 @@ main <- function() {
   assert_true(known_positive$n_complete[[1]] == 8, "known positive pooled short row should retain all subjects")
   assert_true(abs(known_positive$association_estimate[[1]] - 1.0) < 1e-12, "expected perfect positive pooled Pearson correlation")
 
-  known_negative <- results %>%
+  known_long <- results %>%
     filter(analysis_level == "channel", unit_id == "S02_D01", chrom == "HbR", behavior_domain == "engagement", pool_name == "long")
-  assert_true(nrow(known_negative) == 1, "missing known negative pooled Pearson row")
-  assert_true(known_negative$n_complete[[1]] == 8, "known negative pooled long row should retain all subjects")
-  assert_true(abs(known_negative$association_estimate[[1]] + 1.0) < 1e-12, "expected perfect negative pooled Pearson correlation")
+  assert_true(nrow(known_long) == 0, "interaction-gated channel target should not produce pooled long rows")
+
+  known_long_positive <- results %>%
+    filter(analysis_level == "channel", unit_id == "S01_D01", chrom == "HbO", behavior_domain == "engagement", pool_name == "long")
+  assert_true(nrow(known_long_positive) == 1, "missing known gated long pooled Pearson row")
+  assert_true(known_long_positive$n_complete[[1]] == 7, "known gated long row should drop exactly one subject due to the zero placeholder")
+  assert_true(abs(known_long_positive$association_estimate[[1]] - 1.0) < 1e-12, "expected perfect positive gated long Pearson correlation")
+
+  low_signal <- results %>%
+    filter(analysis_level == "channel", unit_id == "S09_D09", chrom == "HbO", behavior_domain == "engagement", pool_name == "education")
+  assert_true(nrow(low_signal) == 0, "non-significant pooled targets should not be retained")
+
+  interaction_target <- results %>%
+    filter(analysis_level == "channel", unit_id == "S02_D01", chrom == "HbR")
+  assert_true(nrow(interaction_target) == 0, "interaction-only targets should be excluded from pooled main-effect follow-up")
 
   family_summary <- results %>%
     filter(.data$analysis_status == "tested") %>%
@@ -185,7 +203,7 @@ main <- function() {
   assert_true(all(family_summary$max_abs < 1e-12), "manual BH check failed for pooled means")
 
   plotted <- results %>%
-    filter(.data$analysis_status == "tested", is.finite(.data$p_fdr), .data$p_fdr < 0.05)
+    filter(.data$analysis_status == "tested", is.finite(.data$p_unc), .data$p_unc < 0.05)
   if (nrow(plotted) > 0) {
     assert_true(all(!is.na(plotted$plot_file)), "significant pooled-mean rows should record figure paths")
     assert_true(all(file.exists(plotted$plot_file)), "significant pooled-mean figure files were not created")

@@ -3,9 +3,12 @@
 # Exploratory pooled-mean neural-behavior correlations for the SFV study.
 #
 # Scope
-#   - Select the currently FDR-significant channel and ROI hits from the tidy
-#     LMM outputs.
-#   - Convert each selected neural target into subject-level pooled means for:
+#   - Select channel and ROI targets with FDR-significant pooled-main-effect
+#     findings from the tidy LMM outputs.
+#   - Gate eligible pooled follow-up tests by the selected main effect:
+#       * format  -> short, long
+#       * content -> education, entertainment
+#   - Convert each eligible neural target into subject-level pooled means for:
 #       * short
 #       * long
 #       * education
@@ -24,7 +27,7 @@
 #
 # Interpretation
 #   - This workflow is exploratory because it reuses the same dataset for
-#     target selection and follow-up association testing.
+#     target selection and pooled follow-up testing.
 #
 # Citations (see CITATIONS.md)
 #   - Kriegeskorte et al. (2009): selective-inference caution.
@@ -72,6 +75,14 @@ CONDITION_MAP <- tibble::tribble(
   "02", "SF_Ent", "Short", "Entertainment",
   "03", "LF_Ent", "Long", "Entertainment",
   "04", "LF_Edu", "Long", "Education"
+)
+
+POOL_GATE_MAP <- tibble::tribble(
+  ~selected_effect, ~pool_name,
+  "format", "short",
+  "format", "long",
+  "content", "education",
+  "content", "entertainment"
 )
 
 BEHAVIOR_COLUMN_MAP <- tibble::tribble(
@@ -209,7 +220,7 @@ derive_output_paths <- function(out_dir) {
   list(
     out_dir = out_dir,
     results_csv = file.path(out_dir, "pooled_mean_correlations_r.csv"),
-    selected_targets_csv = file.path(out_dir, "selected_pooled_mean_targets_r.csv"),
+    targets_csv = file.path(out_dir, "selected_pooled_mean_targets_r.csv"),
     subject_pairs_csv = file.path(out_dir, "subject_level_pooled_mean_pairs_r.csv"),
     out_fig_dir = file.path(out_dir, "figures")
   )
@@ -251,30 +262,6 @@ load_roi_definition <- function(roi_json_path) {
     stop(paste0("Each channel must belong to exactly one ROI. Overlaps detected: ", paste0(offenders$channel, "=", offenders$n_rois, collapse = ", ")))
   }
   roi_map %>% arrange(.data$unit_id, .data$channel)
-}
-
-load_significant_targets <- function(path, analysis_level, unit_col, target_alpha) {
-  df <- read_csv(path, show_col_types = FALSE)
-  assert_required_columns(df, c(unit_col, "chrom", "effect", "estimate", "p_fdr"), path)
-  unit_values <- if (analysis_level == "channel") normalize_channel_id(df[[unit_col]], path) else as.character(df[[unit_col]])
-  out <- df %>%
-    transmute(
-      analysis_level = analysis_level,
-      unit_id = unit_values,
-      chrom = as.character(.data$chrom),
-      selected_effect = as.character(.data$effect),
-      selection_estimate = as.numeric(.data$estimate),
-      selection_p_fdr = as.numeric(.data$p_fdr),
-      selection_source = path
-    ) %>%
-    filter(.data$selected_effect %in% c("format", "content", "interaction")) %>%
-    filter(is.finite(.data$selection_p_fdr) & .data$selection_p_fdr < target_alpha)
-  if (nrow(out) == 0) return(out)
-  out %>%
-    group_by(.data$analysis_level, .data$unit_id, .data$chrom) %>%
-    arrange(.data$selection_p_fdr, .by_group = TRUE) %>%
-    slice(1) %>%
-    ungroup()
 }
 
 load_merged_input <- function(input_csv, exclude_subjects_json) {
@@ -335,6 +322,58 @@ build_behavior_condition_rows <- function(df_merged) {
     left_join(CONDITION_MAP %>% select(condition_label, length, content), by = "condition_label")
 }
 
+load_significant_main_effect_targets <- function(path, analysis_level, unit_col, target_alpha) {
+  df <- read_csv(path, show_col_types = FALSE)
+  assert_required_columns(df, c(unit_col, "chrom", "effect", "estimate", "p_fdr"), path)
+  unit_values <- if (analysis_level == "channel") normalize_channel_id(df[[unit_col]], path) else as.character(df[[unit_col]])
+  df %>%
+    transmute(
+      analysis_level = analysis_level,
+      unit_id = unit_values,
+      chrom = as.character(.data$chrom),
+      selected_effect = as.character(.data$effect),
+      selection_estimate = as.numeric(.data$estimate),
+      selection_p_fdr = as.numeric(.data$p_fdr),
+      selection_source = path
+    ) %>%
+    filter(.data$selected_effect %in% c("format", "content")) %>%
+    filter(is.finite(.data$selection_p_fdr) & .data$selection_p_fdr < target_alpha)
+}
+
+build_selected_targets <- function(beta_long, roi_map, channel_results_csv, roi_results_csv, target_alpha) {
+  selected_targets <- bind_rows(
+    load_significant_main_effect_targets(channel_results_csv, "channel", "channel", target_alpha),
+    load_significant_main_effect_targets(roi_results_csv, "roi", "roi", target_alpha)
+  )
+  if (nrow(selected_targets) == 0) {
+    return(selected_targets)
+  }
+
+  available_channel_targets <- beta_long %>%
+    distinct(channel, chrom) %>%
+    transmute(analysis_level = "channel", unit_id = .data$channel, chrom)
+
+  available_roi_targets <- beta_long %>%
+    select(channel, chrom) %>%
+    distinct() %>%
+    inner_join(roi_map, by = "channel") %>%
+    group_by(.data$unit_id, .data$chrom) %>%
+    summarize(roi_member_count = dplyr::n_distinct(.data$channel), .groups = "drop") %>%
+    transmute(analysis_level = "roi", unit_id, chrom, roi_member_count)
+
+  bind_rows(
+    selected_targets %>%
+      filter(.data$analysis_level == "channel") %>%
+      inner_join(available_channel_targets, by = c("analysis_level", "unit_id", "chrom")) %>%
+      mutate(target_origin = "channel", roi_member_count = NA_integer_),
+    selected_targets %>%
+      filter(.data$analysis_level == "roi") %>%
+      inner_join(available_roi_targets, by = c("analysis_level", "unit_id", "chrom")) %>%
+      mutate(target_origin = "roi")
+  ) %>%
+    arrange(.data$analysis_level, .data$unit_id, .data$chrom)
+}
+
 compute_pooled_means <- function(condition_rows, group_cols, value_col) {
   bind_rows(
     condition_rows %>%
@@ -376,30 +415,30 @@ compute_pooled_means <- function(condition_rows, group_cols, value_col) {
   )
 }
 
-build_channel_neural_means <- function(beta_long, selected_targets) {
-  selected_channel_targets <- selected_targets %>% filter(.data$analysis_level == "channel") %>% distinct(.data$unit_id, .data$chrom)
-  if (nrow(selected_channel_targets) == 0) {
+build_channel_neural_means <- function(beta_long, targets) {
+  channel_targets <- targets %>% filter(.data$analysis_level == "channel") %>% distinct(.data$unit_id, .data$chrom)
+  if (nrow(channel_targets) == 0) {
     return(tibble::tibble(subject_id = integer(), analysis_level = character(), unit_id = character(), chrom = character(), pool_name = character(), neural_n_nonmissing = integer(), neural_value = double()))
   }
   beta_long %>%
-    inner_join(selected_channel_targets, by = c("channel" = "unit_id", "chrom" = "chrom")) %>%
+    inner_join(channel_targets, by = c("channel" = "unit_id", "chrom" = "chrom")) %>%
     transmute(subject_id, analysis_level = "channel", unit_id = .data$channel, chrom, condition_label, length, content, neural_value = .data$beta) %>%
     compute_pooled_means(group_cols = c("subject_id", "analysis_level", "unit_id", "chrom"), value_col = "neural_value") %>%
     rename(neural_n_nonmissing = n_nonmissing, neural_value = pooled_value)
 }
 
-build_roi_neural_means <- function(beta_long, roi_map, selected_targets) {
-  selected_roi_targets <- selected_targets %>% filter(.data$analysis_level == "roi") %>% distinct(.data$unit_id, .data$chrom)
-  if (nrow(selected_roi_targets) == 0) {
+build_roi_neural_means <- function(beta_long, roi_map, targets) {
+  roi_targets <- targets %>% filter(.data$analysis_level == "roi") %>% distinct(.data$unit_id, .data$chrom)
+  if (nrow(roi_targets) == 0) {
     return(tibble::tibble(subject_id = integer(), analysis_level = character(), unit_id = character(), chrom = character(), pool_name = character(), neural_n_nonmissing = integer(), neural_value = double()))
   }
-  missing_rois <- setdiff(unique(selected_roi_targets$unit_id), unique(roi_map$unit_id))
+  missing_rois <- setdiff(unique(roi_targets$unit_id), unique(roi_map$unit_id))
   if (length(missing_rois) > 0) {
     stop(paste0("Selected ROI targets are missing from the ROI definition JSON: ", paste(sort(missing_rois), collapse = ", ")))
   }
   beta_long %>%
     inner_join(roi_map, by = "channel") %>%
-    inner_join(selected_roi_targets, by = c("unit_id", "chrom")) %>%
+    inner_join(roi_targets, by = c("unit_id", "chrom")) %>%
     group_by(.data$subject_id, .data$unit_id, .data$chrom, .data$condition_label, .data$length, .data$content) %>%
     summarize(neural_value = if (all(is.na(.data$beta))) NA_real_ else mean(.data$beta, na.rm = TRUE), .groups = "drop") %>%
     mutate(analysis_level = "roi") %>%
@@ -413,12 +452,13 @@ build_behavior_means <- function(df_merged) {
     rename(behavior_n_nonmissing = n_nonmissing, behavior_value = pooled_value)
 }
 
-build_subject_level_pairs <- function(neural_means, behavior_means, selected_targets) {
+build_subject_level_pairs <- function(neural_means, behavior_means, targets) {
   neural_means %>%
-    inner_join(selected_targets, by = c("analysis_level", "unit_id", "chrom")) %>%
+    inner_join(targets, by = c("analysis_level", "unit_id", "chrom")) %>%
+    inner_join(POOL_GATE_MAP, by = c("selected_effect", "pool_name")) %>%
     inner_join(behavior_means, by = c("subject_id", "pool_name"), relationship = "many-to-many") %>%
     mutate(complete_pair = is.finite(.data$neural_value) & is.finite(.data$behavior_value)) %>%
-    select(subject_id, analysis_level, unit_id, chrom, pool_name, behavior_domain, selected_effect, selection_estimate, selection_p_fdr, selection_source, neural_n_nonmissing, behavior_n_nonmissing, neural_value, behavior_value, complete_pair)
+    select(subject_id, analysis_level, unit_id, chrom, target_origin, roi_member_count, selected_effect, selection_estimate, selection_p_fdr, selection_source, pool_name, behavior_domain, neural_n_nonmissing, behavior_n_nonmissing, neural_value, behavior_value, complete_pair)
 }
 
 compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
@@ -472,14 +512,16 @@ plot_pairwise_correlation <- function(sub_complete, row, out_fig_dir) {
     geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "#c04b2c", fill = "#f1c9b8") +
     labs(
       title = paste0(row$unit_id, " ", row$chrom, " ", row$pool_name, " mean vs ", row$behavior_domain),
-      subtitle = paste0("Target: ", row$analysis_level, " | Selected effect: ", row$selected_effect),
+      subtitle = paste0("Target: ", row$analysis_level, " | Gated by: ", row$selected_effect),
       x = paste0(row$behavior_domain, " ", row$pool_name, " mean"),
       y = paste0("Neural ", row$pool_name, " mean")
     ) +
     theme_minimal(base_size = 11)
   x_anchor <- min(sub_complete$behavior_value, na.rm = TRUE)
   y_anchor <- max(sub_complete$neural_value, na.rm = TRUE)
-  p <- p + annotate("label", x = x_anchor, y = y_anchor, label = paste(annotation_lines, collapse = "\n"), hjust = 0, vjust = 1, linewidth = 0.25, size = 3.2)
+  # Annotate with n, r, p, q values in the top-left corner of the plot
+  # NOTE: uncomment for the annotation to be visible
+  # p <- p + annotate("label", x = x_anchor, y = y_anchor, label = paste(annotation_lines, collapse = "\n"), hjust = 0, vjust = 1, linewidth = 0.25, size = 3.2)
   ggsave(file_path, p, width = 7.2, height = 5.2, dpi = 160)
   file_path
 }
@@ -488,15 +530,6 @@ main <- function() {
   args <- parse_args()
   outputs <- derive_output_paths(args$out_dir)
 
-  selected_targets <- bind_rows(
-    load_significant_targets(args$channel_results_csv, "channel", "channel", args$target_alpha),
-    load_significant_targets(args$roi_results_csv, "roi", "roi", args$target_alpha)
-  ) %>%
-    arrange(.data$analysis_level, .data$unit_id, .data$chrom)
-  if (nrow(selected_targets) == 0) {
-    stop("No FDR-significant channel or ROI targets were found for the requested target_alpha.")
-  }
-
   clear_output_root(outputs$out_dir)
   dir.create(outputs$out_dir, recursive = TRUE, showWarnings = FALSE)
   dir.create(outputs$out_fig_dir, recursive = TRUE, showWarnings = FALSE)
@@ -504,18 +537,28 @@ main <- function() {
   merged <- load_merged_input(args$input_csv, args$exclude_subjects_json)
   beta_long <- reshape_beta_long(merged$data, merged$beta_cols)
   roi_map <- load_roi_definition(args$roi_json)
+  targets <- build_selected_targets(
+    beta_long = beta_long,
+    roi_map = roi_map,
+    channel_results_csv = args$channel_results_csv,
+    roi_results_csv = args$roi_results_csv,
+    target_alpha = args$target_alpha
+  )
+  if (nrow(targets) == 0) {
+    stop("No FDR-significant format/content channel or ROI targets were available for pooled follow-up.")
+  }
 
   neural_means <- bind_rows(
-    build_channel_neural_means(beta_long, selected_targets),
-    build_roi_neural_means(beta_long, roi_map, selected_targets)
+    build_channel_neural_means(beta_long, targets),
+    build_roi_neural_means(beta_long, roi_map, targets)
   )
   behavior_means <- build_behavior_means(merged$data)
 
-  subject_pairs <- build_subject_level_pairs(neural_means, behavior_means, selected_targets) %>%
+  subject_pairs <- build_subject_level_pairs(neural_means, behavior_means, targets) %>%
     arrange(.data$analysis_level, .data$unit_id, .data$chrom, .data$behavior_domain, .data$pool_name, .data$subject_id)
 
   result_groups <- subject_pairs %>%
-    distinct(.data$analysis_level, .data$unit_id, .data$chrom, .data$pool_name, .data$behavior_domain, .data$selected_effect, .data$selection_estimate, .data$selection_p_fdr, .data$selection_source) %>%
+    distinct(.data$analysis_level, .data$unit_id, .data$chrom, .data$target_origin, .data$roi_member_count, .data$selected_effect, .data$selection_estimate, .data$selection_p_fdr, .data$selection_source, .data$pool_name, .data$behavior_domain) %>%
     mutate(association_method = "pearson")
 
   results <- bind_rows(lapply(seq_len(nrow(result_groups)), function(i) {
@@ -535,12 +578,14 @@ main <- function() {
       analysis_level = meta$analysis_level[[1]],
       unit_id = meta$unit_id[[1]],
       chrom = meta$chrom[[1]],
-      pool_name = meta$pool_name[[1]],
-      behavior_domain = meta$behavior_domain[[1]],
+      target_origin = meta$target_origin[[1]],
+      roi_member_count = meta$roi_member_count[[1]],
       selected_effect = meta$selected_effect[[1]],
       selection_estimate = meta$selection_estimate[[1]],
       selection_p_fdr = meta$selection_p_fdr[[1]],
       selection_source = meta$selection_source[[1]],
+      pool_name = meta$pool_name[[1]],
+      behavior_domain = meta$behavior_domain[[1]],
       association_method = "pearson",
       analysis_status = stats$analysis_status,
       skip_reason = stats$skip_reason,
@@ -576,7 +621,7 @@ main <- function() {
   plot_idx <- if (args$figure_policy == "all_tested") {
     which(results$analysis_status == "tested")
   } else {
-    which(results$analysis_status == "tested" & is.finite(results$p_fdr) & results$p_fdr < args$alpha)
+    which(results$analysis_status == "tested" & is.finite(results$p_unc) & results$p_unc < args$alpha)
   }
   if (length(plot_idx) > 0) {
     for (idx in plot_idx) {
@@ -595,17 +640,17 @@ main <- function() {
     }
   }
 
-  selected_targets_out <- selected_targets %>% arrange(.data$selection_p_fdr, .data$analysis_level, .data$unit_id, .data$chrom)
+  targets_out <- targets %>% arrange(.data$analysis_level, .data$unit_id, .data$chrom)
   results_out <- results %>% arrange(is.na(.data$p_fdr), .data$p_fdr, .data$p_unc, .data$behavior_domain, .data$pool_name, .data$analysis_level, .data$unit_id, .data$chrom)
 
-  write_csv(selected_targets_out, outputs$selected_targets_csv, na = "NA")
+  write_csv(targets_out, outputs$targets_csv, na = "NA")
   write_csv(subject_pairs, outputs$subject_pairs_csv, na = "NA")
   write_csv(results_out, outputs$results_csv, na = "NA")
 
-  cat("[summary] selected targets:", nrow(selected_targets_out), "\n")
+  cat("[summary] selected targets:", nrow(targets_out), "\n")
   cat("[summary] tested rows:", sum(results_out$analysis_status == "tested"), "\n")
   cat("[summary] plotted rows:", length(plot_idx), "\n")
-  cat("[out] selected targets:", outputs$selected_targets_csv, "\n")
+  cat("[out] selected targets:", outputs$targets_csv, "\n")
   cat("[out] subject-level pairs:", outputs$subject_pairs_csv, "\n")
   cat("[out] results CSV:", outputs$results_csv, "\n")
   cat("[out] figures dir:", outputs$out_fig_dir, "\n")
