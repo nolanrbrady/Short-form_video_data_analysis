@@ -11,6 +11,9 @@
 # - Verify main-effect plots use subject-level marginal means across the
 #   orthogonal factor.
 # - Verify interaction plots retain the 4 raw conditions rather than collapsing.
+# - Verify the figure uses violin density envelopes and does not connect points
+#   with subject trajectory lines.
+# - Verify the figure includes explicit mean and +/- 1 SD summary overlays.
 # - Verify literal zero beta placeholders fail hard.
 
 suppressPackageStartupMessages({
@@ -148,6 +151,15 @@ test_zero_placeholder_failure <- function(merged_csv) {
   )
   assert_true(ok, "Expected literal beta-value zeros to fail hard.")
   assert_true(grepl("literal 0 values", msg, fixed = TRUE), "Zero-placeholder failure message should mention literal 0 values.")
+}
+
+test_plot_geometry_source <- function() {
+  script_src <- paste(readLines(SCRIPT_PATH, warn = FALSE), collapse = "\n")
+  assert_true(grepl("geom_violin", script_src, fixed = TRUE), "Distribution plot should use a violin geometry.")
+  assert_true(!grepl("geom_line", script_src, fixed = TRUE), "Distribution plot should not connect subject points with lines.")
+  assert_true(grepl("mean_sdl_1", script_src, fixed = TRUE), "Distribution plot should define an explicit mean +/- 1 SD helper.")
+  assert_true(grepl('geom = "errorbar"', script_src, fixed = TRUE), "Distribution plot should show the +/- 1 SD interval.")
+  assert_true(grepl('geom = "point"', script_src, fixed = TRUE), "Distribution plot should show the mean marker.")
 }
 
 test_run_plotting_outputs <- function(
@@ -292,6 +304,7 @@ main <- function() {
   write_toy_roi_results(roi_results)
 
   test_significant_hit_discovery(channel_results, roi_results)
+  test_plot_geometry_source()
   test_zero_placeholder_failure(merged_csv)
   test_run_plotting_outputs(
     merged_csv = merged_csv,

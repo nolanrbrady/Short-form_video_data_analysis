@@ -20,9 +20,10 @@
 #     (Searle et al., 1980; see CITATIONS.md).
 #   - For interaction effects, plots the four raw condition distributions rather
 #     than collapsing across the interacting factor.
-#   - Shows raw point distributions directly instead of summary-only bars so
-#     readers can inspect spread, sample size, and unusual values
-#     (Weissgerber et al., 2015; see CITATIONS.md).
+#   - Shows violin density envelopes with raw point distributions and mean +/- 1
+#     SD overlays instead of summary-only bars so readers can inspect spread,
+#     sample size, and unusual values (Hintze & Nelson, 1998; Weissgerber et al.,
+#     2015; see CITATIONS.md).
 #
 # Missingness / pruned channels
 #   - Pruned channels must remain explicit missing values.
@@ -35,6 +36,7 @@
 #   - Yucel et al. (2021): transparent fNIRS reporting and explicit missingness handling.
 #   - Poldrack (2007): ROI signal extraction by averaging pre-specified channels.
 #   - Searle et al. (1980): equal-weight marginal means for main-effect displays.
+#   - Hintze & Nelson (1998): violin plots for distribution visualization.
 #   - Weissgerber et al. (2015): raw-data visualization over summary-only plots.
 
 suppressPackageStartupMessages({
@@ -420,6 +422,16 @@ sanitize_filename_component <- function(x) {
   gsub("[^A-Za-z0-9_]+", "_", as.character(x))
 }
 
+mean_sdl_1 <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x) == 0) {
+    return(data.frame(y = NA_real_, ymin = NA_real_, ymax = NA_real_))
+  }
+  mean_x <- mean(x)
+  sd_x <- if (length(x) > 1) stats::sd(x) else 0
+  data.frame(y = mean_x, ymin = mean_x - sd_x, ymax = mean_x + sd_x)
+}
+
 effect_group_column <- function(effect) {
   if (identical(effect, "format")) return("format")
   if (identical(effect, "content")) return("content")
@@ -525,11 +537,13 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
     mutate(plot_level = factor(.data$plot_level, levels = x_levels))
 
   p <- ggplot(plot_df, aes(x = .data$plot_level, y = .data$beta_plot_value)) +
-    geom_line(
-      aes(group = .data$subject_id),
+    geom_violin(
+      aes(fill = .data$plot_level),
+      trim = FALSE,
+      alpha = 0.22,
+      color = "#5f5f5f",
       linewidth = 0.35,
-      alpha = 0.35,
-      color = "#8c8c8c"
+      na.rm = TRUE
     ) +
     geom_point(
       aes(color = .data$plot_level),
@@ -537,6 +551,25 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
       size = 2.1,
       alpha = 0.88
     ) +
+    stat_summary(
+      fun.data = mean_sdl_1,
+      geom = "errorbar",
+      width = 0.16,
+      linewidth = 0.55,
+      color = "#222222",
+      na.rm = TRUE
+    ) +
+    stat_summary(
+      fun = mean,
+      geom = "point",
+      shape = 23,
+      size = 3.2,
+      stroke = 0.8,
+      fill = "white",
+      color = "#222222",
+      na.rm = TRUE
+    ) +
+    scale_fill_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
     scale_color_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
     labs(
       title = title_text,
