@@ -3,7 +3,10 @@ Covariate preprocessing for the Short Form Video (SFV) study.
 
 This script is intentionally conservative and paper-friendly:
 - Loads a Qualtrics export that has 3 header rows (QID, label, ImportId) into a DataFrame with MultiIndex columns.
-- Encodes text responses into numeric (ordinal) values for correlations.
+- Encodes text responses into numeric values for correlations.
+- Keeps nominal race/ethnicity/sex fields as explicit indicator columns rather than imposing an
+  artificial numeric order. Race permits multiple selections, so each selected race category is
+  represented as its own indicator.
 - Computes per-participant composite totals for multi-item scales (PHQ-8, GAD, ASRS, Yang PU, Yang Motivation).
 - Outputs a clean covariate dataset (correlation diagnostics are handled in `covariate_correlation_analysis.py`).
 
@@ -93,6 +96,45 @@ SFV_DURATION_0_TO_3 = {
 
 PD_YES_NO = {"No": 0, "Yes": 1}
 
+HISPANIC_LATINO_YES_NO = {"No": 0, "Yes": 1}
+
+RACE_CATEGORIES = [
+    "Asian",
+    "White/Caucasian",
+    "Other",
+    "American Indian/Alaska Native",
+    "Black or African American",
+]
+
+RACE_OUTPUT_NAMES = {
+    "Asian": "race_asian",
+    "White/Caucasian": "race_white_caucasian",
+    "Other": "race_other",
+    "American Indian/Alaska Native": "race_american_indian_alaska_native",
+    "Black or African American": "race_black_african_american",
+}
+
+SEX_CATEGORIES = ["Female", "Male"]
+
+SEX_OUTPUT_NAMES = {
+    "Female": "sex_female",
+    "Male": "sex_male",
+}
+
+EDUCATION_CATEGORIES = [
+    "High school",
+    "Associates",
+    "Bachelor's",
+    "Master's",
+]
+
+EDUCATION_OUTPUT_NAMES = {
+    "High school": "education_high_school",
+    "Associates": "education_associates",
+    "Bachelor's": "education_bachelors",
+    "Master's": "education_masters",
+}
+
 # Behavior switches (kept explicit for paper reproducibility).
 ENCODE_SFV_DURATION_OTHER_AS_NAN = True  # If False, "Other" / "Other (please specify)" will be encoded as 4.
 
@@ -131,6 +173,19 @@ def col_by_qid(df: pd.DataFrame, qid: str) -> Tuple[str, str, str]:
     return matches[0]
 
 
+def col_by_qid_and_label_contains(df: pd.DataFrame, qid: str, label_text: str) -> Tuple[str, str, str]:
+    """Return the unique column tuple matching a QID and a stable label substring."""
+    matches = [c for c in df.columns if c[0] == qid and label_text in c[1]]
+    if len(matches) == 0:
+        raise KeyError(f"QID not found with label containing {label_text!r}: {qid}")
+    if len(matches) > 1:
+        raise KeyError(
+            f"QID and label matched multiple columns: qid={qid}, label_text={label_text!r}. "
+            f"Matches: {matches[:5]}{'...' if len(matches) > 5 else ''}"
+        )
+    return matches[0]
+
+
 def cols_by_label(df: pd.DataFrame, label: str) -> List[Tuple[str, str, str]]:
     """Return all columns whose label (level 1) matches `label`."""
     cols = [c for c in df.columns if c[1] == label]
@@ -152,7 +207,94 @@ def merge_other_responses(primary: pd.Series, other_text: pd.Series, other_token
 
 def encode_ordinal(series: pd.Series, mapping: Dict[str, float]) -> pd.Series:
     """Encode a string response series using an explicit mapping."""
-    return series.replace(mapping)
+    encoded = series.copy()
+    for raw_value, numeric_value in mapping.items():
+        encoded = encoded.mask(encoded == raw_value, numeric_value)
+    return encoded
+
+
+def clean_text_responses(series: pd.Series) -> pd.Series:
+    """Trim whitespace while preserving missing values."""
+    cleaned = series.astype("string").str.strip()
+    return cleaned.mask(cleaned == "")
+
+
+def fail_on_unmapped(series: pd.Series, allowed_values: Sequence[str], name: str) -> None:
+    """Fail fast if a categorical response contains values outside the explicit codebook."""
+    observed = set(clean_text_responses(series).dropna().unique().tolist())
+    unmapped = sorted(observed.difference(allowed_values))
+    if unmapped:
+        raise ValueError(
+            f"Unmapped values for {name}: {unmapped}. "
+            "Update the codebook explicitly before generating covariates."
+        )
+
+
+def encode_single_select_indicators(
+    series: pd.Series,
+    categories: Sequence[str],
+    output_names: Dict[str, str],
+    *,
+    name: str,
+) -> pd.DataFrame:
+    """
+    Encode a nominal single-select response as one indicator column per allowed category.
+
+    This avoids treating unordered demographic categories as if they were ordinal or interval
+    covariates (Flanagin et al., 2021; VanderWeele & Robinson, 2014).
+    """
+    fail_on_unmapped(series, categories, name)
+    cleaned = clean_text_responses(series)
+    return pd.DataFrame(
+        {
+            output_names[category]: cleaned.eq(category).where(cleaned.notna(), float("nan")).astype(float)
+            for category in categories
+        },
+        index=series.index,
+    )
+
+
+def encode_multi_select_indicators(
+    series: pd.Series,
+    categories: Sequence[str],
+    output_names: Dict[str, str],
+    *,
+    name: str,
+) -> pd.DataFrame:
+    """
+    Encode a comma-separated multi-select nominal response as one indicator per allowed category.
+
+    Multiple race selections are retained rather than collapsed to a single "multiracial" or
+    "other" bucket so preprocessing preserves self-reported categories for transparent downstream
+    reporting (Flanagin et al., 2021).
+    """
+    cleaned = clean_text_responses(series)
+    allowed = set(categories)
+    observed_tokens: set[str] = set()
+    selected_tokens: list[set[str] | None] = []
+
+    for value in cleaned.tolist():
+        if pd.isna(value):
+            selected_tokens.append(None)
+            continue
+        tokens = {token.strip() for token in str(value).split(",") if token.strip()}
+        observed_tokens.update(tokens)
+        selected_tokens.append(tokens)
+
+    unmapped = sorted(observed_tokens.difference(allowed))
+    if unmapped:
+        raise ValueError(
+            f"Unmapped values for {name}: {unmapped}. "
+            "Update the codebook explicitly before generating covariates."
+        )
+
+    encoded = {}
+    for category in categories:
+        encoded[output_names[category]] = [
+            float("nan") if tokens is None else float(category in tokens)
+            for tokens in selected_tokens
+        ]
+    return pd.DataFrame(encoded, index=series.index)
 
 
 def report_unmapped(series: pd.Series, mapping: Dict[str, float], name: str) -> List[str]:
@@ -181,7 +323,10 @@ def compute_scale_scores(
     - n_answered: number of answered items
     """
     raw = df.loc[:, item_cols]
-    numeric = raw.replace(mapping)
+    numeric = raw.copy()
+    for raw_value, numeric_value in mapping.items():
+        numeric = numeric.mask(numeric == raw_value, numeric_value)
+    numeric = numeric.apply(pd.to_numeric, errors="coerce")
 
     n_items = numeric.shape[1]
     min_items = ceil(n_items * min_item_proportion)
@@ -252,7 +397,11 @@ def main() -> None:
     # Single-item covariates
     # -------------------------
     subject_id_col = col_by_qid(df, "Q71")
+    education_col = col_by_qid_and_label_contains(df, "Q2", "highest degree completed")
     age_col = col_by_qid(df, "Q9")
+    hispanic_latino_col = col_by_qid(df, "Q11")
+    race_col = col_by_qid(df, "Q12")
+    sex_col = col_by_qid(df, "Q13")
     pd_col = col_by_qid(df, "Q16")
     sfv_freq_col = col_by_qid(df, "Q80")
     sfv_dur_col = col_by_qid(df, "Q81")
@@ -268,6 +417,37 @@ def main() -> None:
     validate_subject_ids(subject_id, dataset_name=in_path.name)
 
     age = pd.to_numeric(df[age_col], errors="coerce").rename("age")
+
+    # Race/ethnicity and sex are encoded as explicit indicators, not arbitrary ordinal scores.
+    # This follows reporting guidance that race and ethnicity should be treated as self-reported
+    # social constructs with transparent categories (Flanagin et al., 2021) and avoids causal
+    # overinterpretation from numeric race coding (VanderWeele & Robinson, 2014).
+    fail_on_unmapped(df[hispanic_latino_col], HISPANIC_LATINO_YES_NO, "hispanic_latino (Q11)")
+    hispanic_latino = (
+        encode_ordinal(clean_text_responses(df[hispanic_latino_col]), HISPANIC_LATINO_YES_NO)
+        .rename("hispanic_latino")
+    )
+
+    race_indicators = encode_multi_select_indicators(
+        df[race_col],
+        RACE_CATEGORIES,
+        RACE_OUTPUT_NAMES,
+        name="race (Q12)",
+    )
+
+    sex_indicators = encode_single_select_indicators(
+        df[sex_col],
+        SEX_CATEGORIES,
+        SEX_OUTPUT_NAMES,
+        name="sex at birth (Q13)",
+    )
+
+    education_indicators = encode_single_select_indicators(
+        df[education_col],
+        EDUCATION_CATEGORIES,
+        EDUCATION_OUTPUT_NAMES,
+        name="highest degree completed (Q2)",
+    )
 
     report_unmapped(df[pd_col], PD_YES_NO, "pd_status (Q16)")
     pd_status = encode_ordinal(df[pd_col], PD_YES_NO).rename("pd_status")
@@ -323,6 +503,10 @@ def main() -> None:
         selections={
             "subject_id": [subject_id_col],
             "age": [age_col],
+            "education": [education_col],
+            "hispanic_latino": [hispanic_latino_col],
+            "race": [race_col],
+            "sex": [sex_col],
             "pd_status": [pd_col],
             "sfv_frequency": [sfv_freq_col],
             "sfv_daily_duration": [sfv_dur_col],
@@ -338,6 +522,10 @@ def main() -> None:
     covariates = pd.concat(
         [
             age,
+            hispanic_latino,
+            race_indicators,
+            sex_indicators,
+            education_indicators,
             pd_status,
             sfv_frequency,
             sfv_daily_duration,

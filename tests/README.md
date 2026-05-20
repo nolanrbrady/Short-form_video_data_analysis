@@ -164,6 +164,19 @@ Command:
 python tests/validate_beta_discrepancy_plot_py.py
 ```
 
+## Demographics Table (Python): shared subject-exclusion validation
+
+Runs `create_demographics_table.py` helper functions on synthetic merged data and verifies:
+- Homer-style exclusion IDs remove matching numeric `subject_id` rows after normalization
+- ID and beta columns are excluded from the descriptive demographics table
+- duplicate exclusion IDs fail after normalization instead of silently removing a participant twice
+
+Command:
+
+```bash
+python tests/validate_demographics_table_py.py
+```
+
 ## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines
 
 Runs repeated null-effect synthetic datasets through all four inferential scripts:

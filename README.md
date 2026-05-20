@@ -141,7 +141,7 @@ python audit_check.py
 
 ### A3) Socio-demographic + covariate preprocessing
 
-**Goal:** Turn the Qualtrics export into a clean numeric covariate table (ordinal encodings + scale totals).
+**Goal:** Turn the Qualtrics export into a clean numeric covariate table (indicator encodings, ordinal encodings, and scale totals).
 
 - Script: `process_sociodemographic.py`
 - Input: `qualtrics/final_SF_demographic_data.csv`
@@ -150,6 +150,10 @@ python audit_check.py
   - `covariate_outputs/covariates_clean.csv` (covariates only; excludes `subject_id`)
   - `covariate_outputs/covariate_missingness.csv`, `covariate_outputs/covariate_column_audit.csv`, `covariate_outputs/sfv_duration_other_audit.csv`
 - Fails hard if the Qualtrics study ID column contains missing or duplicate `subject_id` values.
+- Race/ethnicity, sex, and education are encoded as explicit indicator columns. Q12 race supports
+  comma-separated multiple selections, so selected race categories are preserved as separate
+  indicators; Q11 Hispanic/Latino identity is retained as its own binary ethnicity indicator.
+  Unknown category labels fail hard instead of being silently coerced.
 
 Command:
 
@@ -172,6 +176,20 @@ Command:
 
 ```bash
 python generate_combined_data.py
+```
+
+### A4b) Create descriptive demographics table
+
+- Script: `create_demographics_table.py`
+- Input: `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- Shared exclusion manifest: `data/config/excluded_subjects.json`
+- Subject IDs are normalized before exclusions, so Homer-style IDs such as `sub_0050` match numeric tabular IDs such as `50`.
+- The script prints an exclusion audit (`listed`, `matched`, `removed`, `remaining`) before printing the table.
+
+Command:
+
+```bash
+python create_demographics_table.py
 ```
 
 ### A5) Import Homer3 FIR basis weights (optional; produced externally)

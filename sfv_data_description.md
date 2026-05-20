@@ -82,6 +82,24 @@ from the Qualtrics export `qualtrics/final_SF_demographic_data.csv`.
 - `age`
   - Age in years (numeric).
 
+- `hispanic_latino`
+  - Binary indicator from Q11 (`No = 0`, `Yes = 1`).
+  - Kept adjacent to race indicators because Hispanic/Latino identity is collected separately from Q12 race categories.
+
+- `race_asian`, `race_white_caucasian`, `race_other`, `race_american_indian_alaska_native`, `race_black_african_american`
+  - Multi-select race indicators from Q12.
+  - Each column is `1` when that category was selected, `0` when it was not selected, and `NaN` when Q12 is missing.
+  - Multiple selected race categories are preserved as multiple `1` values rather than collapsed or ordinally scored.
+  - Encoding reference: Flanagin et al. (2021) and VanderWeele & Robinson (2014); see `CITATIONS.md`.
+
+- `sex_female`, `sex_male`
+  - One-hot indicators from Q13 sex at birth.
+  - Encoded as nominal indicators rather than `Female = 1` / `Male = 0` as a single ordered variable.
+
+- `education_high_school`, `education_associates`, `education_bachelors`, `education_masters`
+  - One-hot indicators from Q2 highest degree completed.
+  - Encoded as nominal indicators to avoid imposing equal spacing between degree categories.
+
 - `pd_status`
   - Binary indicator from a Yes/No item (encoded: `No = 0`, `Yes = 1`).
 

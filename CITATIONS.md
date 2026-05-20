@@ -151,7 +151,29 @@
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC7616317/
   - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`
 
-# Measures (Questionnaires)
+# Measures
+
+## Demographic Covariate Encoding
+
+- **Flanagin, A., Frey, T., Christiansen, S. L.; AMA Manual of Style Committee (2021)**
+  - **Title:** Updated Guidance on the Reporting of Race and Ethnicity in Medical and Science Journals
+  - **First Author:** Flanagin
+  - **Year:** 2021
+  - **Usage:** Race and ethnicity covariate encoding/reporting
+  - **Reasoning:** Supports transparent handling of self-reported race and ethnicity categories as social constructs. Used to justify preserving Q11 Hispanic/Latino identity separately from Q12 race and retaining all selected Q12 race categories as indicators rather than collapsing or ordinally scoring them.
+  - **Link:** https://doi.org/10.1001/jama.2021.13304
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
+
+- **VanderWeele, T. J., & Robinson, W. R. (2014)**
+  - **Title:** On the causal interpretation of race in regressions adjusting for confounding and mediating variables
+  - **First Author:** VanderWeele
+  - **Year:** 2014
+  - **Usage:** Race covariate interpretation caution
+  - **Reasoning:** Used to justify avoiding arbitrary numeric race scores and to document that race indicators in this study are descriptive/adjustment covariates requiring careful interpretation, not biological or ordinal measurements.
+  - **Link:** https://doi.org/10.1097/EDE.0000000000000105
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
+
+## Questionnaires
 
 - **Kroenke, K., Strine, T. W., Spitzer, R. L., Williams, J. B. W., Berry, J. T., & Mokdad, A. H. (2009)**
   - **Title:** The PHQ-8 as a measure of current depression in the general population
@@ -443,6 +465,6 @@
   - **First Author:** Sandve
   - **Year:** 2013
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`
