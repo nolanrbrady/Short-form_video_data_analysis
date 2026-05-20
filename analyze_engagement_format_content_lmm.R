@@ -25,6 +25,10 @@
 #   - IMPORTANT: engagement zeros are treated as valid values (not missing).
 #   - Age is a required omnibus covariate and must be complete after subject exclusions.
 #
+# Effect Sizes
+#   - Partial eta-squared (eta2_p) is calculated from the t-statistic and Satterthwaite df:
+#       eta2_p = t^2 / (t^2 + df)
+#
 # Multiple testing correction
 #   - Holm correction across the 3 planned omnibus effects:
 #       Length, Content, Length x Content interaction.
@@ -39,6 +43,7 @@
 #   - Bates et al. (2015): lme4 implementation.
 #   - Kuznetsova et al. (2017): lmerTest / Satterthwaite df.
 #   - Lenth (2016); Searle et al. (1980): EMMs and pairwise contrasts.
+#   - Lakens (2013): Calculating and reporting effect sizes (eta2_p).
 
 suppressPackageStartupMessages({
   library(readr)
@@ -301,7 +306,14 @@ extract_fixed <- function(model, term) {
   ci <- suppressMessages(confint(model, parm = term, method = "Wald"))
   ci_low <- as.numeric(ci[1])
   ci_high <- as.numeric(ci[2])
-  list(estimate = est, se = se, df = df, stat = t, p_unc = p, ci95_low = ci_low, ci95_high = ci_high)
+  
+  eta2_p <- (t^2) / ((t^2) + df)
+  
+  list(
+    estimate = est, se = se, df = df, stat = t, p_unc = p, 
+    ci95_low = ci_low, ci95_high = ci_high,
+    eta2_p = eta2_p
+  )
 }
 
 main <- function() {
@@ -350,7 +362,8 @@ main <- function() {
     t = c(eff_length$stat, eff_content$stat, eff_inter$stat),
     p_unc = c(eff_length$p_unc, eff_content$p_unc, eff_inter$p_unc),
     ci95_low = c(eff_length$ci95_low, eff_content$ci95_low, eff_inter$ci95_low),
-    ci95_high = c(eff_length$ci95_high, eff_content$ci95_high, eff_inter$ci95_high)
+    ci95_high = c(eff_length$ci95_high, eff_content$ci95_high, eff_inter$ci95_high),
+    eta2_p = c(eff_length$eta2_p, eff_content$eta2_p, eff_inter$eta2_p)
   ) %>%
     mutate(
       # Column name `p_fdr` is retained for downstream compatibility.
@@ -361,7 +374,7 @@ main <- function() {
     ) %>%
     select(
       effect, n_subjects, n_obs, singular_fit,
-      estimate, se, df, t, p_unc, p_fdr, ci95_low, ci95_high
+      estimate, se, df, t, p_unc, p_fdr, ci95_low, ci95_high, eta2_p
     )
 
   p_inter_adj <- main_df %>%
@@ -387,7 +400,8 @@ main <- function() {
     se = numeric(),
     df = numeric(),
     t = numeric(),
-    p_unc = numeric()
+    p_unc = numeric(),
+    eta2_p = numeric()
   )
 
   if (do_posthoc) {
@@ -398,6 +412,11 @@ main <- function() {
       pw,
       context_label = "engagement format x content posthoc"
     ) %>%
+      mutate(
+        t_num = suppressWarnings(as.numeric(.data$t)),
+        eta2_p = if_else(.data$stat_type == "t", (.data$t_num^2) / ((.data$t_num^2) + .data$df), NA_real_)
+      ) %>%
+      select(-t_num) %>%
       arrange(.data$condition_a, .data$condition_b)
   }
 

@@ -416,15 +416,6 @@
   - **Link:** https://doi.org/10.3389/fpsyg.2013.00863
   - **Source:** `analyze_engagement_format_content_lmm.R`
 
-- **Westfall, J., Kenny, D. A., & Judd, C. M. (2014)**
-  - **Title:** Statistical power and optimal design in experiments in which samples of participants and stimuli are crossed
-  - **First Author:** Westfall
-  - **Year:** 2014
-  - **Usage:** Cohen's d for linear mixed models
-  - **Reasoning:** Standardizing the estimate differences by the total standard deviation (random + residual variance) is recommended to make effect sizes in LMMs comparable to classic Cohen's d in between-subject designs.
-  - **Link:** https://doi.org/10.1037/xge0000011
-  - **Source:** `analyze_engagement_format_content_lmm.R`
-
 # Data Visualization
 
 - **Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015)**
