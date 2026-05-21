@@ -131,6 +131,26 @@ Command:
 Rscript tests/validate_correlational_relationships_roi_means_r.R
 ```
 
+## Pooled-Mean Correlations (R): standalone pooled-target validation
+
+Runs `analyze_pooled_mean_correlations.R` on a synthetic dataset and verifies:
+- Target selection keeps only significant `format`/`content` rows from the tidy channel/ROI LMM outputs
+- Pool gating restricts `format` targets to `short/long` and `content` targets to `education/entertainment`
+- Channel pooled neural values recover exact known values
+- ROI condition means use available member channels when one member is pruned
+- Non-significant and interaction-only targets are excluded from the exported target set
+- The exported Pearson correlations agree with independently known gated reference cases
+- Channel `0` placeholders are treated as missing rather than true beta values
+- BH-FDR correctness within each configured family
+- Figure emission obeys the default `significant_only` policy
+- Duplicate normalized `subject_id` values fail hard
+
+Command:
+
+```bash
+Rscript tests/validate_pooled_mean_correlations_r.R
+```
+
 ## Behavior Pairwise Correlations (R): standalone behavioral screen validation
 
 Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset and verifies:

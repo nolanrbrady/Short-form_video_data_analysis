@@ -638,7 +638,7 @@ Neural targets:
 ## Inputs
 
 Primary CSV input:
-- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 
 Required behavior columns:
 - `sf_education_engagement`

@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-csv",
         type=Path,
-        default=Path("data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv"),
+        default=Path("data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv"),
         help="Merged CSV containing channel columns and behavioral columns.",
     )
     parser.add_argument(

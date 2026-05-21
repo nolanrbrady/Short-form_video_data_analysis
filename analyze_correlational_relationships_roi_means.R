@@ -69,7 +69,7 @@ TARGET_ROI_SPECS <- tibble::tribble(
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
-    input_csv = "data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv",
+    input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     roi_json = "data/config/roi_definition.json",
     analysis_plan_json = "data/config/correlational_analysis_plan_roi_means.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",

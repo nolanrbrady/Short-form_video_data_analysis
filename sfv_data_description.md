@@ -17,7 +17,7 @@ This document describes the columns in `data/tabular/generated_data/homer3_betas
   3) The raw derived AUC table is screened between subjects within each exact `channel x condition x chromophore` column by `mask_homer_auc_between_subject_outliers.py`, which writes `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
   4) The outlier-masked AUC table is inner-joined to `combined_sfv_data.csv` by `merge_homer3_betas_with_combined_data.R` (default output path is this file).
   5) Because the merge is an **inner join**, participants not present in both inputs are dropped from this merged table.
-  6) The raw derived AUC table also carries a sidecar provenance file `data/tabular/homer3_glm_betas_wide_auc.provenance.json` that must match the raw FIR export and settings JSON used to generate it.
+  6) The raw derived AUC table also carries a sidecar provenance file `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json` that must match the raw FIR export and settings JSON used to generate it.
   7) The outlier-masking stage also writes `data/results/homer_auc_outlier_audit.csv` and `data/results/homer_auc_outlier_summary.json` for QC traceability.
 
 ## Critical missingness / pruned-channel note (fNIRS betas)

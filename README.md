@@ -181,7 +181,7 @@ python generate_combined_data.py
 ### A4b) Create descriptive demographics table
 
 - Script: `create_demographics_table.py`
-- Input: `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- Input: `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 - Shared exclusion manifest: `data/config/excluded_subjects.json`
 - Subject IDs are normalized before exclusions, so Homer-style IDs such as `sub_0050` match numeric tabular IDs such as `50`.
 - The script prints an exclusion audit (`listed`, `matched`, `removed`, `remaining`) before printing the table.
@@ -300,7 +300,7 @@ python plot_fir_betas_subjects.py
 
 - Python: `plot_beta_discrepancy_dynamics.py`
 - Inputs:
-  - `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
   - `data/config/roi_definition.json`
   - `data/config/excluded_subjects.json`
 
@@ -775,7 +775,7 @@ Example:
 
 ```bash
 Rscript analyze_correlational_relationships.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --roi_json data/config/roi_definition.json \
   --analysis_plan_json data/config/correlational_analysis_plan.json \
   --exclude_subjects_json data/config/excluded_subjects.json \
@@ -811,7 +811,7 @@ Example:
 
 ```bash
 Rscript analyze_correlational_relationships_roi_means.R \
-  --input_csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --roi_json data/config/roi_definition.json \
   --analysis_plan_json data/config/correlational_analysis_plan_roi_means.json \
   --exclude_subjects_json data/config/excluded_subjects.json \
@@ -922,7 +922,7 @@ Purpose:
 - Keep the analysis exploratory and reproducible, with explicit missingness handling and global FDR control.
 
 Input:
-- `data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+- `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 
 Missingness and quality policy:
 - Channel `0` and `NaN` values are treated as missing/pruned observations, consistent with the repo's Homer beta import note.
@@ -938,7 +938,7 @@ Example:
 
 ```bash
 python analyze_channel_behavior_relationships.py \
-  --input-csv data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv \
+  --input-csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --out-dir data/results/channel_behavior_relationships
 ```
 

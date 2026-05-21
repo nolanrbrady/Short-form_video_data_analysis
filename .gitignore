@@ -32,6 +32,7 @@ data/results/*
 data/results/
 
 data/tabular/generated_data/
+data/tabular_used_for_analysis/
 
 qualtrics/follow_up_demographic_survey_1.csv
 

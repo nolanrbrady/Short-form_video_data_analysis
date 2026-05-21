@@ -17,7 +17,7 @@ from typing import Iterable
 
 import pandas as pd
 
-DEFAULT_INPUT_CSV = Path("data/tabular/homer3_betas_plus_combined_sfv_data_inner_join.csv")
+DEFAULT_INPUT_CSV = Path("data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv")
 DEFAULT_EXCLUDED_SUBJECTS_JSON = Path("data/config/excluded_subjects.json")
 
 
