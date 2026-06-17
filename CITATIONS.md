@@ -202,6 +202,17 @@
   - **Link:** https://doi.org/10.1017/S0033291704002892
   - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
 
+## Recall / Retention Scoring
+
+- **Simmons, J. P., Nelson, L. D., & Simonsohn, U. (2011)**
+  - **Title:** False-Positive Psychology: Undisclosed Flexibility in Data Collection and Analysis Allows Presenting Anything as Significant
+  - **First Author:** Simmons
+  - **Year:** 2011
+  - **Usage:** Transparent disclosure of study-specific recall-item exclusions and exploratory recruitment-order diagnostics
+  - **Reasoning:** Supports making all analysis exclusions explicit and auditable. Used here to justify storing invalid recall questions and Qualtrics ID aliases in versioned manifests, keeping excluded items visible in audit outputs, and documenting that `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task retention denominators because they were identified as invalid assessment items across the full study, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`; also documents the pre-task `Q39` to canonical `Q22` scoring alias. Also supports explicitly labeling optional subject-ID correlations as exploratory recruitment-order diagnostics rather than primary evidence.
+  - **Link:** https://doi.org/10.1177/0956797611417632
+  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
+
 # Statistical Analysis
 
 - **Laird, N. M., & Ware, J. H. (1982)**
@@ -465,6 +476,6 @@
   - **First Author:** Sandve
   - **Year:** 2013
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table and covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `covariate_correlation_analysis.py`, `tests/validate_covariate_correlation_analysis_py.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`

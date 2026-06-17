@@ -399,6 +399,8 @@ Required columns:
 - `subject_id` is normalized by extracting digits and converting to integer.
 - Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
 - Required retention columns and `age` must all exist; missing columns are a hard error.
+- Retention inputs must come from the recall preprocessing script using the invalid-question manifest (`data/config/recall_invalid_questions.json`) so `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task scoring denominators, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`.
+- Retention preprocessing must also apply `data/config/recall_question_aliases.json`; currently this maps pre-task `Q39` to canonical post-task/key item `Q22`.
 - Retention columns and `age` must be numeric/coercible to numeric; non-numeric values are a hard error.
 - `age` must be complete after subject exclusions; any remaining missing value is a hard error.
 

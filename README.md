@@ -119,6 +119,11 @@ Output columns include:
 - Script: `demographic/process_recall_assessment.py`
 - Inputs (expected on disk): `../../Assessment/pretask_assessment.csv`, `../../Assessment/posttask_assessment.csv`, `../../Assessment/Recall_Assessment_Key.csv`
   - **Important:** the script defines `ASSESSMENT_DIR = "../../Assessment"` as a *relative path*, so run it from inside `demographic/` (or edit `ASSESSMENT_DIR`).
+- Invalid-item exclusion manifest: `data/config/recall_invalid_questions.json`
+  - Excluded from both pre-task and post-task retention scoring: `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, `Q28`, plus pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`.
+  - The excluded items remain in the pre/post audit CSVs with `method = excluded_invalid_question`, but they are not included in the per-condition mean-correctness denominator.
+- Question-alias manifest: `data/config/recall_question_aliases.json`
+  - Maps pre-task `Q39` to canonical/keyed item `Q22` so the same `Wa anta` item is scored in both pre-task and post-task exports.
 
 Command (recommended):
 
@@ -131,7 +136,7 @@ cd ..
 Outputs:
 
 - `data/tabular/generated_data/recall_assessment_score_diffs.csv`: one row per `subject_id`, columns like `diff_short_form_education`, etc.
-- `demographic/recall_assessment_audit_pre.csv`, `demographic/recall_assessment_audit_post.csv`: detailed per-question audits (raw text, normalized text, exact/fuzzy match method)
+- `demographic/recall_assessment_audit_pre.csv`, `demographic/recall_assessment_audit_post.csv`: detailed per-question audits (raw text, normalized text, exact/fuzzy/excluded match method)
 
 Optional audit sanity-check:
 
@@ -1073,15 +1078,29 @@ Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
 - Two presets:
   - **`covariates` preset**: correlations on `covariate_outputs/covariates_clean.csv`
   - **`combined` preset**: correlations on `data/tabular/generated_data/combined_sfv_data.csv`
+- Subject exclusions are applied from `data/config/excluded_subjects.json` by default before correlations are computed.
+- The input must contain the configured subject ID column (`subject_id` by default) whenever the exclusion manifest is nonempty; the script fails hard rather than inferring exclusions from row order.
+- The script fails if more than 48 subjects remain after exclusions (`--max-subjects 48` by default), so a missed exclusion manifest cannot silently enter the correlation analysis.
+- Identifier columns (`subject_id`, the configured subject column, and `homer_subject` when present) are removed from the correlation matrix after exclusions.
+- To explore recruitment-order artifacts, pass `--include-subject-id-correlation`; this adds the normalized numeric ID as `recruitment_order_proxy` after exclusions. Treat this as an exploratory diagnostic only, because subject ID is interpretable only if it encodes recruitment/order.
 
 Recommended commands:
 
 ```bash
 # Covariates-only correlations + p-values (if SciPy installed)
-python covariate_correlation_analysis.py --preset covariates --out-dir covariate_outputs
+python covariate_correlation_analysis.py \
+  --preset covariates \
+  --input path/to/covariates_with_subject_id.csv \
+  --out-dir covariate_outputs \
+  --excluded-subjects-json data/config/excluded_subjects.json
 
 # Combined dataset correlations + heatmap saved alongside the combined dataset
-python covariate_correlation_analysis.py --preset combined --out-dir data/tabular/generated_data
+python covariate_correlation_analysis.py \
+  --preset combined \
+  --out-dir data/tabular/generated_data \
+  --excluded-subjects-json data/config/excluded_subjects.json \
+  --max-subjects 48 \
+  --include-subject-id-correlation
 ```
 
 ---
@@ -1182,7 +1201,7 @@ Methodology notes / planned improvements live in:
 - `process_sociodemographic.py`: Qualtrics demographics + psych scales → numeric covariates + audits (`data/tabular/generated_data/` + `covariate_outputs/`)
 - `demographic/combine_engagement.py`: raw engagement CSVs (external `../../Engagement`) → `demographic/combined_engagement_data.csv` (+ runs basic statsmodels analyses)
 - `process_engagement.py`: per-subject engagement condition means → `data/tabular/generated_data/engagement_data_processed.csv`
-- `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs
+- `demographic/process_recall_assessment.py`: grade pre/post recall (external `../../Assessment`) → diffs CSV + detailed audit CSVs; uses `data/config/recall_invalid_questions.json` to exclude known invalid assessment items from the normalized retention denominator and `data/config/recall_question_aliases.json` for explicit pre/post Qualtrics ID aliases
 - `generate_combined_data.py`: merge engagement + sociodemographics + recall diffs → `data/tabular/generated_data/combined_sfv_data.csv`
 - `data/tabular/homer3_glm_betas_wide_fir_pca.csv`: externally produced production Homer3 FIR basis-weight table (wide table; copied into this repo; contains `0` and `NaN` as stand-ins for pruned channels)
 - `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv`: locally derived single-beta table produced by `collapse_homer_fir_to_auc.py` from the FIR basis weights

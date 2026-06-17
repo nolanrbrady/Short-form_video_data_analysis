@@ -2,6 +2,20 @@
 
 This folder contains lightweight validation harnesses that aim to verify scientific/analysis integrity against `ANALYSIS_SPEC.md`.
 
+## Recall assessment processing (Python)
+
+Runs synthetic checks for `demographic/process_recall_assessment.py` and verifies:
+- configured invalid recall questions are excluded from condition mean denominators
+- configured pre/post Qualtrics ID aliases are applied before scoring
+- excluded questions remain visible in audit output with `method = excluded_invalid_question`
+- invalid-question manifest condition mismatches fail hard
+
+Command:
+
+```bash
+python tests/validate_recall_assessment_processing_py.py
+```
+
 ## Pipeline C (R): synthetic end-to-end validation
 
 Runs `analyze_format_content_lmm_channelwise.R` on a synthetic dataset that:
@@ -195,6 +209,20 @@ Command:
 
 ```bash
 python tests/validate_demographics_table_py.py
+```
+
+## Covariate Correlation Diagnostics (Python): shared subject-exclusion validation
+
+Runs `covariate_correlation_analysis.py` helper functions on synthetic data and verifies:
+- manifest-listed subjects are removed before Spearman correlations are computed
+- nonempty exclusion manifests fail hard when the input lacks the configured subject ID column
+- normalized subject ID can be included as `recruitment_order_proxy` only when explicitly requested
+- the analysis fails if more than 48 subjects remain after exclusions
+
+Command:
+
+```bash
+python tests/validate_covariate_correlation_analysis_py.py
 ```
 
 ## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines

@@ -143,7 +143,11 @@ from the pre- and post-task recall assessments plus the answer key.
 Each value is:
 - the participant’s **mean correctness** in that condition at **post-task**, minus mean correctness at **pre-task**,
 - where correctness is scored per-item as 0/1 using conservative normalization and matching rules (see `demographic/process_recall_assessment.py`),
-- and the mean is taken over items associated with that condition in `Recall_Assessment_Key.csv`.
+- and the mean is taken over valid items associated with that condition in `Recall_Assessment_Key.csv`.
+
+The scoring denominator excludes study-invalid recall questions listed in `data/config/recall_invalid_questions.json`: `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28`, plus pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`. These items are excluded from both pre-task and post-task scoring and remain visible in the audit CSVs as `excluded_invalid_question`.
+
+The recall preprocessing also applies explicit Qualtrics ID aliases listed in `data/config/recall_question_aliases.json`; currently pre-task `Q39` is scored as the same canonical item as post-task/keyed `Q22`.
 
 - `diff_short_form_education`
   - Post − pre mean correctness for Short-form Education items.

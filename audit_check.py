@@ -48,6 +48,19 @@ def check_audit_file(filepath):
             if score != 0:
                 issues.append(f"Row {idx}: Method is {method} but score is {score}")
 
+        # 5. Study-invalid recall items are intentionally excluded from the
+        # retention denominator but kept in audit output for transparency.
+        elif method == 'excluded_invalid_question':
+            if pd.notna(score):
+                issues.append(f"Row {idx}: Excluded invalid question should have missing score, got {score}")
+            if 'excluded_from_retention_score' in df.columns and not bool(row['excluded_from_retention_score']):
+                issues.append(f"Row {idx}: Excluded invalid question is not flagged as excluded")
+            if 'exclusion_reason' in df.columns and not str(row['exclusion_reason']).strip():
+                issues.append(f"Row {idx}: Excluded invalid question has no exclusion reason")
+
+        else:
+            issues.append(f"Row {idx}: Unknown audit method '{method}'")
+
     if not issues:
         print("  No logic inconsistencies found in scoring.")
     else:
