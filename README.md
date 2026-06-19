@@ -39,7 +39,7 @@ There is no packaged Python project here; most scripts are “run as a script”
 Common dependencies across scripts:
 
 - Tabular processing: `pandas`, `numpy`
-- Plotting: `matplotlib`, `seaborn` (and optionally `scipy` for p-values)
+- Plotting/correlation diagnostics: `matplotlib`, `seaborn`, `scipy`
 - fNIRS: `mne`, `mne-nirs`, `numpy`, `pandas`
 - Stats models (engagement + LME): `statsmodels`, `scipy`
 
@@ -364,6 +364,31 @@ Command:
 
 ```bash
 Rscript plot_significant_beta_value_distribution.R
+```
+
+### A5g) Plot behavioral score distributions by condition
+
+- R: `plot_behavior_score_distributions.R`
+- Inputs:
+  - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
+  - `data/config/excluded_subjects.json`
+
+What it does:
+- Applies the shared subject-exclusion manifest before plotting so behavioral figures use the same excluded-participant policy as the inferential analyses.
+- Plots engagement scores and recall/retention improvement scores (`post - pre`) as separate publication-ready PNG figures across the four conditions.
+- Adds content main-effect PNG figures for engagement and recall/retention by averaging Education and Entertainment scores across Short and Long within each complete-case subject.
+- Uses domain-specific complete-case filtering: subjects need all four engagement values for the engagement figure and all four retention values for the retention figure.
+- Treats behavioral `0` values as valid observed scores and does not impute missing values.
+- Uses violin density envelopes with jittered subject-level points plus mean and +/- 1 SD overlays.
+- Writes PNG figures plus audit and summary CSVs.
+
+Default output directory:
+- `data/results/behavior_score_distribution/`
+
+Command:
+
+```bash
+Rscript plot_behavior_score_distributions.R
 ```
 
 ### A6) Single entry-point preprocessing + merge + certification
@@ -1078,6 +1103,9 @@ Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
 - Two presets:
   - **`covariates` preset**: correlations on `covariate_outputs/covariates_clean.csv`
   - **`combined` preset**: correlations on `data/tabular/generated_data/combined_sfv_data.csv`
+- Each run writes Pearson-only correlation outputs:
+  - `covariate_correlations_pearson.csv`, `covariate_correlations_pearson_pvalues.csv`, and `covariate_heatmap_pearson.png` for the `covariates` preset.
+  - `covariate_correlation_analysis_pearson.csv`, `covariate_correlation_analysis_pearson_pvalues.csv`, and `covariate_correlation_heatmap_pearson.png` for the `combined` preset.
 - Subject exclusions are applied from `data/config/excluded_subjects.json` by default before correlations are computed.
 - The input must contain the configured subject ID column (`subject_id` by default) whenever the exclusion manifest is nonempty; the script fails hard rather than inferring exclusions from row order.
 - The script fails if more than 48 subjects remain after exclusions (`--max-subjects 48` by default), so a missed exclusion manifest cannot silently enter the correlation analysis.
@@ -1087,7 +1115,7 @@ Rscript tests/calibrate_type2_error_r.R --n_reps 200 --type2_upper_bound 0.25
 Recommended commands:
 
 ```bash
-# Covariates-only correlations + p-values (if SciPy installed)
+# Covariates-only Pearson correlations + p-values
 python covariate_correlation_analysis.py \
   --preset covariates \
   --input path/to/covariates_with_subject_id.csv \
@@ -1211,13 +1239,14 @@ Methodology notes / planned improvements live in:
 - `data/results/homer_auc_outlier_summary.json`: machine-readable summary of between-subject AUC screening
 - `validate_homer_fir_auc_conversion.py`: hard-fail lint that checks excluded FIR basis vectors map to `NaN` in the derived AUC CSV and that the provenance sidecar matches the current raw FIR export + settings JSON
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
-- `covariate_correlation_analysis.py`: Spearman correlation tables + heatmaps (covariates-only or combined dataset)
+- `covariate_correlation_analysis.py`: Pearson correlation tables, p-values, and heatmaps (covariates-only or combined dataset)
 - `analyze_correlational_relationships.R`: targeted exploratory correlations for selected pooled long/short channel/ROI neural targets against pooled long/short and raw behavioral runs, with figure generation controlled by the analysis-plan config
 - `analyze_correlational_relationships_roi_means.R`: standalone pooled ROI-mean x pooled behavioral-mean correlation analysis
 - `analyze_behavior_pairwise_correlations.R`: standalone uncorrected Pearson screen across declared behavioral-variable pairs in the merged SFV dataset
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `plot_significant_beta_value_distribution.R`: plots simple beta-value point distributions for the FDR-significant channelwise and ROI LMM hits, with one audit CSV covering every plotted row
+- `plot_behavior_score_distributions.R`: plots engagement and recall/retention improvement score distributions by condition and content marginal mean from the final merged Homer3 + SFV dataset, applying the shared participant-exclusion manifest
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
 

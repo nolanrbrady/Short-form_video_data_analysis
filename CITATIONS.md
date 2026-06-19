@@ -319,9 +319,9 @@
   - **First Author:** Pearson
   - **Year:** 1896
   - **Usage:** Pearson product-moment correlation
-  - **Reasoning:** Foundational source for the product-moment correlation coefficient used in the exploratory post-hoc analysis between continuous pooled long/short neural means and the matching pooled long/short behavioral means, the supplementary raw behavioral task-cell values tested against those same pooled neural means, and the standalone pairwise behavioral screening analysis.
+  - **Reasoning:** Foundational source for the product-moment correlation coefficient used in the exploratory post-hoc analysis between continuous pooled long/short neural means and the matching pooled long/short behavioral means, the supplementary raw behavioral task-cell values tested against those same pooled neural means, the standalone pairwise behavioral screening analysis, and the optional Pearson covariate-correlation diagnostics.
   - **Link:** https://doi.org/10.1098/rsta.1896.0007
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `covariate_correlation_analysis.py`, `tests/test_covariate_correlation_analysis.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Fisher, R. A. (1921)**
   - **Title:** On the "Probable Error" of a Coefficient of Correlation Deduced from a Small Sample
@@ -411,7 +411,7 @@
   - **Usage:** Estimated marginal means concept
   - **Reasoning:** Foundational reference for population marginal means / least-squares means terminology and interpretation underlying EMM-based post-hoc summaries and the equal-weight marginal-mean logic used when collapsing the 2x2 design to a long-vs-short main-effect contrast.
   - **Link:** https://doi.org/10.1080/00031305.1980.10483031
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_pooled_mean_correlations_r.R`, `plot_significant_beta_value_distribution.R`, `README.md`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_pooled_mean_correlations_r.R`, `plot_significant_beta_value_distribution.R`, `plot_behavior_score_distributions.R`, `README.md`
 
 - **Student (1908)**
   - **Title:** The Probable Error of a Mean
@@ -456,18 +456,18 @@
   - **First Author:** Weissgerber
   - **Year:** 2015
   - **Usage:** Raw-data visualization for group comparisons
-  - **Reasoning:** Argues for plotting the observed data directly so readers can inspect spread, sample size, unusual values, and summary overlays rather than relying on summary-only displays. Used here to justify the subject-level point-distribution plots with mean +/- SD overlays for significant channelwise and ROI beta effects.
+  - **Reasoning:** Argues for plotting the observed data directly so readers can inspect spread, sample size, unusual values, and summary overlays rather than relying on summary-only displays. Used here to justify the subject-level point-distribution plots with mean +/- SD overlays for significant channelwise/ROI beta effects and behavioral engagement/retention condition scores.
   - **Link:** https://doi.org/10.1371/journal.pbio.1002128
-  - **Source:** `plot_significant_beta_value_distribution.R`, `tests/validate_significant_beta_distribution_plot_r.R`, `README.md`, `CITATIONS.md`
+  - **Source:** `plot_significant_beta_value_distribution.R`, `plot_behavior_score_distributions.R`, `tests/validate_significant_beta_distribution_plot_r.R`, `tests/validate_behavior_score_distribution_plot_r.R`, `README.md`, `CITATIONS.md`
 
 - **Hintze, J. L., & Nelson, R. D. (1998)**
   - **Title:** Violin Plots: A Box Plot-Density Trace Synergism
   - **First Author:** Hintze
   - **Year:** 1998
-  - **Usage:** Violin density envelopes for beta-value distribution figures
-  - **Reasoning:** Introduces violin plots as a way to combine distribution-density information with familiar grouped-comparison displays. Used here to justify showing beta-value density envelopes behind the raw subject-level points for significant channelwise and ROI effects without connecting independent condition/group points by subject lines.
+  - **Usage:** Violin density envelopes for grouped distribution figures
+  - **Reasoning:** Introduces violin plots as a way to combine distribution-density information with familiar grouped-comparison displays. Used here to justify showing density envelopes behind raw subject-level points for significant channelwise/ROI beta effects and behavioral engagement/retention condition scores without relying on summary-only bars.
   - **Link:** https://doi.org/10.1080/00031305.1998.10480559
-  - **Source:** `plot_significant_beta_value_distribution.R`, `README.md`, `CITATIONS.md`
+  - **Source:** `plot_significant_beta_value_distribution.R`, `plot_behavior_score_distributions.R`, `README.md`, `CITATIONS.md`
 
 # Reproducibility
 
@@ -476,6 +476,6 @@
   - **First Author:** Sandve
   - **Year:** 2013
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table and covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints.
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table/behavior-plot/covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints and publication figures.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `covariate_correlation_analysis.py`, `tests/validate_covariate_correlation_analysis_py.py`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `plot_behavior_score_distributions.R`, `covariate_correlation_analysis.py`, `tests/test_covariate_correlation_analysis.py`, `tests/validate_behavior_score_distribution_plot_r.R`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`

@@ -22,10 +22,14 @@ This study is due to be published in a major cognitive science journal and as su
 Do:
 - Always ensure the documentation is up to date. We never want out of date .md files that pollute the codebase. 
 - Cite your sources
-- Write clean and maintainable code with function doc strings and comments that enable quick and easy parsing of the code by a human.
+- Write clean and maintainable code with function doc strings and informative comments that enable quick and easy parsing of the code by a human.
+    - Comments should reduce cognitive load by explaining non-obvious scientific intent, data-integrity safeguards, processing order, and how code paths relate to the study design or inferential analyses.
+    - Prefer section-level and function-level comments for analysis scripts so readers can quickly understand the data flow before reading implementation details.
 - Prioritize modularity and single responsibility when possible. Modular functions with explicit tests are integral to trusting results.
+- Run relevant targeted tests or validation commands after implementation when they are needed to substantiate that a scientific or analysis change behaves as intended.
 - Test for scientific quality and integrity vs if a program will crash or not. I prefer the scripts to fail hard and fast than to introduce subtle bugs that impact the downstream results.
     - Scientific quality means that if a function says it's preprocessing the spike artifacts, make sure it's doing exactly that. If a statistical test is intended to test a one-sided t-test use a true positive and a true negative test to ensure the test is performing the operation exactly as intended. Be incredibly thorough with the tests. The deeper they go the better.
+    - Test files should include detailed descriptions for each test function explaining the behavior under test, the scientific or data-integrity risk it guards against, and why the expected result is valid.
 - Push back on things if I say or ask for something that goes against the scientific norm. Educate me on why the thing I asked for is not likely the right option.
 
 Do not:
