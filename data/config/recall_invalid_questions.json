@@ -1,0 +1,49 @@
+{
+  "invalid_questions": [
+    {
+      "question_id": "Q5",
+      "condition": "Long-form Education",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q6",
+      "condition": "Long-form Education",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q35",
+      "condition": "Long-form Education",
+      "reason": "Pre-task Qualtrics alias for invalid Q6 item; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q7",
+      "condition": "Long-form Entertainment",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q36",
+      "condition": "Long-form Entertainment",
+      "reason": "Pre-task Qualtrics alias for invalid Q7 item; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q8",
+      "condition": "Long-form Entertainment",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q10",
+      "condition": "Short-form Education",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q26",
+      "condition": "Short-form Education",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    },
+    {
+      "question_id": "Q28",
+      "condition": "Short-form Entertainment",
+      "reason": "Assessment item identified as invalid across the full study; exclude from pre/post retention scoring."
+    }
+  ]
+}

@@ -38,3 +38,5 @@ qualtrics/follow_up_demographic_survey_1.csv
 
 .codex-research/*
 qualtrics/Follow-up Demographics Survey_May 20, 2026_13.10.csv
+
+covariate_outputs/

@@ -1,0 +1,10 @@
+{
+  "aliases": [
+    {
+      "alias_question_id": "Q39",
+      "canonical_question_id": "Q22",
+      "assessment": "pre",
+      "reason": "Pre-task Qualtrics alias for the same recall item represented as Q22 in the post-task export and answer key."
+    }
+  ]
+}
