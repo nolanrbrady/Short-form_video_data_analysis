@@ -377,6 +377,7 @@ What it does:
 - Applies the shared subject-exclusion manifest before plotting so behavioral figures use the same excluded-participant policy as the inferential analyses.
 - Plots engagement scores and recall/retention improvement scores (`post - pre`) as separate publication-ready PNG figures across the four conditions.
 - Adds content main-effect PNG figures for engagement and recall/retention by averaging Education and Entertainment scores across Short and Long within each complete-case subject.
+- Adds retention length main-effect PNG figures by averaging content conditions within short and long blocks (Short = SF_Edu + SF_Ent; Long = LF_Edu + LF_Ent) for each complete-case subject.
 - Uses domain-specific complete-case filtering: subjects need all four engagement values for the engagement figure and all four retention values for the retention figure.
 - Treats behavioral `0` values as valid observed scores and does not impute missing values.
 - Uses violin density envelopes with jittered subject-level points plus mean and +/- 1 SD overlays.
@@ -1246,7 +1247,7 @@ Methodology notes / planned improvements live in:
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `plot_significant_beta_value_distribution.R`: plots simple beta-value point distributions for the FDR-significant channelwise and ROI LMM hits, with one audit CSV covering every plotted row
-- `plot_behavior_score_distributions.R`: plots engagement and recall/retention improvement score distributions by condition and content marginal mean from the final merged Homer3 + SFV dataset, applying the shared participant-exclusion manifest
+- `plot_behavior_score_distributions.R`: plots engagement and recall/retention improvement score distributions by condition, plus content and retention-length marginal means from the final merged Homer3 + SFV dataset, applying the shared participant-exclusion manifest
 - `audit_check.py`: consistency checks for the recall assessment audit CSVs
 - `demographic/engagement_stats.py`: helper functions used by `combine_engagement.py` for ANOVA/OLS/mixed model
 
