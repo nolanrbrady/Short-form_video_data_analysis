@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # Plot publication-ready subject-level behavioral score distributions for the
-# four study conditions.
+# four study conditions and planned descriptive marginals for the score factors.
 #
 # Inputs
 #   - data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv
@@ -12,6 +12,8 @@
 #     with inferential analyses (Sandve et al., 2013; see CITATIONS.md).
 #   - Plots engagement scores and retention/recall improvement scores
 #     (`post - pre`) as separate PNG figures across the four conditions.
+#   - Adds a retention length-marginal figure by averaging short- and
+#     long-form conditions within subject.
 #   - Uses violin density envelopes with raw jittered subject points and
 #     mean +/- 1 SD overlays instead of summary-only bars so readers can inspect
 #     spread, sample size, and unusual values (Hintze & Nelson, 1998;
@@ -47,6 +49,7 @@ suppressPackageStartupMessages({
 CONDITION_LEVELS <- c("SF_Edu", "SF_Ent", "LF_Edu", "LF_Ent")
 ENGAGEMENT_CONDITION_LEVELS <- c("SF_Edu", "LF_Edu", "SF_Ent", "LF_Ent")
 CONTENT_LEVELS <- c("Education", "Entertainment")
+LENGTH_LEVELS <- c("Short", "Long")
 CONDITION_LABELS <- c(
   SF_Edu = "Short-Form\nEducation",
   SF_Ent = "Short-Form\nEntertainment",
@@ -57,11 +60,18 @@ CONTENT_LABELS <- c(
   Education = "Education",
   Entertainment = "Entertainment"
 )
+LENGTH_LABELS <- c(
+  Short = "Short",
+  Long = "Long"
+)
+LENGTH_PLOTTED_DOMAINS <- c("retention")
 PLOT_PALETTE <- c(
   SF_Edu = "#1b4d3e",
   SF_Ent = "#3b7a57",
   LF_Edu = "#8f2d56",
   LF_Ent = "#c04b2c",
+  Short = "#1b4d3e",
+  Long = "#c04b2c",
   Education = "#1b4d3e",
   Entertainment = "#c04b2c"
 )
@@ -245,7 +255,7 @@ reshape_behavior_scores <- function(df) {
 # other if only one domain has all four condition values.
 complete_case_domain_scores <- function(df_long, domain_name) {
   domain_df <- df_long %>%
-    filter(.data$domain == .env$domain_name)
+    filter(.data$domain == domain_name)
   non_missing <- domain_df %>% filter(!is.na(.data$score))
 
   keep_ids <- non_missing %>%
@@ -278,6 +288,17 @@ condition_content_level <- function(condition) {
   case_when(
     as.character(condition) %in% c("SF_Edu", "LF_Edu") ~ "Education",
     as.character(condition) %in% c("SF_Ent", "LF_Ent") ~ "Entertainment",
+    TRUE ~ NA_character_
+  )
+}
+
+# Collapse the four condition labels to the length factor used by the LMMs.
+# Short is the negative sum-coded level (`length_c = -0.5`) and Long is the
+# positive level (`length_c = +0.5`) in the inferential scripts.
+condition_length_level <- function(condition) {
+  case_when(
+    as.character(condition) %in% c("SF_Edu", "SF_Ent") ~ "Short",
+    as.character(condition) %in% c("LF_Edu", "LF_Ent") ~ "Long",
     TRUE ~ NA_character_
   )
 }
@@ -319,6 +340,44 @@ build_content_marginal_scores <- function(domain_df) {
       score_col = "content_marginal_mean"
     ) %>%
     arrange(.data$domain, .data$subject_id, .data$content_level)
+}
+
+# Build subject-level length marginal means for retention length main-effect plots.
+# Each point is the within-subject mean across content levels for Short or Long
+# (Searle et al., 1980; see CITATIONS.md).
+build_length_marginal_scores <- function(domain_df) {
+  out <- domain_df %>%
+    mutate(length_level = condition_length_level(.data$condition)) %>%
+    group_by(.data$domain, .data$domain_label, .data$subject_id, .data$length_level, .data$score_label) %>%
+    summarize(
+      score = mean(.data$score),
+      n_source_conditions = n_distinct(.data$condition),
+      source_score_cols = paste(sort(unique(.data$score_col)), collapse = ";"),
+      .groups = "drop"
+    )
+
+  bad <- out %>% filter(is.na(.data$length_level) | .data$n_source_conditions != 2)
+  if (nrow(bad) > 0) {
+    stop(
+      paste0(
+        "Length marginal means require exactly two source conditions per subject/length. ",
+        "Unexpected rows detected for subject_id values: ",
+        paste(head(unique(bad$subject_id), 10), collapse = ", ")
+      )
+    )
+  }
+
+  out %>%
+    mutate(
+      condition = NA_character_,
+      condition_label = NA_character_,
+      length_level = factor(.data$length_level, levels = LENGTH_LEVELS),
+      length_label = LENGTH_LABELS[as.character(.data$length_level)],
+      content_level = NA_character_,
+      content_label = NA_character_,
+      score_col = "length_marginal_mean"
+    ) %>%
+    arrange(.data$domain, .data$subject_id, .data$length_level)
 }
 
 # Helper used by stat_summary() to show mean +/- 1 SD on top of raw data. The
@@ -474,31 +533,9 @@ write_behavior_plot <- function(domain_df, domain_name, out_dir, width, height, 
   )
 }
 
-# Write a content main-effect display for one behavioral domain. Each point is a
-# subject-level marginal mean across video length: Education averages SF_Edu and
-# LF_Edu; Entertainment averages SF_Ent and LF_Ent. These are raw descriptive
-# values, not age-adjusted model-estimated marginal means.
-write_content_marginal_plot <- function(domain_df, domain_name, out_dir, width, height, dpi) {
-  write_behavior_distribution_plot(
-    plot_df = domain_df,
-    domain_name = domain_name,
-    out_dir = out_dir,
-    x_level_col = "content_level",
-    x_display_col = "content_label",
-    x_levels = CONTENT_LEVELS,
-    x_labels = CONTENT_LABELS,
-    filename_suffix = "content_marginal_score_distribution",
-    plot_title = paste0(unique(domain_df$domain_label), " content main-effect scores"),
-    plot_subtitle = "Subject-level content marginal means averaged across video length",
-    width = width,
-    height = height,
-    dpi = dpi
-  )
-}
-
 # Summarize every plotted data layer for auditability. The `plot_type` column is
-# critical: raw-condition and content-marginal rows represent different
-# estimands and should never be pooled accidentally.
+# critical: raw-condition, content-marginal, and length-marginal rows represent
+# different estimands and should never be pooled accidentally.
 summarize_behavior_scores <- function(audit_df) {
   audit_df %>%
     group_by(
@@ -507,6 +544,8 @@ summarize_behavior_scores <- function(audit_df) {
       .data$domain_label,
       .data$condition,
       .data$condition_label,
+      .data$length_level,
+      .data$length_label,
       .data$content_level,
       .data$content_label,
       .data$score_label
@@ -520,7 +559,13 @@ summarize_behavior_scores <- function(audit_df) {
       max = max(.data$score),
       .groups = "drop"
     ) %>%
-    arrange(.data$plot_type, .data$domain, .data$condition, .data$content_level)
+    arrange(
+      .data$plot_type,
+      .data$domain,
+      .data$condition,
+      .data$content_level,
+      .data$length_level
+    )
 }
 
 # Main programmatic entry point used by both the CLI and validation harness.
@@ -533,11 +578,11 @@ run_plotting <- function(
   width = 7.0,
   height = 5.0,
   dpi = 300L,
-  plot_types = c("raw_condition", "content_marginal")
+  plot_types = c("raw_condition", "content_marginal", "length_marginal")
 ) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-  supported_plot_types <- c("raw_condition", "content_marginal")
+  supported_plot_types <- c("raw_condition", "content_marginal", "length_marginal")
   requested_plot_types <- match.arg(plot_types, choices = supported_plot_types, several.ok = TRUE)
 
   df <- load_behavior_input(input_csv, exclude_subjects_json)
@@ -565,6 +610,8 @@ run_plotting <- function(
       score_col = .data$score_col,
       source_score_cols = .data$score_col,
       n_source_conditions = 1L,
+      length_level = NA_character_,
+      length_label = NA_character_,
       score_label = .data$score_label,
       score = .data$score,
       included_in_plot = TRUE
@@ -583,6 +630,8 @@ run_plotting <- function(
       condition_label = .data$condition_label,
       content_level = as.character(.data$content_level),
       content_label = .data$content_label,
+      length_level = NA_character_,
+      length_label = NA_character_,
       score_col = .data$score_col,
       source_score_cols = .data$source_score_cols,
       n_source_conditions = .data$n_source_conditions,
@@ -592,13 +641,38 @@ run_plotting <- function(
     ) %>%
     arrange(.data$domain, .data$subject_id, factor(.data$content_level, levels = CONTENT_LEVELS))
 
+  # Retention-specific length marginals are used for the recall interpretation of
+  # short-vs-long differences (Searle et al., 1980; see CITATIONS.md).
+  length_audit_df <- bind_rows(lapply(domain_dfs, build_length_marginal_scores)) %>%
+    filter(.data$domain %in% LENGTH_PLOTTED_DOMAINS) %>%
+    transmute(
+      plot_type = "length_marginal",
+      domain = .data$domain,
+      domain_label = .data$domain_label,
+      subject_id = .data$subject_id,
+      condition = .data$condition,
+      condition_label = .data$condition_label,
+      length_level = as.character(.data$length_level),
+      length_label = as.character(.data$length_label),
+      content_level = as.character(.data$content_level),
+      content_label = .data$content_label,
+      score_col = .data$score_col,
+      source_score_cols = .data$source_score_cols,
+      n_source_conditions = .data$n_source_conditions,
+      score_label = .data$score_label,
+      score = .data$score,
+      included_in_plot = TRUE
+    ) %>%
+    arrange(.data$domain, .data$subject_id, factor(.data$length_level, levels = LENGTH_LEVELS))
+
   # Use explicit factor ordering in the audit CSV so visual x-axis order and
   # machine-readable row order tell the same story.
-  audit_df <- bind_rows(raw_audit_df, content_audit_df) %>%
+  audit_df <- bind_rows(raw_audit_df, content_audit_df, length_audit_df) %>%
     arrange(
       .data$plot_type,
       .data$domain,
       .data$subject_id,
+      factor(.data$length_level, levels = LENGTH_LEVELS),
       factor(.data$condition, levels = CONDITION_LEVELS),
       factor(.data$content_level, levels = CONTENT_LEVELS)
     )
@@ -614,7 +688,7 @@ run_plotting <- function(
     if ("raw_condition" %in% requested_plot_types) {
       # Four-condition descriptive figure.
       domain_df <- audit_df %>%
-        filter(.data$plot_type == "raw_condition", .data$domain == .env$domain_name) %>%
+        filter(.data$plot_type == "raw_condition", .data$domain == domain_name) %>%
         mutate(
           condition = factor(.data$condition, levels = CONDITION_LEVELS),
           condition_display = factor(
@@ -633,14 +707,52 @@ run_plotting <- function(
     }
 
     if ("content_marginal" %in% requested_plot_types) {
-      # Content main-effect descriptive figure derived from the same complete-case
-      # domain rows.
+      # Content marginal display: each point is a subject-level mean across video
+      # length. These are raw descriptive values, not age-adjusted model EMMs.
       content_df <- audit_df %>%
-        filter(.data$plot_type == "content_marginal", .data$domain == .env$domain_name)
-      figure_paths[[paste0(domain_name, "_content_marginal")]] <- write_content_marginal_plot(
-        domain_df = content_df,
+        filter(.data$plot_type == "content_marginal", .data$domain == domain_name)
+      figure_paths[[paste0(domain_name, "_content_marginal")]] <- write_behavior_distribution_plot(
+        plot_df = content_df,
         domain_name = domain_name,
         out_dir = out_dir,
+        x_level_col = "content_level",
+        x_display_col = "content_label",
+        x_levels = CONTENT_LEVELS,
+        x_labels = CONTENT_LABELS,
+        filename_suffix = "content_marginal_score_distribution",
+        plot_title = paste0(unique(content_df$domain_label), " content marginal scores"),
+        plot_subtitle = "Subject-level content marginal means averaged across video length",
+        width = width,
+        height = height,
+        dpi = dpi
+      )
+    }
+
+    if ("length_marginal" %in% requested_plot_types && domain_name %in% LENGTH_PLOTTED_DOMAINS) {
+      # Retention length marginal display: each point is a subject-level mean
+      # across content. These are raw descriptive values, not age-adjusted model
+      # EMMs.
+      length_df <- audit_df %>%
+        filter(.data$plot_type == "length_marginal", .data$domain == domain_name) %>%
+        mutate(
+          length_level = factor(.data$length_level, levels = LENGTH_LEVELS),
+          length_label = factor(
+            as.character(.data$length_level),
+            levels = LENGTH_LEVELS,
+            labels = as.character(LENGTH_LABELS[LENGTH_LEVELS])
+          )
+        )
+      figure_paths[[paste0(domain_name, "_length_marginal")]] <- write_behavior_distribution_plot(
+        plot_df = length_df,
+        domain_name = domain_name,
+        out_dir = out_dir,
+        x_level_col = "length_level",
+        x_display_col = "length_label",
+        x_levels = LENGTH_LEVELS,
+        x_labels = LENGTH_LABELS,
+        filename_suffix = "length_marginal_score_distribution",
+        plot_title = paste0(unique(length_df$domain_label), " length marginal scores"),
+        plot_subtitle = "Subject-level length marginal means averaged across content",
         width = width,
         height = height,
         dpi = dpi

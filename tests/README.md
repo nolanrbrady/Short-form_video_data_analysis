@@ -198,6 +198,23 @@ Command:
 python tests/validate_beta_discrepancy_plot_py.py
 ```
 
+## Behavioral Score Distribution Plotting (R): engagement + retention validation
+
+Runs `plot_behavior_score_distributions.R` on a synthetic final merged dataset and verifies:
+- shared subject exclusions are applied before plotting
+- engagement and recall/retention condition columns map to the intended four conditions
+- content main-effect marginal means are computed within subject as Education and Entertainment averages across Short and Long after complete-case filtering
+- behavioral zero values remain valid observations
+- missing condition cells trigger domain-specific complete-case exclusion without imputation
+- non-numeric score tokens and missing required columns fail hard
+- PNG figures plus audit and summary CSVs are created, including retention length-marginal recall figures
+
+Command:
+
+```bash
+Rscript tests/validate_behavior_score_distribution_plot_r.R
+```
+
 ## Demographics Table (Python): shared subject-exclusion validation
 
 Runs `create_demographics_table.py` helper functions on synthetic merged data and verifies:
@@ -218,7 +235,6 @@ Runs `covariate_correlation_analysis.py` helper functions on synthetic data and 
 - nonempty exclusion manifests fail hard when the input lacks the configured subject ID column
 - normalized subject ID can be included as `recruitment_order_proxy` only when explicitly requested
 - the analysis fails if more than 48 subjects remain after exclusions
-
 Command:
 
 ```bash

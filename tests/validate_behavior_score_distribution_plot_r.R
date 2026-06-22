@@ -12,6 +12,8 @@
 #   retention LMM preprocessing functions.
 # - Verify content marginal contrasts match LMM content estimates in controlled
 #   no-age-effect/no-noise synthetic data where equality is expected.
+# - Verify retention length marginal contrasts match LMM length estimates in the same
+#   controlled synthetic setting.
 # - Verify PNG figure and audit outputs are created.
 # - Verify the figure source uses violin + jittered raw points with mean +/- 1 SD overlays.
 
@@ -131,7 +133,8 @@ test_run_plotting_outputs <- function(input_csv, exclusions_json, out_dir) {
       "engagement_score_distribution.png",
       "retention_score_distribution.png",
       "engagement_content_marginal_score_distribution.png",
-      "retention_content_marginal_score_distribution.png"
+      "retention_content_marginal_score_distribution.png",
+      "retention_length_marginal_score_distribution.png"
     )
   )
   assert_true(all(file.exists(expected_figures)), "Expected PNG behavior figures were not created.")
@@ -193,8 +196,28 @@ test_run_plotting_outputs <- function(input_csv, exclusions_json, out_dir) {
   assert_true(length(sub2_edu_retention) == 1 && abs(sub2_edu_retention[[1]] - 0.10) < 1e-9, "Subject 2 retention Education marginal mean should equal mean(SF_Edu, LF_Edu).")
   assert_true(length(sub2_ent_retention) == 1 && abs(sub2_ent_retention[[1]] - 0.20) < 1e-9, "Subject 2 retention Entertainment marginal mean should equal mean(SF_Ent, LF_Ent).")
 
+  retention_length <- audit %>% filter(.data$plot_type == "length_marginal", .data$domain == "retention")
+  assert_true(nrow(retention_length) == 6, "Retention length marginal audit should contain 2 rows per retained subject.")
+  assert_true(all(retention_length$n_source_conditions == 2L), "Length marginal rows should be computed from exactly two source conditions.")
+  sub1_short_retention <- retention_length$score[
+    retention_length$subject_id == 1L & retention_length$length_level == "Short"
+  ]
+  sub1_long_retention <- retention_length$score[
+    retention_length$subject_id == 1L & retention_length$length_level == "Long"
+  ]
+  sub2_short_retention <- retention_length$score[
+    retention_length$subject_id == 2L & retention_length$length_level == "Short"
+  ]
+  sub2_long_retention <- retention_length$score[
+    retention_length$subject_id == 2L & retention_length$length_level == "Long"
+  ]
+  assert_true(length(sub1_short_retention) == 1 && abs(sub1_short_retention[[1]] - 0.15) < 1e-9, "Subject 1 retention Short marginal mean should equal mean(SF_Edu, SF_Ent).")
+  assert_true(length(sub1_long_retention) == 1 && abs(sub1_long_retention[[1]] - 0.35) < 1e-9, "Subject 1 retention Long marginal mean should equal mean(LF_Edu, LF_Ent).")
+  assert_true(length(sub2_short_retention) == 1 && abs(sub2_short_retention[[1]] - 0.05) < 1e-9, "Subject 2 retention Short marginal mean should equal mean(SF_Edu, SF_Ent).")
+  assert_true(length(sub2_long_retention) == 1 && abs(sub2_long_retention[[1]] - 0.25) < 1e-9, "Subject 2 retention Long marginal mean should equal mean(LF_Edu, LF_Ent).")
+
   summary_df <- outputs$summary_df
-  assert_true(nrow(summary_df) == 12, "Summary CSV should contain 8 raw-condition rows plus 4 content-marginal rows.")
+  assert_true(nrow(summary_df) == 14, "Summary CSV should contain 8 raw-condition rows, 4 content-marginal rows, and 2 retention length-marginal rows.")
   assert_true(all(summary_df$n_subjects == 3L), "Each synthetic summary condition should have 3 retained subjects.")
 }
 
@@ -274,9 +297,19 @@ test_lmm_preprocessing_agreement <- function(input_csv, exclusions_json) {
     "Engagement LMM content coding should be +0.5 for Education and -0.5 for Entertainment."
   )
   assert_true(
+    all(lmm_engagement_cc$length_c[lmm_engagement_cc$condition %in% c("SF_Edu", "SF_Ent")] == -0.5) &&
+      all(lmm_engagement_cc$length_c[lmm_engagement_cc$condition %in% c("LF_Edu", "LF_Ent")] == 0.5),
+    "Engagement LMM length coding should be -0.5 for Short and +0.5 for Long."
+  )
+  assert_true(
     all(lmm_retention_cc$content_c[lmm_retention_cc$condition %in% c("SF_Edu", "LF_Edu")] == 0.5) &&
       all(lmm_retention_cc$content_c[lmm_retention_cc$condition %in% c("SF_Ent", "LF_Ent")] == -0.5),
     "Retention LMM content coding should be +0.5 for Education and -0.5 for Entertainment."
+  )
+  assert_true(
+    all(lmm_retention_cc$length_c[lmm_retention_cc$condition %in% c("SF_Edu", "SF_Ent")] == -0.5) &&
+      all(lmm_retention_cc$length_c[lmm_retention_cc$condition %in% c("LF_Edu", "LF_Ent")] == 0.5),
+    "Retention LMM length coding should be -0.5 for Short and +0.5 for Long."
   )
 }
 
@@ -314,10 +347,18 @@ write_controlled_lmm_alignment_input <- function(path) {
 # inspected downstream.
 content_contrast_from_plot_audit <- function(audit_df, domain_name) {
   wide <- audit_df %>%
-    filter(.data$plot_type == "content_marginal", .data$domain == .env$domain_name) %>%
+    filter(.data$plot_type == "content_marginal", .data$domain == domain_name) %>%
     select("subject_id", "content_level", "score") %>%
     tidyr::pivot_wider(names_from = "content_level", values_from = "score")
   mean(wide$Education - wide$Entertainment)
+}
+
+length_contrast_from_plot_audit <- function(audit_df, domain_name) {
+  wide <- audit_df %>%
+    filter(.data$plot_type == "length_marginal", .data$domain == domain_name) %>%
+    select("subject_id", "length_level", "score") %>%
+    tidyr::pivot_wider(names_from = "length_level", values_from = "score")
+  mean(wide$Long - wide$Short)
 }
 
 # Fit the same LMM functions used by the inferential scripts on the controlled
@@ -354,6 +395,29 @@ test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, 
   assert_true(
     abs(retention_plot_contrast - retention_content_est) < 1e-9,
     "In controlled no-age-effect retention data, plotted Education-Entertainment contrast should equal LMM content estimate."
+  )
+}
+
+test_length_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json) {
+  outputs <- plot_env$run_plotting(
+    input_csv = input_csv,
+    exclude_subjects_json = exclusions_json,
+    out_dir = tempfile("behavior_length_lmm_alignment_out_"),
+    width = 6,
+    height = 4,
+    dpi = 120,
+    plot_types = c("length_marginal", "raw_condition")
+  )
+
+  retention_input <- retention_lmm_env$load_retention_input(input_csv, exclusions_json)
+  retention_cc <- retention_lmm_env$complete_case_subjects(retention_lmm_env$reshape_to_long(retention_input))
+  retention_model <- retention_lmm_env$fit_factorial_lmm(retention_cc)
+  retention_length_est <- as.numeric(summary(retention_model)$coefficients["length_c", "Estimate"])
+  retention_plot_contrast <- length_contrast_from_plot_audit(outputs$audit_df, "retention")
+
+  assert_true(
+    abs(retention_plot_contrast - retention_length_est) < 1e-9,
+    "In controlled no-age-effect retention data, plotted Long-Short contrast should equal LMM length estimate."
   )
 }
 
@@ -446,6 +510,7 @@ main <- function() {
   test_run_plotting_outputs(input_csv, exclusions_json, out_dir)
   test_lmm_preprocessing_agreement(input_csv, exclusions_json)
   test_content_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json)
+  test_length_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json)
   test_non_numeric_failure(input_csv, exclusions_json)
   test_missing_column_failure(input_csv, exclusions_json)
   test_cli_execution(input_csv, exclusions_json, cli_out_dir)
