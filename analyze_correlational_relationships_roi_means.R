@@ -652,9 +652,23 @@ sanitize_slug <- function(x) {
 }
 
 clear_output_root <- function(out_csv, out_fig_dir) {
+  normalize_output_path <- function(path) {
+    path_abs <- if (grepl("^/", path)) path else file.path(getwd(), path)
+    parts <- strsplit(gsub("/+", "/", path_abs), "/", fixed = FALSE)[[1]]
+    stack <- character()
+    for (part in parts) {
+      if (part == "" || part == ".") next
+      if (part == "..") {
+        if (length(stack) > 0) stack <- stack[-length(stack)]
+      } else {
+        stack <- c(stack, part)
+      }
+    }
+    paste0("/", paste(stack, collapse = "/"))
+  }
   output_root <- dirname(out_csv)
-  output_root_norm <- normalizePath(output_root, winslash = "/", mustWork = FALSE)
-  out_fig_norm <- normalizePath(out_fig_dir, winslash = "/", mustWork = FALSE)
+  output_root_norm <- normalize_output_path(output_root)
+  out_fig_norm <- normalize_output_path(out_fig_dir)
   if (!(identical(out_fig_norm, output_root_norm) || startsWith(out_fig_norm, paste0(output_root_norm, "/")))) {
     stop("For safety, out_fig_dir must be inside dirname(out_csv) for ROI-mean output cleanup.")
   }

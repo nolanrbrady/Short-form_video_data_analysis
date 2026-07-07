@@ -593,6 +593,40 @@ sanitize_slug <- function(x) {
     str_to_lower()
 }
 
+clear_output_root <- function(out_csv, out_fig_dir) {
+  # Rebuild the result folder before writing this exploratory endpoint so stale
+  # CSV/figure artifacts cannot be mistaken for current results.
+  # Reference: Sandve et al. (2013), see `CITATIONS.md`.
+  normalize_output_path <- function(path) {
+    path_abs <- if (grepl("^/", path)) path else file.path(getwd(), path)
+    parts <- strsplit(gsub("/+", "/", path_abs), "/", fixed = FALSE)[[1]]
+    stack <- character()
+    for (part in parts) {
+      if (part == "" || part == ".") next
+      if (part == "..") {
+        if (length(stack) > 0) stack <- stack[-length(stack)]
+      } else {
+        stack <- c(stack, part)
+      }
+    }
+    paste0("/", paste(stack, collapse = "/"))
+  }
+  output_root <- dirname(out_csv)
+  output_root_norm <- normalize_output_path(output_root)
+  out_fig_norm <- normalize_output_path(out_fig_dir)
+  if (!(identical(out_fig_norm, output_root_norm) || startsWith(out_fig_norm, paste0(output_root_norm, "/")))) {
+    stop("For safety, out_fig_dir must be inside dirname(out_csv) for correlation output cleanup.")
+  }
+  if (!dir.exists(output_root)) {
+    return(FALSE)
+  }
+  deleted <- unlink(output_root, recursive = TRUE, force = TRUE)
+  if (deleted != 0 || dir.exists(output_root)) {
+    stop("Failed to clear the previous correlation output directory.")
+  }
+  TRUE
+}
+
 compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
   n_complete <- nrow(sub_complete)
   if (n_complete < min_subjects) {
@@ -732,6 +766,7 @@ plot_pairwise_correlation <- function(sub_complete, row, out_fig_dir) {
 
 main <- function() {
   args <- parse_args()
+  clear_output_root(args$out_csv, args$out_fig_dir)
   dir.create(dirname(args$out_csv), recursive = TRUE, showWarnings = FALSE)
   dir.create(args$out_fig_dir, recursive = TRUE, showWarnings = FALSE)
 
