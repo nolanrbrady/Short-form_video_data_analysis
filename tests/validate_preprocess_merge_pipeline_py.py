@@ -184,7 +184,11 @@ def write_recall_csv(path: Path, n_subjects: int) -> None:
 def write_qualtrics_csv(path: Path, n_subjects: int) -> None:
     single_cols = [
         ("Q71", "Study ID", '{"ImportId":"QID71"}'),
+        ("Q2", "What is the highest degree completed?", '{"ImportId":"QID2"}'),
         ("Q9", "Age", '{"ImportId":"QID9"}'),
+        ("Q11", "Hispanic/Latino", '{"ImportId":"QID11"}'),
+        ("Q12", "Race", '{"ImportId":"QID12"}'),
+        ("Q13", "Sex", '{"ImportId":"QID13"}'),
         ("Q16", "PD Status", '{"ImportId":"QID16"}'),
         ("Q80", "SFV Frequency", '{"ImportId":"QID80"}'),
         ("Q81", "SFV Daily Duration", '{"ImportId":"QID81"}'),
@@ -205,7 +209,11 @@ def write_qualtrics_csv(path: Path, n_subjects: int) -> None:
     for subject_num in range(1, n_subjects + 1):
         row: list[object] = [
             f"{subject_num:04d}",
+            "Bachelor's",
             18 + subject_num,
+            "No",
+            "White/Caucasian",
+            "Female" if subject_num % 2 == 0 else "Male",
             "No",
             "Daily",
             "1 - 2 hours",

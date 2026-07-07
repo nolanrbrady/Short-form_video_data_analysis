@@ -2,6 +2,62 @@
 
 This folder contains lightweight validation harnesses that aim to verify scientific/analysis integrity against `ANALYSIS_SPEC.md`.
 
+## Real Result Reproducibility (Python): no-overwrite exported-results check
+
+Runs the primary real-data result-producing scripts into a temporary directory and compares their CSV outputs to the exported files under `data/results`.
+This validator intentionally never writes to `data/results`; it only reads exported results for comparison.
+
+It verifies:
+- channelwise, ROI, retention, and engagement LMM CSVs reproduce from the documented real inputs
+- main exploratory/correlation CSV data reproduce, ignoring only expected temp-vs-exported `plot_file` paths
+- channel-behavior screening CSVs and core metadata reproduce
+- neural tidy outputs satisfy `estimate / se == t` for Kenward-Roger-consistent 1-df rows
+
+Command:
+
+```bash
+python tests/validate_real_result_reproducibility_py.py
+```
+
+## Exported Result Table Invariants (Python): no-overwrite CSV audit
+
+Reads exported CSVs under `data/results` and checks internal statistical/reporting invariants without rerunning analyses or writing files.
+
+It verifies:
+- neural tidy tables have valid required columns, complete-case `n_obs == 4 * n_subjects`, valid p/q values, CIs containing estimates, BH-FDR by chromophore/effect family, and `estimate / se == t`
+- neural posthoc rows match the FDR-significant interaction gate
+- retention and engagement tables have valid Holm corrections, CIs containing estimates, and posthoc gating
+- correlation tables have valid effect-size ranges, p/q ranges, BH family adjustments, and family sizes
+
+Command:
+
+```bash
+python tests/validate_exported_result_table_invariants_py.py
+```
+
+## Real Neural Model Diagnostics (R): no-overwrite model audit
+
+Refits the real channelwise and ROI neural primary LMMs in memory, compares the
+fixed-effect statistics to the exported tidy result tables, and checks that
+residuals/fitted values are finite and non-degenerate. This validator reads
+`data/results` but intentionally writes no files.
+
+It verifies:
+- channelwise and ROI real-data neural models reproduce exported estimates, SEs, KR df, signed t values, p-values, and KR-df confidence intervals
+- exported `n_subjects`, `n_obs`, `converged`, and `singular_fit` flags match the refit models
+- real model residuals and fitted values are finite and non-degenerate
+- real neural primary models do not emit captured non-convergence warnings
+
+The Shapiro-Wilk residual p-value is printed as a diagnostic, not a hard
+correctness gate, because mixed-model residual normality tests can be sensitive
+and should be interpreted with plots and sensitivity checks.
+
+Command:
+
+```bash
+Rscript tests/validate_real_model_diagnostics_r.R
+```
+
 ## Recall assessment processing (Python)
 
 Runs synthetic checks for `demographic/process_recall_assessment.py` and verifies:
@@ -27,6 +83,7 @@ Runs `analyze_format_content_lmm_channelwise.R` on a synthetic dataset that:
 - Verifies the output `converged` flag is present and TRUE for the clean synthetic fits
 - Verifies the tidy output is sorted by ascending `p_unc`
 - Verifies coefficient recovery (within tolerance) for known ground-truth fixed effects
+- Verifies reported SE values reconstruct the reported signed Kenward-Roger t statistics
 - Verifies explicit inferential TP/TN outcomes (known significant interaction channel vs known null channel)
 - Verifies post-hoc gating only triggers for interaction-FDR-significant channels
 - Verifies duplicate `subject_id` fails hard
@@ -50,6 +107,7 @@ Runs `analyze_format_content_lmm_roi.R` on a synthetic dataset that:
 - Verifies the tidy output is sorted by ascending `p_unc`
 - Verifies complete-case behavior when all ROI channels are pruned for a condition
 - Verifies coefficient recovery for ROI-level known generating effects
+- Verifies reported SE values reconstruct the reported signed Kenward-Roger t statistics
 - Verifies explicit inferential TP/TN outcomes (known significant ROI interaction vs known null ROI interaction)
 - Verifies BH-FDR correctness across ROIs (per chrom/effect family)
 - Verifies interaction-gated post-hoc behavior
@@ -238,7 +296,7 @@ Runs `covariate_correlation_analysis.py` helper functions on synthetic data and 
 Command:
 
 ```bash
-python tests/validate_covariate_correlation_analysis_py.py
+pytest -q tests/test_covariate_correlation_analysis.py
 ```
 
 ## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines

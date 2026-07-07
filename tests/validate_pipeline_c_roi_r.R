@@ -58,6 +58,41 @@ bh_qvalues_manual <- function(p_values) {
   q
 }
 
+assert_reported_se_reconstructs_t <- function(main_tidy, label_cols) {
+  # Publication-table integrity check: for each 1-df Kenward-Roger fixed-effect
+  # row, the reported SE must be the SE underlying the reported signed t statistic.
+  # References: Kenward & Roger (1997); Halekoh & Højsgaard (2014), see `CITATIONS.md`.
+  required <- c(label_cols, "effect", "estimate", "se", "t")
+  assert_true(all(required %in% names(main_tidy)), "tidy main output missing inferential columns needed for SE/t audit")
+
+  audited <- main_tidy %>%
+    filter(is.finite(.data$estimate), is.finite(.data$se), is.finite(.data$t), abs(.data$se) > 0)
+  assert_true(nrow(audited) > 0, "SE/t audit found no finite rows to evaluate")
+
+  max_abs <- max(abs((audited$estimate / audited$se) - audited$t), na.rm = TRUE)
+  assert_true(
+    max_abs < 1e-7,
+    paste0("reported SE does not reconstruct reported KR signed t statistic for ", paste(label_cols, collapse = " x "))
+  )
+}
+
+assert_script_uses_kr_consistent_se <- function(script_path) {
+  # Static guard for a subtle publication risk: the main-effect SE must not be
+  # taken from the default coefficient table while df/t/p come from KR ANOVA.
+  # The end-to-end synthetic fixture may be too balanced to expose the numeric
+  # discrepancy, so this protects the intended extraction path directly.
+  lines <- readLines(script_path, warn = FALSE)
+  text <- paste(lines, collapse = "\n")
+  assert_true(
+    grepl("derive_kr_consistent_se", text, fixed = TRUE),
+    "analysis script must derive main-effect SE from the same KR F statistic used for signed t"
+  )
+  assert_true(
+    !grepl("summary(model)$coefficients", text, fixed = TRUE),
+    "analysis script still extracts default coefficient-table SEs for KR-reported main effects"
+  )
+}
+
 make_subject_ids <- function(n_subjects) {
   ids_int <- seq_len(n_subjects)
   list(
@@ -219,6 +254,9 @@ run_analysis <- function(
 }
 
 main <- function() {
+  script <- "analyze_format_content_lmm_roi.R"
+  assert_script_uses_kr_consistent_se(script)
+
   tmp <- file.path(tempdir(), "pipeline_c_roi_validation")
   dir.create(tmp, showWarnings = FALSE, recursive = TRUE)
 
@@ -316,6 +354,9 @@ main <- function() {
     "converged",
     "singular_fit",
     "estimate",
+    "se",
+    "df",
+    "t",
     "ci95_low",
     "ci95_high",
     "p_unc",
@@ -324,6 +365,7 @@ main <- function() {
   assert_true(all(required_main_cols %in% names(main_tidy)), "tidy main output missing required columns")
   assert_true(all(main_tidy$converged), "expected all synthetic ROI fits to converge cleanly")
   assert_true(!is.unsorted(main_tidy$p_unc), "expected tidy main output to be sorted by ascending p_unc")
+  assert_reported_se_reconstructs_t(main_tidy, c("roi", "chrom"))
 
   # Exactly 2 ROIs x 2 chrom x 3 effects
   assert_true(nrow(main_tidy) == 12, "unexpected number of tidy rows for 2 ROIs x 2 chroms x 3 effects")
@@ -393,6 +435,11 @@ main <- function() {
     out_row <- main_tidy %>% filter(roi == "VMPFC", chrom == "HbO", effect == term_map[[1]])
     assert_true(nrow(out_row) == 1, paste0("missing output row for reference term ", term_map[[1]]))
     assert_true(abs(out_row$estimate[[1]] - ref_coefs[term_map[[2]], "Estimate"]) < 1e-10, paste0("estimate mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$df[[1]] - ref_anova[term_map[[2]], "DenDF"]) < 1e-10, paste0("df mismatch for ", term_map[[1]], " reference fit"))
+    expected_t <- sign(ref_coefs[term_map[[2]], "Estimate"]) * sqrt(ref_anova[term_map[[2]], "F value"])
+    expected_se <- abs(ref_coefs[term_map[[2]], "Estimate"] / expected_t)
+    assert_true(abs(out_row$se[[1]] - expected_se) < 1e-7, paste0("KR-consistent SE mismatch for ", term_map[[1]], " reference fit"))
+    assert_true(abs(out_row$t[[1]] - expected_t) < 1e-5, paste0("t mismatch for ", term_map[[1]], " reference fit"))
     assert_true(abs(out_row$p_unc[[1]] - ref_anova[term_map[[2]], "Pr(>F)"]) < 1e-7, paste0("p_unc mismatch for ", term_map[[1]], " reference fit"))
   }
 

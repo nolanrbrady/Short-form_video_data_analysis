@@ -22,6 +22,12 @@ import numpy as np
 FIR_COL_PATTERN = re.compile(r"^(S\d+_D\d+)_Cond(\d{2})_(HbO|HbR)_Basis(\d{3})$")
 
 
+def trapezoid_integral(y: np.ndarray, x: np.ndarray) -> float:
+    """Integrate `y` over `x` with NumPy's trapezoidal rule API across versions."""
+    trapezoid_fn = getattr(np, "trapezoid", np.trapz)
+    return float(trapezoid_fn(y, x))
+
+
 @dataclass(frozen=True)
 class ReconstructionSettings:
     """Settings for reconstructing Homer Gaussian-basis latent HRFs."""
@@ -423,7 +429,7 @@ class LatentHRFReconstructor:
         auc_mask = self._window_mask(self.auc_settings.auc_window)
         baseline_value = float(np.mean(hrf[baseline_mask]))
         corrected = hrf - baseline_value
-        return float(np.trapezoid(corrected[auc_mask], self.time_axis[auc_mask]))
+        return trapezoid_integral(corrected[auc_mask], self.time_axis[auc_mask])
 
     def _window_mask(self, window: tuple[float, float]) -> np.ndarray:
         start, stop = window

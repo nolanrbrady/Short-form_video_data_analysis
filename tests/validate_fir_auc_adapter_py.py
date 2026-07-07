@@ -29,6 +29,7 @@ from homer_fir import (
     load_preprocessing_settings,
     parse_fir_header,
     settings_to_dict,
+    trapezoid_integral,
 )
 
 
@@ -196,7 +197,7 @@ def test_auc_matches_manual_trapezoid(settings_path: Path) -> None:
     assert np.allclose(reconstructed, expected_hrf)
 
     baseline_value = np.mean(expected_hrf[(t >= -0.5) & (t <= 0.0)])
-    expected_auc = np.trapezoid(
+    expected_auc = trapezoid_integral(
         (expected_hrf - baseline_value)[(t >= 0.0) & (t <= 0.5)],
         t[(t >= 0.0) & (t <= 0.5)],
     )
@@ -234,7 +235,7 @@ def test_oscillatory_mixed_sign_basis_can_yield_negative_auc(settings_path: Path
     baseline_mask = (time_axis >= -0.5) & (time_axis <= 0.0)
     auc_mask = (time_axis >= 0.0) & (time_axis <= 1.5)
     baseline_value = float(np.mean(hrf[baseline_mask]))
-    expected_auc = np.trapezoid(hrf[auc_mask] - baseline_value, time_axis[auc_mask])
+    expected_auc = trapezoid_integral(hrf[auc_mask] - baseline_value, time_axis[auc_mask])
     observed_auc = reconstructor.summarize_auc(hrf)
 
     assert np.isclose(observed_auc, expected_auc)
