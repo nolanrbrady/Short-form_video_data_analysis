@@ -355,35 +355,56 @@ back_transform_neural_metric <- function(x) {
   as.numeric(x) / NEURAL_LMM_RESPONSE_SCALE
 }
 
+derive_kr_consistent_se <- function(est, f_val, term, model) {
+  # For these effect-coded omnibus terms NumDF is constrained to 1, so the
+  # Kenward-Roger F test is equivalent to t^2. Deriving SE from the same F value
+  # prevents publication tables from mixing default Wald SEs with KR df/t/p.
+  # References: Kenward & Roger (1997); Halekoh & Højsgaard (2014), see `CITATIONS.md`.
+  if (!is.finite(est)) {
+    stop(paste0("Invalid fixed-effect estimate for term '", term, "': ", est))
+  }
+  if (!is.finite(f_val) || f_val < 0) {
+    stop(paste0("Invalid Kenward-Roger F statistic for term '", term, "': ", f_val))
+  }
+  if (f_val > 0) {
+    return(abs(est) / sqrt(f_val))
+  }
+
+  kr_coefs <- summary(model, ddf = "Kenward-Roger")$coefficients
+  if (!(term %in% rownames(kr_coefs))) stop(paste0("Expected term '", term, "' in KR model coefficients."))
+  se <- as.numeric(kr_coefs[term, "Std. Error"])
+  if (!is.finite(se) || se <= 0) {
+    stop(paste0("Could not derive a finite Kenward-Roger-consistent SE for term '", term, "'."))
+  }
+  se
+}
+
 extract_fixed <- function(model, term, anova_kr) {
   # Extract fixed-effect results using:
-  # - Estimate/SE from model coefficient table
-  # - Kenward-Roger DenDF and p-value from Type-III ANOVA
-  # For 1-df terms, report t as sign(beta) * sqrt(F).
-  # - Wald 95% CI
+  # - Estimate from fixed effects
+  # - Kenward-Roger DenDF, F statistic, and p-value from Type-III ANOVA
+  # For 1-df terms, report t as sign(beta) * sqrt(F) and SE = abs(beta / t).
+  # This keeps estimate, SE, df, t, and p internally consistent for publication.
   if (!(term %in% rownames(anova_kr))) {
     stop(paste0("Expected term '", term, "' in Kenward-Roger ANOVA table."))
   }
 
-  coefs <- summary(model)$coefficients
-  if (!(term %in% rownames(coefs))) stop(paste0("Expected term '", term, "' in model coefficients."))
-  est <- as.numeric(coefs[term, "Estimate"])
-  se <- as.numeric(coefs[term, "Std. Error"])
+  fixed_effects <- lme4::fixef(model)
+  if (!(term %in% names(fixed_effects))) stop(paste0("Expected term '", term, "' in model fixed effects."))
+  est <- as.numeric(fixed_effects[[term]])
   num_df <- as.numeric(anova_kr[term, "NumDF"])
   if (!is.finite(num_df) || abs(num_df - 1) > 1e-8) {
     stop(paste0("Expected NumDF=1 for term '", term, "' but got ", num_df, "."))
   }
   df <- as.numeric(anova_kr[term, "DenDF"])
   f_val <- as.numeric(anova_kr[term, "F value"])
-  if (!is.finite(f_val) || f_val < 0) {
-    stop(paste0("Invalid Kenward-Roger F statistic for term '", term, "': ", f_val))
-  }
+  se <- derive_kr_consistent_se(est, f_val, term, model)
   t <- sign(est) * sqrt(f_val)
   p <- as.numeric(anova_kr[term, "Pr(>F)"])
 
-  ci <- suppressMessages(confint(model, parm = term, method = "Wald"))
-  ci_low <- back_transform_neural_metric(ci[1])
-  ci_high <- back_transform_neural_metric(ci[2])
+  ci_half_width <- qt(0.975, df = df) * se
+  ci_low <- back_transform_neural_metric(est - ci_half_width)
+  ci_high <- back_transform_neural_metric(est + ci_half_width)
   list(
     estimate = back_transform_neural_metric(est),
     se = back_transform_neural_metric(se),
@@ -679,6 +700,9 @@ main <- function() {
         converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_format,
+        se = .data$se_format,
+        df = .data$df_format,
+        t = .data$t_format,
         ci95_low = .data$ci95_format_low,
         ci95_high = .data$ci95_format_high,
         p_unc = .data$p_format_unc,
@@ -694,6 +718,9 @@ main <- function() {
         converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_content,
+        se = .data$se_content,
+        df = .data$df_content,
+        t = .data$t_content,
         ci95_low = .data$ci95_content_low,
         ci95_high = .data$ci95_content_high,
         p_unc = .data$p_content_unc,
@@ -709,6 +736,9 @@ main <- function() {
         converged = .data$converged,
         singular_fit = .data$singular_fit,
         estimate = .data$estimate_interaction,
+        se = .data$se_interaction,
+        df = .data$df_interaction,
+        t = .data$t_interaction,
         ci95_low = .data$ci95_interaction_low,
         ci95_high = .data$ci95_interaction_high,
         p_unc = .data$p_interaction_unc,

@@ -552,6 +552,7 @@ Model (per channel × chromophore):
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 - Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
+- The R tidy main-effects table reports estimate, Kenward-Roger-consistent standard error, Kenward-Roger denominator df, signed t-statistic, 95% CI, uncorrected p-value, and BH-FDR q-value for each channel x chromophore x effect row. For the 1-df omnibus terms, the reported SE is derived from the same Kenward-Roger F statistic used for the signed t value, so `estimate / se` reconstructs `t`.
 
 Pruned channels / missingness policy:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as **`NaN`** (do **not** impute).
@@ -622,6 +623,7 @@ Model / inference:
 - BH-FDR is applied separately per chromophore and per effect across ROIs.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 - Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
+- The R tidy main-effects table reports estimate, Kenward-Roger-consistent standard error, Kenward-Roger denominator df, signed t-statistic, 95% CI, uncorrected p-value, and BH-FDR q-value for each ROI x chromophore x effect row. For the 1-df omnibus terms, the reported SE is derived from the same Kenward-Roger F statistic used for the signed t value, so `estimate / se` reconstructs `t`.
 
 Example:
 

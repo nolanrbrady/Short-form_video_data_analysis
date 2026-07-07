@@ -231,7 +231,7 @@
   - **Usage:** Linear mixed-effects modeling
   - **Reasoning:** Primary peer-reviewed reference for the `lme4` framework used by the channelwise, ROI-wise, retention, and engagement analyses in R, including the practice of explicitly auditing optimizer/convergence warnings alongside returned fits.
   - **Link:** https://doi.org/10.18637/jss.v067.i01
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `r_lmm_convergence_helpers.R`, `tests/validate_pipeline_c_r.R`, `tests/validate_lmm_convergence_helpers_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`, `tests/calibrate_type1_error_r.R`, `tests/calibrate_type2_error_r.R`, `ANALYSIS_SPEC.md`, `README.md`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `r_lmm_convergence_helpers.R`, `tests/validate_pipeline_c_r.R`, `tests/validate_lmm_convergence_helpers_r.R`, `tests/validate_real_model_diagnostics_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_pipeline_r.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_engagement_pipeline_r.R`, `tests/calibrate_type1_error_r.R`, `tests/calibrate_type2_error_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. B. (2017)**
   - **Title:** lmerTest Package: Tests in Linear Mixed Effects Models
@@ -246,19 +246,19 @@
   - **Title:** Small Sample Inference for Fixed Effects from Restricted Maximum Likelihood
   - **First Author:** Kenward
   - **Year:** 1997
-  - **Usage:** Kenward-Roger denominator degrees of freedom and F-test approximation
-  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation used for fixed-effect tests in the channelwise and ROI format×content LMM scripts, including their age-adjusted omnibus models.
+  - **Usage:** Kenward-Roger denominator degrees of freedom, F-test approximation, and internally consistent 1-df SE/t reporting
+  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation used for fixed-effect tests in the channelwise and ROI format×content LMM scripts, including their age-adjusted omnibus models. For 1-df omnibus terms, the scripts derive reported SEs from the same Kenward-Roger F statistic used for signed t so publication tables do not mix default Wald SEs with KR df/t/p.
   - **Link:** https://doi.org/10.2307/2533558
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_real_model_diagnostics_r.R`, `ANALYSIS_SPEC.md`
 
 - **Halekoh, U., & Højsgaard, S. (2014)**
   - **Title:** A Kenward-Roger Approximation and Parametric Bootstrap Methods for Tests in Linear Mixed Models - The R Package pbkrtest
   - **First Author:** Halekoh
   - **Year:** 2014
   - **Usage:** R implementation of Kenward-Roger tests via `pbkrtest`
-  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df and p-values for `lmer` models in the age-adjusted channelwise and ROI omnibus analyses.
+  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df, F statistics, and p-values for `lmer` models in the age-adjusted channelwise and ROI omnibus analyses. The channelwise and ROI scripts use those 1-df KR F statistics to derive reported SEs that reconstruct the signed t statistics.
   - **Link:** https://doi.org/10.18637/jss.v059.i09
-  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_real_model_diagnostics_r.R`, `ANALYSIS_SPEC.md`
 
 - **Satterthwaite, F. E. (1946)**
   - **Title:** An approximate distribution of estimates of variance components

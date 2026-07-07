@@ -155,7 +155,8 @@ Coding (required):
 
 Reported quantities (per channel × chromophore × effect):
 - Fixed-effect estimate (Format, Content, and **Format×Content interaction**)
-- 95% CI
+- Kenward-Roger-consistent standard error, Kenward-Roger denominator df, and signed t-statistic
+- 95% CI from the Kenward-Roger-consistent standard error and denominator df
 - p-value (uncorrected and FDR-corrected)
 
 Significance threshold:
@@ -163,6 +164,7 @@ Significance threshold:
 
 R implementation notes:
 - LMM via `lme4::lmer`, with fixed-effect p-values/df from Kenward-Roger Type-III tests via `lmerTest` + `pbkrtest`.
+- For the 1-df omnibus terms, the R script derives the reported SE from the same Kenward-Roger F statistic used for signed t, so `estimate / se` reconstructs `t` in publication tables.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
@@ -330,6 +332,10 @@ Primary model (per ROI × chrom):
 
 Inference and post-hoc:
 - Main effects reported for Format, Content, and Interaction.
+- The ROI tidy main-effects output reports estimate, Kenward-Roger-consistent
+  standard error, Kenward-Roger denominator df, signed t-statistic, 95% CI,
+  uncorrected p-value, and BH-FDR q-value for each ROI × chromophore × effect row.
+  For the 1-df omnibus terms, `estimate / se` reconstructs the reported signed t.
 - The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
