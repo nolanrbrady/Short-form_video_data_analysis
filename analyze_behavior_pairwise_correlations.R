@@ -468,38 +468,58 @@ strip_leading_zero <- function(x) {
 }
 
 format_r_value <- function(x) {
-  strip_leading_zero(formatC(x, digits = 2, format = "f"))
+  # Round first so that tiny negatives (e.g. -0.001) do not render as "-.00".
+  rounded <- round(x, 2)
+  if (isTRUE(rounded == 0)) {
+    rounded <- 0
+  }
+  strip_leading_zero(formatC(rounded, digits = 2, format = "f"))
 }
 
-format_q_value <- function(x) {
-  if (is.na(x)) {
-    return("=NA")
+# Significance markers keyed to the global Benjamini-Hochberg FDR q-value so the
+# figure stays readable while exact q-values remain available in the CSV outputs.
+significance_stars <- function(q) {
+  if (is.na(q)) {
+    return("")
   }
-  if (x < 0.001) {
-    return("<.001")
+  if (q < 0.001) {
+    return("***")
   }
-  paste0("=", strip_leading_zero(formatC(x, digits = 3, format = "f")))
+  if (q < 0.01) {
+    return("**")
+  }
+  if (q < 0.05) {
+    return("*")
+  }
+  ""
 }
 
 display_variable_label <- function(x, variable_labels) {
   if (!(x %in% names(variable_labels))) {
     stop(paste0("No figure label loaded for variable: ", x))
   }
-  str_wrap(unname(variable_labels[[x]]), width = 16)
+  str_wrap(unname(variable_labels[[x]]), width = 14)
 }
 
-format_matrix_label <- function(r, q) {
-  if (is.na(r) || is.na(q)) {
+format_cell_label <- function(r, q) {
+  if (is.na(r)) {
     return("")
   }
-  paste0("r=", format_r_value(r), " (q", format_q_value(q), ")")
+  paste0(format_r_value(r), significance_stars(q))
 }
 
 plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, variable_labels) {
   variable_index <- seq_along(variables)
   names(variable_index) <- variables
-  axis_labels <- vapply(variables, display_variable_label, character(1), variable_labels = variable_labels)
+  diagonal_labels <- vapply(variables, display_variable_label, character(1), variable_labels = variable_labels)
   n_variables <- length(variables)
+
+  # Diagonal tiles carry the wrapped variable names so the matrix is
+  # self-documenting; this removes the cramped rotated axis labels entirely.
+  diagonal_df <- tibble::tibble(
+    idx = variable_index,
+    label = diagonal_labels
+  )
 
   plot_df <- results %>%
     filter(.data$analysis_status == "tested") %>%
@@ -508,69 +528,96 @@ plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, 
       var_y_index = unname(variable_index[.data$var_y]),
       cell_label = vapply(
         seq_len(n()),
-        function(i) format_matrix_label(.data$pearson_r[[i]], .data$p_fdr[[i]]),
+        function(i) format_cell_label(.data$pearson_r[[i]], .data$p_fdr[[i]]),
         character(1)
       ),
-      label_face = if_else(.data$significant_fdr, "bold", "plain")
+      label_face = if_else(.data$significant_fdr %in% TRUE, "bold", "plain"),
+      # White text stays legible on the saturated (strong-correlation) tiles,
+      # near-black text on the pale mid-range tiles.
+      text_color = if_else(abs(.data$pearson_r) > 0.5, "white", "grey15")
     )
 
+  n_tested <- nrow(plot_df)
+  n_min <- min(results$n_complete[results$analysis_status == "tested"], na.rm = TRUE)
+  n_max <- max(results$n_complete[results$analysis_status == "tested"], na.rm = TRUE)
+  n_range <- if (n_min == n_max) as.character(n_min) else paste0(n_min, " to ", n_max)
+
   p <- ggplot(plot_df, aes(x = .data$var_x_index, y = .data$var_y_index)) +
-    geom_tile(aes(fill = .data$pearson_r), color = "white", linewidth = 0.45) +
-    geom_text(
-      aes(label = .data$cell_label, fontface = .data$label_face),
-      size = 2.15,
-      lineheight = 0.9,
-      color = "#111111"
+    geom_tile(aes(fill = .data$pearson_r), color = "white", linewidth = 0.6) +
+    # Neutral diagonal tiles hosting the variable names.
+    geom_tile(
+      data = diagonal_df,
+      aes(x = .data$idx, y = .data$idx),
+      fill = "grey93",
+      color = "white",
+      linewidth = 0.6,
+      inherit.aes = FALSE
     ) +
+    geom_text(
+      aes(label = .data$cell_label, fontface = .data$label_face, color = .data$text_color),
+      size = 2.85
+    ) +
+    geom_text(
+      data = diagonal_df,
+      aes(x = .data$idx, y = .data$idx, label = .data$label),
+      inherit.aes = FALSE,
+      size = 2.5,
+      lineheight = 0.9,
+      fontface = "bold",
+      color = "grey20"
+    ) +
+    scale_color_identity() +
     scale_fill_gradient2(
       low = "#2166ac",
       mid = "#f7f7f7",
       high = "#b2182b",
       midpoint = 0,
       limits = c(-1, 1),
-      name = "Pearson r"
+      breaks = c(-1, -0.5, 0, 0.5, 1),
+      name = expression("Pearson " * italic(r)),
+      guide = guide_colorbar(
+        title.position = "top",
+        title.hjust = 0.5,
+        barwidth = grid::unit(9, "lines"),
+        barheight = grid::unit(0.7, "lines"),
+        ticks.colour = "grey30",
+        frame.colour = "grey30"
+      )
     ) +
-    scale_x_continuous(
-      breaks = seq_len(n_variables),
-      labels = axis_labels,
-      limits = c(0.5, n_variables + 0.5),
-      position = "top",
-      expand = c(0, 0)
-    ) +
-    scale_y_reverse(
-      breaks = seq_len(n_variables),
-      labels = axis_labels,
-      limits = c(n_variables + 0.5, 0.5),
-      expand = c(0, 0)
-    ) +
+    scale_x_continuous(limits = c(0.5, n_variables + 0.5), expand = c(0, 0)) +
+    scale_y_reverse(limits = c(n_variables + 0.5, 0.5), expand = c(0, 0)) +
     coord_fixed(clip = "off") +
     labs(
       title = "Pairwise Behavioral Correlations",
-      subtitle = "Lower triangle cells show Pearson r with global Benjamini-Hochberg FDR q-values in parentheses.",
+      subtitle = bquote("Pearson " * italic(r) * "; asterisks denote Benjamini-Hochberg FDR-adjusted significance (" *
+        "*" * italic(q) * " < .05, ** " * italic(q) * " < .01, *** " * italic(q) * " < .001)."),
       x = NULL,
       y = NULL,
-      caption = paste(
-        "recruitment_order_proxy is a subject-ID-derived recruitment/order diagnostic.",
-        "SFV frequency and duration are ordinal 0-3 codes treated numerically for this Pearson screen."
+      caption = paste0(
+        "n = ", n_range, " participants per pair (pairwise-complete); ", n_tested, " unique pairs.\n",
+        "Recruitment Order is a subject-ID-derived recruitment/order diagnostic, not a substantive trait. ",
+        "Short-form Video Frequency and Daily Duration are ordinal 0-3 codes treated numerically."
       )
     ) +
-    theme_minimal(base_size = 10) +
+    # Park the legend inside the otherwise-empty upper-right triangle.
+    theme_minimal(base_size = 11) +
     theme(
       panel.grid = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 0, vjust = 0, size = 7.4),
-      axis.text.y = element_text(size = 7.8),
-      plot.title = element_text(face = "bold", size = 15),
-      plot.subtitle = element_text(size = 9.5, margin = margin(b = 8)),
-      plot.caption = element_text(size = 8, hjust = 0),
-      legend.position = "right",
-      legend.title = element_text(size = 9),
-      legend.text = element_text(size = 8),
-      plot.margin = margin(12, 20, 12, 12)
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title = element_text(face = "bold", size = 17, margin = margin(b = 3)),
+      plot.subtitle = element_text(size = 10, margin = margin(b = 6), color = "grey25"),
+      plot.caption = element_text(size = 8.5, hjust = 0, color = "grey35", margin = margin(t = 10)),
+      legend.position = c(0.82, 0.78),
+      legend.direction = "horizontal",
+      legend.title = element_text(size = 10),
+      legend.text = element_text(size = 9),
+      plot.margin = margin(14, 14, 12, 14)
     )
 
   suppressMessages({
-    ggplot2::ggsave(filename = outputs$matrix_png, plot = p, width = 14, height = 11, dpi = 300, bg = "white")
-    ggplot2::ggsave(filename = outputs$matrix_pdf, plot = p, width = 14, height = 11, bg = "white")
+    ggplot2::ggsave(filename = outputs$matrix_png, plot = p, width = 12, height = 12.5, dpi = 300, bg = "white")
+    ggplot2::ggsave(filename = outputs$matrix_pdf, plot = p, width = 12, height = 12.5, bg = "white")
   })
 }
 
