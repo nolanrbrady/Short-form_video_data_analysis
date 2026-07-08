@@ -9,7 +9,7 @@ This validator intentionally never writes to `data/results`; it only reads expor
 
 It verifies:
 - channelwise, ROI, retention, and engagement LMM CSVs reproduce from the documented real inputs
-- main exploratory/correlation CSV data reproduce, ignoring only expected temp-vs-exported `plot_file` paths
+- main exploratory/correlation CSV data reproduce, including the behavior-pairwise all-attempted and BH-FDR CSVs, ignoring only expected temp-vs-exported `plot_file` paths where those columns exist
 - channel-behavior screening CSVs and core metadata reproduce
 - neural tidy outputs satisfy `estimate / se == t` for Kenward-Roger-consistent 1-df rows
 
@@ -225,15 +225,21 @@ Rscript tests/validate_pooled_mean_correlations_r.R
 
 ## Behavior Pairwise Correlations (R): standalone behavioral screen validation
 
-Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset and verifies:
+Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset and on the real merged publication input, then verifies:
 - the standalone behavioral-correlation script exits cleanly
-- it writes a full CSV and a significant-only CSV
+- it writes a full all-attempted CSV and an all-tested BH-FDR CSV
+- it emits the lower-triangle matrix as PNG and PDF
+- incomplete variable-figure-label configs fail hard and identify the omitted label
+- the exact requested variable set is used and `pd_status` is absent
+- `recruitment_order_proxy` is derived from normalized `subject_id`
 - it uses pairwise complete cases for each variable pair
 - known positive and negative synthetic pairs recover the expected Pearson correlations
-- constant-input pairs are skipped with an explicit reason
-- binary-vs-continuous pairs remain analyzable under the Pearson-only policy
+- ordinal SFV-use variables are treated as numeric Pearson inputs
+- an underpowered synthetic pair is skipped with `n_complete<6`, excluded from the FDR CSV, and left without q-value/significance flags
+- global BH-FDR q-values match `p.adjust(..., method = "BH")`
+- `significant_fdr` is based on `p_fdr < alpha`
 - it clears stale CSV and figure artifacts before rerun
-- uncorrected-significant rows generate figures
+- every real-data pair's `n_complete`, Pearson `r`, raw p-value, Fisher CI, BH-FDR q-value, and FDR flag match an independently recomputed reference table
 
 Command:
 

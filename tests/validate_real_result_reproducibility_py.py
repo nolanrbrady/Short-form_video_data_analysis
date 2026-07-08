@@ -281,12 +281,12 @@ def compare_correlation_outputs(tmp: Path) -> None:
         (
             "behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv",
             "behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv",
-            ("plot_file",),
+            (),
         ),
         (
-            "behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv",
-            "behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv",
-            ("plot_file",),
+            "behavior_pairwise_correlations/behavior_pairwise_correlations_fdr_r.csv",
+            "behavior_pairwise_correlations/behavior_pairwise_correlations_fdr_r.csv",
+            (),
         ),
     ]
     for exported_rel, rerun_rel, ignored in comparisons:
