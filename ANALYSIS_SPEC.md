@@ -899,30 +899,30 @@ Must verify:
 - fail-hard behavior for duplicate IDs and malformed required inputs
 
 # ANALYSIS_SPEC — Standalone Pairwise Behavioral Correlations
-Last updated: 2026-04-03
+Last updated: 2026-07-08
 
 ## Scope
 
-Goal: Screen exploratory pairwise associations among the declared behavioral variables in the same merged subject-level CSV used by `analyze_correlational_relationships.R`, without multiple-testing correction in this dedicated workflow.
+Goal: Screen exploratory pairwise associations among the declared behavioral variables in the same merged subject-level CSV used by `analyze_correlational_relationships.R`, with a global Benjamini-Hochberg FDR correction across all tested pairs.
 
 Default behavioral variables:
 - `sf_education_engagement`
 - `sf_entertainment_engagement`
 - `lf_entertainment_engagement`
 - `lf_education_engagement`
-- `age`
-- `pd_status`
-- `sfv_frequency`
-- `sfv_daily_duration`
-- `phq_total`
-- `gad_total`
-- `asrs_total`
-- `yang_pu_total`
-- `yang_mot_total`
 - `diff_short_form_education`
 - `diff_short_form_entertainment`
 - `diff_long_form_education`
 - `diff_long_form_entertainment`
+- `age`
+- `recruitment_order_proxy` (derived from normalized `subject_id`)
+- `sfv_frequency`
+- `sfv_daily_duration`
+- `asrs_total`
+- `yang_pu_total`
+- `yang_mot_total`
+- `phq_total`
+- `gad_total`
 
 ## Inputs
 
@@ -931,13 +931,15 @@ Primary CSV input:
 
 Required support files:
 - `data/config/behavior_pairwise_correlation_plan.json`
+- `data/config/variable_figure_names.json`
 - `data/config/excluded_subjects.json`
 
 ## Missingness and data integrity
 
 - `subject_id` is normalized by extracting digits and converting to integer.
+- `recruitment_order_proxy` is derived from normalized `subject_id` after duplicate-ID checks and is retained only as an exploratory recruitment/order artifact diagnostic.
 - Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
-- All declared behavioral variables must exist in the merged CSV; missing columns are a hard error.
+- All declared non-derived behavioral variables and all derived-variable source columns must exist in the merged CSV; missing columns are a hard error.
 - All declared behavioral variables must be numeric/coercible to numeric; non-numeric values are a hard error.
 - Each tested pair uses pairwise complete cases only.
 - No imputation is allowed.
@@ -951,29 +953,32 @@ Required support files:
   - `analysis_status`, `skip_reason`
   - `n_complete`
   - `pearson_r`
-  - `r_squared`
   - `p_unc`
+  - `p_fdr`
+  - `significant_fdr`
   - `ci95_low`, `ci95_high`
-  - `slope`, `intercept`
-  - `plot_file`
-- No multiple-testing correction is applied in this workflow.
-- `pd_status` remains in the same Pearson table; with 0/1 coding, the resulting coefficient is on the point-biserial effect-size scale.
+- Apply BH-FDR once across every tested row in this workflow, including `recruitment_order_proxy` pairs.
+- `sfv_frequency` and `sfv_daily_duration` are ordinal 0-3 codes but are intentionally treated as numeric, equally spaced scores in this Pearson diagnostic screen.
+- `pd_status` is not part of this workflow.
 
 ## Figures
 
 - The script clears `data/results/behavior_pairwise_correlations/` before each run so stale result files and figures cannot persist.
-- Under the default plan, plots are emitted only for tested rows with `p_unc < 0.05`.
-- Plots use scatter plus linear fit; if either variable is binary, that axis is jittered visually to reduce overplotting while keeping the same Pearson fit.
+- Emit one lower-triangle matrix as both PNG and PDF.
+- Matrix cells show Pearson `r` with global BH-FDR `q` values in parentheses.
+- Axis labels are loaded from `data/config/variable_figure_names.json`; missing labels for plotted variables are a hard error.
+- The upper triangle and diagonal are omitted.
 
 ## Outputs
 
 - `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv`
-- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv`
-- `data/results/behavior_pairwise_correlations/figures/`
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_fdr_r.csv`
+- `data/results/behavior_pairwise_correlations/figures/behavior_pairwise_correlation_lower_triangle.png`
+- `data/results/behavior_pairwise_correlations/figures/behavior_pairwise_correlation_lower_triangle.pdf`
 
 Output ordering:
-- rows are sorted by ascending `p_unc`
-- ties are broken by descending absolute `pearson_r`
+- rows are sorted by ascending `p_fdr`
+- ties are broken by ascending `p_unc`, then descending absolute `pearson_r`
 
 ## Validation requirements
 
@@ -981,10 +986,15 @@ Validation script:
 - `tests/validate_behavior_pairwise_correlations_r.R`
 
 Must verify:
+- the exact requested variable set is used and `pd_status` is absent
+- `recruitment_order_proxy` is derived from normalized `subject_id`
 - a known positive synthetic pair recovers a perfect positive Pearson correlation
 - a known negative synthetic pair recovers a perfect negative Pearson correlation
+- ordinal SFV variables are treated as numeric Pearson inputs
 - pairwise complete-case handling drops only the subjects missing one member of a pair
-- constant-input pairs are skipped with an explicit reason
-- binary-vs-continuous pairs still return finite Pearson estimates
+- global `p.adjust(..., method = "BH")` matches exported `p_fdr`
+- `significant_fdr` is based on `p_fdr < alpha`
+- the FDR CSV contains every tested pair, not only significant rows
+- the real merged publication input is audited against an independently recomputed reference table for every pair's `n_complete`, Pearson `r`, raw p-value, Fisher CI, BH-FDR q-value, and FDR flag
 - the output directory is rebuilt at run start, removing stale CSVs and PNGs
-- significant tested rows generate figures and the significant-only CSV
+- the lower-triangle PNG and PDF are emitted

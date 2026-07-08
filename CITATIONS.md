@@ -209,9 +209,9 @@
   - **First Author:** Simmons
   - **Year:** 2011
   - **Usage:** Transparent disclosure of study-specific recall-item exclusions and exploratory recruitment-order diagnostics
-  - **Reasoning:** Supports making all analysis exclusions explicit and auditable. Used here to justify storing invalid recall questions and Qualtrics ID aliases in versioned manifests, keeping excluded items visible in audit outputs, and documenting that `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task retention denominators because they were identified as invalid assessment items across the full study, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`; also documents the pre-task `Q39` to canonical `Q22` scoring alias. Also supports explicitly labeling optional subject-ID correlations as exploratory recruitment-order diagnostics rather than primary evidence.
+  - **Reasoning:** Supports making all analysis exclusions explicit and auditable. Used here to justify storing invalid recall questions and Qualtrics ID aliases in versioned manifests, keeping excluded items visible in audit outputs, and documenting that `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task retention denominators because they were identified as invalid assessment items across the full study, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`; also documents the pre-task `Q39` to canonical `Q22` scoring alias. Also supports explicitly labeling subject-ID-derived correlations as exploratory recruitment-order diagnostics rather than primary evidence.
   - **Link:** https://doi.org/10.1177/0956797611417632
-  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
 
 # Statistical Analysis
 
@@ -310,9 +310,9 @@
   - **First Author:** Bonett
   - **Year:** 2020
   - **Usage:** Point-biserial correlation for binary behavioral predictors
-  - **Reasoning:** Modern peer-reviewed reference for point-biserial correlation as a standardized effect size and test for dichotomous-vs-continuous associations. Used here for binary behavioral variables such as `pd_status` when screening against continuous channel betas, and to justify interpreting 0/1-coded Pearson behavioral-screen coefficients on the same dichotomous-vs-continuous effect-size scale.
+  - **Reasoning:** Modern peer-reviewed reference for point-biserial correlation as a standardized effect size and test for dichotomous-vs-continuous associations. Used here for binary behavioral variables such as `pd_status` when screening against continuous channel betas.
   - **Link:** https://doi.org/10.1111/bmsp.12189
-  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Pearson, K. (1896)**
   - **Title:** Mathematical Contributions to the Theory of Evolution. III. Regression, Heredity, and Panmixia
@@ -346,9 +346,9 @@
   - **First Author:** Bender
   - **Year:** 2001
   - **Usage:** Multiple-testing family definition for exploratory/post-hoc association analysis
-  - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families at the analysis-tier x behavior-run x grouping level for the pooled-mean and other exploratory follow-up analyses.
+  - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families at the analysis-tier x behavior-run x grouping level for the pooled-mean and other exploratory follow-up analyses, and a single global family for the standalone behavior-pairwise diagnostic matrix.
   - **Link:** https://doi.org/10.1016/S0895-4356(00)00314-0
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Holm, S. (1979)**
   - **Title:** A Simple Sequentially Rejective Multiple Test Procedure
@@ -391,9 +391,9 @@
   - **First Author:** Benjamini
   - **Year:** 1995
   - **Usage:** False Discovery Rate (FDR)
-  - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing.
+  - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing, including the global correction across all tested pairs in the standalone behavioral correlation matrix.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans

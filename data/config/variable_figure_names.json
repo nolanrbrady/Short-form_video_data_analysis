@@ -1,0 +1,19 @@
+{
+    "sf_education_engagement": "Short-form Education Engagement",
+    "sf_entertainment_engagement": "Short-form Entertainment Engagement",
+    "lf_entertainment_engagement": "Long-form Entertainment Engagement",
+    "lf_education_engagement": "Long-form Education Engagement",
+    "diff_short_form_education": "Short-form Education Retention",
+    "diff_short_form_entertainment": "Short-form Entertainment Retention",
+    "diff_long_form_education": "Long-form Education Retention",
+    "diff_long_form_entertainment": "Long-form Entertainment Retention",
+    "age": "Age",
+    "recruitment_order_proxy": "Recruitment Order",
+    "sfv_frequency": "Short-form Video Frequency",
+    "sfv_daily_duration": "Short-form Video Daily Duration",
+    "asrs_total": "ASRS Total",
+    "yang_pu_total": "Yang Problematic Use Scale Total",
+    "yang_mot_total": "Yang Use Motivation Scale Total",
+    "phq_total": "PHQ Total",
+    "gad_total": "GAD Total"
+}

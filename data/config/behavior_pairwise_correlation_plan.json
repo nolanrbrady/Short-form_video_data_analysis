@@ -1,26 +1,35 @@
 {
   "version": 1,
-  "description": "Standalone exploratory Pearson pairwise behavioral correlation plan for the SFV merged dataset.",
+  "description": "Standalone exploratory Pearson pairwise behavioral correlation plan for the SFV merged dataset. Includes a subject-ID-derived recruitment_order_proxy only as a recruitment/order diagnostic.",
   "variables": [
     "sf_education_engagement",
     "sf_entertainment_engagement",
     "lf_entertainment_engagement",
     "lf_education_engagement",
-    "age",
-    "pd_status",
-    "sfv_frequency",
-    "sfv_daily_duration",
-    "phq_total",
-    "gad_total",
-    "asrs_total",
-    "yang_pu_total",
-    "yang_mot_total",
     "diff_short_form_education",
     "diff_short_form_entertainment",
     "diff_long_form_education",
-    "diff_long_form_entertainment"
+    "diff_long_form_entertainment",
+    "age",
+    "recruitment_order_proxy",
+    "sfv_frequency",
+    "sfv_daily_duration",
+    "asrs_total",
+    "yang_pu_total",
+    "yang_mot_total",
+    "phq_total",
+    "gad_total"
+  ],
+  "derived_variables": [
+    {
+      "name": "recruitment_order_proxy",
+      "source": "subject_id",
+      "transform": "normalized_numeric_subject_id"
+    }
   ],
   "figures": {
-    "policy": "significant_only"
+    "lower_triangle": {
+      "filename_stem": "behavior_pairwise_correlation_lower_triangle"
+    }
   }
 }

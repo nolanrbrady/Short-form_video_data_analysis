@@ -997,38 +997,41 @@ python tests/validate_channel_behavior_relationships_py.py
 
 Purpose:
 - Screen pairwise associations among the explicitly declared behavioral variables in the same merged CSV used by `analyze_correlational_relationships.R`.
-- Keep the analysis exploratory and uncorrected for multiplicity in this dedicated workflow.
-- Generate scatterplots only for tested rows with `p_unc < 0.05`.
+- Keep the analysis exploratory and apply one global Benjamini-Hochberg FDR correction across all tested behavioral pairs.
+- Include `recruitment_order_proxy`, derived from normalized `subject_id`, only as a recruitment/order diagnostic and not as a substantive behavioral trait.
+- Generate one lower-triangle correlation matrix with Pearson `r` and BH-FDR `q` values in each tested cell.
 - Clear `data/results/behavior_pairwise_correlations/` before each run so stale CSVs and PNGs do not persist.
 
 Input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
 - `data/config/behavior_pairwise_correlation_plan.json`
+- `data/config/variable_figure_names.json` for lower-triangle matrix axis labels
 
 Behavioral variable set under the default plan:
 - `sf_education_engagement`
 - `sf_entertainment_engagement`
 - `lf_entertainment_engagement`
 - `lf_education_engagement`
-- `age`
-- `pd_status`
-- `sfv_frequency`
-- `sfv_daily_duration`
-- `phq_total`
-- `gad_total`
-- `asrs_total`
-- `yang_pu_total`
-- `yang_mot_total`
 - `diff_short_form_education`
 - `diff_short_form_entertainment`
 - `diff_long_form_education`
 - `diff_long_form_entertainment`
+- `age`
+- `recruitment_order_proxy` (derived from normalized `subject_id`)
+- `sfv_frequency`
+- `sfv_daily_duration`
+- `asrs_total`
+- `yang_pu_total`
+- `yang_mot_total`
+- `phq_total`
+- `gad_total`
 
 Method and missingness policy:
-- Pearson correlation for every tested pair, with Fisher-z confidence intervals.
+- Pearson correlation for every tested pair, with Fisher-z confidence intervals and global BH-FDR q-values.
+- `sfv_frequency` and `sfv_daily_duration` are ordinal 0-3 codes but are intentionally treated as numeric, equally spaced scores in this Pearson diagnostic screen.
 - Pairwise complete cases only for each variable pair.
 - No imputation is performed.
-- `pd_status` remains in the same Pearson table; with 0/1 coding this is on the point-biserial effect-size scale.
+- `recruitment_order_proxy` is interpreted only as a recruitment/order artifact check.
 
 Example:
 
@@ -1036,17 +1039,19 @@ Example:
 Rscript analyze_behavior_pairwise_correlations.R \
   --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
   --analysis_plan_json data/config/behavior_pairwise_correlation_plan.json \
+  --variable_figure_names_json data/config/variable_figure_names.json \
   --exclude_subjects_json data/config/excluded_subjects.json \
   --out_dir data/results/behavior_pairwise_correlations
 ```
 
 Outputs:
 - `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_r.csv`
-- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_significant_r.csv`
-- `data/results/behavior_pairwise_correlations/figures/`
+- `data/results/behavior_pairwise_correlations/behavior_pairwise_correlations_fdr_r.csv`
+- `data/results/behavior_pairwise_correlations/figures/behavior_pairwise_correlation_lower_triangle.png`
+- `data/results/behavior_pairwise_correlations/figures/behavior_pairwise_correlation_lower_triangle.pdf`
 
 Output ordering:
-- rows are sorted by ascending `p_unc`, then descending absolute `pearson_r`
+- rows are sorted by ascending `p_fdr`, then ascending `p_unc`, then descending absolute `pearson_r`
 
 Validation:
 
@@ -1245,7 +1250,7 @@ Methodology notes / planned improvements live in:
 - `covariate_correlation_analysis.py`: Pearson correlation tables, p-values, and heatmaps (covariates-only or combined dataset)
 - `analyze_correlational_relationships.R`: targeted exploratory correlations for selected pooled long/short channel/ROI neural targets against pooled long/short and raw behavioral runs, with figure generation controlled by the analysis-plan config
 - `analyze_correlational_relationships_roi_means.R`: standalone pooled ROI-mean x pooled behavioral-mean correlation analysis
-- `analyze_behavior_pairwise_correlations.R`: standalone uncorrected Pearson screen across declared behavioral-variable pairs in the merged SFV dataset
+- `analyze_behavior_pairwise_correlations.R`: standalone Pearson screen across declared behavioral-variable pairs in the merged SFV dataset, with global BH-FDR and a lower-triangle matrix figure
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values
 - `plot_significant_beta_value_distribution.R`: plots simple beta-value point distributions for the FDR-significant channelwise and ROI LMM hits, with one audit CSV covering every plotted row

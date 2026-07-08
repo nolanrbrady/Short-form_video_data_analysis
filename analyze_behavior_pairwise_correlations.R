@@ -8,14 +8,17 @@
 #   - Restrict the analysis to an explicit behavior-only variable list declared
 #     in `data/config/behavior_pairwise_correlation_plan.json`.
 #   - Compute one Pearson correlation per unique unordered behavioral pair.
+#   - Include `recruitment_order_proxy` only as a subject-ID-derived diagnostic
+#     for possible recruitment/order artifacts, not as a substantive behavior.
 #
 # Rationale
 #   - Pearson (1896): product-moment correlation for continuous pairwise
 #     behavioral association screening.
 #   - Fisher (1921): confidence intervals for Pearson r via Fisher-z.
-#   - Bonett (2020): binary-vs-continuous Pearson correlation with 0/1 coding
-#     is on the point-biserial effect-size scale, so `pd_status` can remain in
-#     the same exploratory table without a separate estimator.
+#   - Benjamini & Hochberg (1995): global FDR correction across the full
+#     behavioral pairwise screening family.
+#   - Simmons et al. (2011): subject-ID correlations are labeled as exploratory
+#     diagnostics to avoid undisclosed flexibility or substantive overclaiming.
 #   - Kriegeskorte et al. (2009): the resulting associations are exploratory
 #     and should not be overinterpreted as confirmatory evidence.
 
@@ -54,6 +57,7 @@ parse_args <- function() {
   defaults <- list(
     input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     analysis_plan_json = "data/config/behavior_pairwise_correlation_plan.json",
+    variable_figure_names_json = "data/config/variable_figure_names.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",
     out_dir = "data/results/behavior_pairwise_correlations",
     alpha = 0.05,
@@ -83,6 +87,91 @@ normalize_json_string_array <- function(x, field_name) {
     stop(paste0("Behavior pairwise correlation plan contains empty values in '", field_name, "'."))
   }
   values
+}
+
+load_variable_figure_labels <- function(label_json_path, variables) {
+  if (!file.exists(label_json_path)) {
+    stop(paste0("Variable figure-name config file not found: ", label_json_path))
+  }
+
+  label_obj <- tryCatch(
+    jsonlite::fromJSON(label_json_path, simplifyVector = FALSE),
+    error = function(e) {
+      stop(
+        paste0(
+          "Failed to parse variable figure-name JSON at ", label_json_path,
+          ". Error: ", conditionMessage(e)
+        )
+      )
+    }
+  )
+  if (!is.list(label_obj) || is.data.frame(label_obj) || length(label_obj) == 0) {
+    stop("Variable figure-name config must be a non-empty JSON object mapping variable names to labels.")
+  }
+  if (is.null(names(label_obj)) || any(!nzchar(names(label_obj)))) {
+    stop("Variable figure-name config must use variable names as object keys.")
+  }
+
+  labels <- vapply(names(label_obj), function(name) {
+    value <- label_obj[[name]]
+    if (!is.atomic(value) || length(value) != 1) {
+      stop(paste0("Variable figure-name label for '", name, "' must be a single string."))
+    }
+    as.character(value)
+  }, character(1))
+
+  if (any(is.na(labels) | trimws(labels) == "")) {
+    bad <- names(labels)[is.na(labels) | trimws(labels) == ""]
+    stop(
+      paste0(
+        "Variable figure-name config contains empty labels for: ",
+        paste(head(bad, 10), collapse = ", ")
+      )
+    )
+  }
+
+  missing_labels <- setdiff(variables, names(labels))
+  if (length(missing_labels) > 0) {
+    stop(
+      paste0(
+        "Variable figure-name config is missing labels for: ",
+        paste(missing_labels, collapse = ", ")
+      )
+    )
+  }
+
+  labels
+}
+
+normalize_derived_variables <- function(x) {
+  if (is.null(x)) {
+    return(list())
+  }
+  if (!is.list(x) || is.data.frame(x)) {
+    stop("Behavior pairwise correlation plan 'derived_variables' must be an array of objects.")
+  }
+
+  lapply(seq_along(x), function(i) {
+    item <- x[[i]]
+    if (!is.list(item) || is.data.frame(item)) {
+      stop(paste0("Derived variable entry ", i, " must be a JSON object."))
+    }
+    name <- as.character(item$name %||% NA_character_)
+    source <- as.character(item$source %||% NA_character_)
+    transform <- as.character(item$transform %||% NA_character_)
+    if (!nzchar(name) || !nzchar(source) || !nzchar(transform)) {
+      stop(paste0("Derived variable entry ", i, " must define name, source, and transform."))
+    }
+    if (transform != "normalized_numeric_subject_id") {
+      stop(
+        paste0(
+          "Unsupported derived variable transform for '", name, "': ",
+          transform
+        )
+      )
+    }
+    list(name = name, source = source, transform = transform)
+  })
 }
 
 load_analysis_plan <- function(plan_json_path) {
@@ -122,19 +211,50 @@ load_analysis_plan <- function(plan_json_path) {
     )
   }
 
-  figures_obj <- plan_obj$figures
+  derived_variables <- normalize_derived_variables(plan_obj$derived_variables)
+  derived_names <- vapply(derived_variables, function(x) x$name, character(1))
+  if (length(derived_names) > 0) {
+    if (anyDuplicated(derived_names) > 0) {
+      dup <- unique(derived_names[duplicated(derived_names)])
+      stop(
+        paste0(
+          "Behavior pairwise correlation plan contains duplicate derived variables: ",
+          paste(dup, collapse = ", ")
+        )
+      )
+    }
+    missing_derived <- setdiff(derived_names, variables)
+    if (length(missing_derived) > 0) {
+      stop(
+        paste0(
+          "Derived variables must also appear in the declared variable order: ",
+          paste(missing_derived, collapse = ", ")
+        )
+      )
+    }
+  }
+
+  figures_obj <- plan_obj$figures %||% list()
   if (!is.list(figures_obj)) {
     stop("Behavior pairwise correlation plan must define a 'figures' object.")
   }
-  figure_policy <- as.character(figures_obj$policy %||% NA_character_)
-  if (!nzchar(figure_policy) || !(figure_policy %in% c("significant_only", "all_tested"))) {
-    stop("Behavior pairwise correlation plan figures.policy must be 'significant_only' or 'all_tested'.")
+  lower_triangle_obj <- figures_obj$lower_triangle %||% list()
+  if (!is.list(lower_triangle_obj)) {
+    stop("Behavior pairwise correlation plan figures.lower_triangle must be an object when provided.")
+  }
+  filename_stem <- as.character(lower_triangle_obj$filename_stem %||% "behavior_pairwise_correlation_lower_triangle")
+  if (!nzchar(filename_stem) || grepl("[/\\\\]", filename_stem)) {
+    stop("Behavior pairwise correlation plan figures.lower_triangle.filename_stem must be a non-empty file stem.")
   }
 
   list(
     version = version,
     variables = variables,
-    figures = list(policy = figure_policy)
+    base_variables = setdiff(variables, derived_names),
+    derived_variables = derived_variables,
+    figures = list(
+      lower_triangle = list(filename_stem = filename_stem)
+    )
   )
 }
 
@@ -207,9 +327,43 @@ derive_output_paths <- function(out_dir) {
   list(
     out_dir = out_dir,
     out_csv = file.path(out_dir, "behavior_pairwise_correlations_r.csv"),
-    out_sig_csv = file.path(out_dir, "behavior_pairwise_correlations_significant_r.csv"),
+    out_fdr_csv = file.path(out_dir, "behavior_pairwise_correlations_fdr_r.csv"),
     out_fig_dir = file.path(out_dir, "figures")
   )
+}
+
+add_matrix_output_paths <- function(outputs, filename_stem) {
+  outputs$matrix_png <- file.path(outputs$out_fig_dir, paste0(filename_stem, ".png"))
+  outputs$matrix_pdf <- file.path(outputs$out_fig_dir, paste0(filename_stem, ".pdf"))
+  outputs
+}
+
+add_derived_variables <- function(df, derived_variables) {
+  out <- df
+  for (derived in derived_variables) {
+    if (!(derived$source %in% names(out))) {
+      stop(
+        paste0(
+          "Cannot derive '", derived$name, "' because source column '",
+          derived$source, "' is absent."
+        )
+      )
+    }
+    if (derived$name %in% names(out)) {
+      stop(
+        paste0(
+          "Cannot derive '", derived$name,
+          "' because the input already contains a column with that name."
+        )
+      )
+    }
+    if (derived$transform == "normalized_numeric_subject_id") {
+      # Simmons et al. (2011; see CITATIONS.md): this ID-derived value is only
+      # an exploratory recruitment/order diagnostic, never a substantive trait.
+      out[[derived$name]] <- as.numeric(normalize_subject_id(out[[derived$source]], derived$source))
+    }
+  }
+  out
 }
 
 load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan) {
@@ -218,7 +372,8 @@ load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan)
     stop(paste0("Expected column 'subject_id' in merged input: ", input_csv))
   }
 
-  assert_required_columns(df, analysis_plan$variables, input_csv)
+  derived_sources <- unique(vapply(analysis_plan$derived_variables, function(x) x$source, character(1)))
+  assert_required_columns(df, unique(c(analysis_plan$base_variables, derived_sources)), input_csv)
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
@@ -236,6 +391,7 @@ load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan)
     )
   }
 
+  df <- add_derived_variables(df, analysis_plan$derived_variables)
   df <- coerce_numeric_strict(df, analysis_plan$variables)
 
   excluded <- apply_subject_exclusions(
@@ -248,18 +404,6 @@ load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan)
   excluded$data
 }
 
-is_binary_zero_one <- function(x) {
-  vals <- sort(unique(x[!is.na(x)]))
-  length(vals) == 2 && identical(as.numeric(vals), c(0, 1))
-}
-
-sanitize_slug <- function(x) {
-  x %>%
-    str_replace_all("[^A-Za-z0-9]+", "_") %>%
-    str_replace_all("^_+|_+$", "") %>%
-    str_to_lower()
-}
-
 compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
   n_complete <- nrow(sub_complete)
   if (n_complete < min_subjects) {
@@ -268,12 +412,9 @@ compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
       skip_reason = paste0("n_complete<", min_subjects),
       n_complete = n_complete,
       pearson_r = NA_real_,
-      r_squared = NA_real_,
       p_unc = NA_real_,
       ci95_low = NA_real_,
-      ci95_high = NA_real_,
-      slope = NA_real_,
-      intercept = NA_real_
+      ci95_high = NA_real_
     ))
   }
 
@@ -283,12 +424,9 @@ compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
       skip_reason = "var_x_has_zero_variance",
       n_complete = n_complete,
       pearson_r = NA_real_,
-      r_squared = NA_real_,
       p_unc = NA_real_,
       ci95_low = NA_real_,
-      ci95_high = NA_real_,
-      slope = NA_real_,
-      intercept = NA_real_
+      ci95_high = NA_real_
     ))
   }
 
@@ -298,12 +436,9 @@ compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
       skip_reason = "var_y_has_zero_variance",
       n_complete = n_complete,
       pearson_r = NA_real_,
-      r_squared = NA_real_,
       p_unc = NA_real_,
       ci95_low = NA_real_,
-      ci95_high = NA_real_,
-      slope = NA_real_,
-      intercept = NA_real_
+      ci95_high = NA_real_
     ))
   }
 
@@ -315,117 +450,156 @@ compute_pairwise_correlation <- function(sub_complete, alpha, min_subjects) {
     conf.level = 1 - alpha
   ))
 
-  lm_fit <- stats::lm(var_y_value ~ var_x_value, data = sub_complete)
-  lm_coef <- stats::coef(lm_fit)
-  lm_summary <- summary(lm_fit)
-
   list(
     status = "tested",
     skip_reason = NA_character_,
     n_complete = n_complete,
     pearson_r = unname(cor_fit$estimate),
-    r_squared = unname(lm_summary$r.squared),
     p_unc = cor_fit$p.value,
     ci95_low = if (!is.null(cor_fit$conf.int)) cor_fit$conf.int[[1]] else NA_real_,
-    ci95_high = if (!is.null(cor_fit$conf.int)) cor_fit$conf.int[[2]] else NA_real_,
-    slope = unname(lm_coef[["var_x_value"]]),
-    intercept = unname(lm_coef[["(Intercept)"]])
+    ci95_high = if (!is.null(cor_fit$conf.int)) cor_fit$conf.int[[2]] else NA_real_
   )
 }
 
-plot_pairwise_correlation <- function(sub_complete, row, out_fig_dir) {
-  x_binary <- is_binary_zero_one(sub_complete$var_x_value)
-  y_binary <- is_binary_zero_one(sub_complete$var_y_value)
+strip_leading_zero <- function(x) {
+  x %>%
+    str_replace("^0\\.", ".") %>%
+    str_replace("^-0\\.", "-.")
+}
 
-  annotation_lines <- c(
-    paste0("n = ", row$n_complete),
-    paste0("r = ", formatC(row$pearson_r, digits = 3, format = "f")),
-    paste0("p = ", format.pval(row$p_unc, digits = 3, eps = 1e-4))
-  )
-  annotation <- paste(annotation_lines, collapse = "\n")
+format_r_value <- function(x) {
+  strip_leading_zero(formatC(x, digits = 2, format = "f"))
+}
 
-  file_stub <- sanitize_slug(paste(row$var_x, "vs", row$var_y, sep = "_"))
-  file_path <- file.path(out_fig_dir, paste0(file_stub, ".png"))
+format_q_value <- function(x) {
+  if (is.na(x)) {
+    return("=NA")
+  }
+  if (x < 0.001) {
+    return("<.001")
+  }
+  paste0("=", strip_leading_zero(formatC(x, digits = 3, format = "f")))
+}
 
-  point_layer <- if (x_binary || y_binary) {
-    geom_jitter(
-      width = if (x_binary) 0.06 else 0,
-      height = if (y_binary) 0.06 else 0,
-      size = 2.2,
-      alpha = 0.85,
-      color = "#1b4d3e"
+display_variable_label <- function(x, variable_labels) {
+  if (!(x %in% names(variable_labels))) {
+    stop(paste0("No figure label loaded for variable: ", x))
+  }
+  str_wrap(unname(variable_labels[[x]]), width = 16)
+}
+
+format_matrix_label <- function(r, q) {
+  if (is.na(r) || is.na(q)) {
+    return("")
+  }
+  paste0("r=", format_r_value(r), " (q", format_q_value(q), ")")
+}
+
+plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, variable_labels) {
+  variable_index <- seq_along(variables)
+  names(variable_index) <- variables
+  axis_labels <- vapply(variables, display_variable_label, character(1), variable_labels = variable_labels)
+  n_variables <- length(variables)
+
+  plot_df <- results %>%
+    filter(.data$analysis_status == "tested") %>%
+    mutate(
+      var_x_index = unname(variable_index[.data$var_x]),
+      var_y_index = unname(variable_index[.data$var_y]),
+      cell_label = vapply(
+        seq_len(n()),
+        function(i) format_matrix_label(.data$pearson_r[[i]], .data$p_fdr[[i]]),
+        character(1)
+      ),
+      label_face = if_else(.data$significant_fdr, "bold", "plain")
     )
-  } else {
-    geom_point(size = 2.2, alpha = 0.85, color = "#1b4d3e")
-  }
 
-  subtitle_bits <- c("Pearson exploratory association")
-  if (x_binary || y_binary) {
-    subtitle_bits <- c(subtitle_bits, "binary axis jittered for visibility")
-  }
-
-  x_anchor <- min(sub_complete$var_x_value, na.rm = TRUE)
-  y_anchor <- max(sub_complete$var_y_value, na.rm = TRUE)
-
-  p <- ggplot(sub_complete, aes(x = .data$var_x_value, y = .data$var_y_value)) +
-    point_layer +
-    geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "#c04b2c", fill = "#f1c9b8") +
-    annotate(
-      "label",
-      x = x_anchor,
-      y = y_anchor,
-      label = annotation,
-      hjust = 0,
-      vjust = 1,
-      linewidth = 0.25,
-      size = 3.2
+  p <- ggplot(plot_df, aes(x = .data$var_x_index, y = .data$var_y_index)) +
+    geom_tile(aes(fill = .data$pearson_r), color = "white", linewidth = 0.45) +
+    geom_text(
+      aes(label = .data$cell_label, fontface = .data$label_face),
+      size = 2.15,
+      lineheight = 0.9,
+      color = "#111111"
     ) +
+    scale_fill_gradient2(
+      low = "#2166ac",
+      mid = "#f7f7f7",
+      high = "#b2182b",
+      midpoint = 0,
+      limits = c(-1, 1),
+      name = "Pearson r"
+    ) +
+    scale_x_continuous(
+      breaks = seq_len(n_variables),
+      labels = axis_labels,
+      limits = c(0.5, n_variables + 0.5),
+      position = "top",
+      expand = c(0, 0)
+    ) +
+    scale_y_reverse(
+      breaks = seq_len(n_variables),
+      labels = axis_labels,
+      limits = c(n_variables + 0.5, 0.5),
+      expand = c(0, 0)
+    ) +
+    coord_fixed(clip = "off") +
     labs(
-      title = paste0(row$var_x, " vs ", row$var_y),
-      subtitle = paste(subtitle_bits, collapse = " | "),
-      x = row$var_x,
-      y = row$var_y
+      title = "Pairwise Behavioral Correlations",
+      subtitle = "Lower triangle cells show Pearson r with global Benjamini-Hochberg FDR q-values in parentheses.",
+      x = NULL,
+      y = NULL,
+      caption = paste(
+        "recruitment_order_proxy is a subject-ID-derived recruitment/order diagnostic.",
+        "SFV frequency and duration are ordinal 0-3 codes treated numerically for this Pearson screen."
+      )
     ) +
-    theme_minimal(base_size = 12) +
+    theme_minimal(base_size = 10) +
     theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank()
+      panel.grid = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 0, vjust = 0, size = 7.4),
+      axis.text.y = element_text(size = 7.8),
+      plot.title = element_text(face = "bold", size = 15),
+      plot.subtitle = element_text(size = 9.5, margin = margin(b = 8)),
+      plot.caption = element_text(size = 8, hjust = 0),
+      legend.position = "right",
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 8),
+      plot.margin = margin(12, 20, 12, 12)
     )
 
-  suppressMessages(
-    ggplot2::ggsave(filename = file_path, plot = p, width = 7, height = 5, dpi = 300)
-  )
-  file_path
+  suppressMessages({
+    ggplot2::ggsave(filename = outputs$matrix_png, plot = p, width = 14, height = 11, dpi = 300, bg = "white")
+    ggplot2::ggsave(filename = outputs$matrix_pdf, plot = p, width = 14, height = 11, bg = "white")
+  })
 }
 
 main <- function() {
   args <- parse_args()
+  analysis_plan <- load_analysis_plan(args$analysis_plan_json)
+  variable_labels <- load_variable_figure_labels(args$variable_figure_names_json, analysis_plan$variables)
   outputs <- derive_output_paths(args$out_dir)
+  outputs <- add_matrix_output_paths(outputs, analysis_plan$figures$lower_triangle$filename_stem)
   cleared_output_root <- clear_output_root(outputs$out_dir)
   dir.create(outputs$out_dir, recursive = TRUE, showWarnings = FALSE)
   dir.create(outputs$out_fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-  analysis_plan <- load_analysis_plan(args$analysis_plan_json)
   df <- load_behavior_input(args$input_csv, args$exclude_subjects_json, analysis_plan)
 
   pair_matrix <- utils::combn(analysis_plan$variables, 2)
   result_rows <- vector("list", ncol(pair_matrix))
-  plot_data_map <- list()
 
   for (i in seq_len(ncol(pair_matrix))) {
     var_x <- pair_matrix[1, i]
     var_y <- pair_matrix[2, i]
     sub_complete <- df %>%
       transmute(
-        subject_id,
         var_x_value = .data[[var_x]],
         var_y_value = .data[[var_y]]
       ) %>%
       filter(!is.na(.data$var_x_value), !is.na(.data$var_y_value))
 
     stats_row <- compute_pairwise_correlation(sub_complete, alpha = args$alpha, min_subjects = args$min_subjects)
-    pair_key <- paste(var_x, var_y, sep = "||")
-    plot_data_map[[pair_key]] <- sub_complete
 
     result_rows[[i]] <- tibble::tibble(
       var_x = var_x,
@@ -434,54 +608,56 @@ main <- function() {
       skip_reason = stats_row$skip_reason,
       n_complete = stats_row$n_complete,
       pearson_r = stats_row$pearson_r,
-      r_squared = stats_row$r_squared,
       p_unc = stats_row$p_unc,
+      p_fdr = NA_real_,
+      significant_fdr = NA,
       ci95_low = stats_row$ci95_low,
-      ci95_high = stats_row$ci95_high,
-      slope = stats_row$slope,
-      intercept = stats_row$intercept,
-      plot_file = NA_character_
+      ci95_high = stats_row$ci95_high
     )
   }
 
-  results <- bind_rows(result_rows) %>%
+  results <- bind_rows(result_rows)
+  tested_idx <- results$analysis_status == "tested" & is.finite(results$p_unc)
+  if (any(tested_idx)) {
+    # Benjamini & Hochberg (1995; see CITATIONS.md): one global FDR family for
+    # this exploratory behavioral-pairwise screen, including the ID diagnostic.
+    results$p_fdr[tested_idx] <- stats::p.adjust(results$p_unc[tested_idx], method = "BH")
+    results$significant_fdr[tested_idx] <- results$p_fdr[tested_idx] < args$alpha
+  }
+
+  results <- results %>%
     mutate(abs_pearson_r = abs(.data$pearson_r)) %>%
-    arrange(is.na(.data$p_unc), .data$p_unc, desc(.data$abs_pearson_r), .data$var_x, .data$var_y) %>%
+    arrange(
+      is.na(.data$p_fdr),
+      .data$p_fdr,
+      is.na(.data$p_unc),
+      .data$p_unc,
+      desc(.data$abs_pearson_r),
+      .data$var_x,
+      .data$var_y
+    ) %>%
     select(-abs_pearson_r)
 
-  plot_idx <- if (analysis_plan$figures$policy == "all_tested") {
-    which(results$analysis_status == "tested")
-  } else {
-    which(results$analysis_status == "tested" & is.finite(results$p_unc) & results$p_unc < args$alpha)
-  }
+  fdr_results <- results %>%
+    filter(.data$analysis_status == "tested")
 
-  for (idx in plot_idx) {
-    row <- results[idx, , drop = FALSE]
-    pair_key <- paste(row$var_x[[1]], row$var_y[[1]], sep = "||")
-    results$plot_file[[idx]] <- plot_pairwise_correlation(
-      sub_complete = plot_data_map[[pair_key]],
-      row = row,
-      out_fig_dir = outputs$out_fig_dir
-    )
-  }
-
-  significant_results <- results %>%
-    filter(.data$analysis_status == "tested", is.finite(.data$p_unc), .data$p_unc < args$alpha)
+  plot_lower_triangle_correlation_matrix(results, analysis_plan$variables, outputs, variable_labels)
 
   write_csv(results, outputs$out_csv, na = "NA")
-  write_csv(significant_results, outputs$out_sig_csv, na = "NA")
+  write_csv(fdr_results, outputs$out_fdr_csv, na = "NA")
 
   cat("[data] merged input file:", args$input_csv, "\n")
   cat("[data] behavior pairwise plan:", args$analysis_plan_json, "\n")
+  cat("[data] variable figure-name config:", args$variable_figure_names_json, "\n")
   cat("[data] subjects after exclusions:", length(unique(df$subject_id)), "\n")
   cat("[data] behavioral variables analyzed:", length(analysis_plan$variables), "\n")
   cat("[data] cleared output root:", if (cleared_output_root) "yes" else "no_existing_dir", "\n")
   cat("[out] results CSV:", outputs$out_csv, "\n")
-  cat("[out] significant CSV:", outputs$out_sig_csv, "\n")
-  cat("[out] figures:", outputs$out_fig_dir, "\n")
+  cat("[out] FDR CSV:", outputs$out_fdr_csv, "\n")
+  cat("[out] lower triangle PNG:", outputs$matrix_png, "\n")
+  cat("[out] lower triangle PDF:", outputs$matrix_pdf, "\n")
   cat("[summary] tested pairs:", sum(results$analysis_status == "tested"), "\n")
-  cat("[summary] significant uncorrected pairs:", nrow(significant_results), "\n")
-  cat("[summary] plotted pairs:", length(plot_idx), "\n")
+  cat("[summary] significant FDR pairs:", sum(results$significant_fdr %in% TRUE), "\n")
   cat("[summary] skipped pairs:", sum(results$analysis_status != "tested"), "\n")
 }
 
