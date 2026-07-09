@@ -191,11 +191,11 @@ Rscript tests/validate_correlational_relationships_r.R
 
 Runs `analyze_correlational_relationships_roi_means.R` and verifies:
 - the standalone ROI-focused script exits cleanly on the study inputs
-- it writes combined, Pearson-only, and Spearman-only CSVs
+- it writes combined and Pearson-only CSVs, and does not write a Spearman CSV
 - it uses its dedicated ROI-means analysis plan rather than the broader correlation-plan schema
 - it contains only pooled behavioral rows and ROI neural rows
 - it clears stale ROI-means CSV and figure artifacts before rerun
-- it writes figures for uncorrected-significant Pearson or Spearman rows under the default ROI-means plan
+- it writes figures for uncorrected-significant Pearson rows under the default ROI-means plan
 
 Command:
 

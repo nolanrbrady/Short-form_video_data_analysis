@@ -86,10 +86,10 @@ BEHAVIOR_COL_MAP <- tibble::tribble(
   "engagement", "Engagement", "sf_entertainment_engagement", "SF_Ent", "Short-Form Entertainment", "Engagement score",
   "engagement", "Engagement", "lf_education_engagement", "LF_Edu", "Long-Form Education", "Engagement score",
   "engagement", "Engagement", "lf_entertainment_engagement", "LF_Ent", "Long-Form Entertainment", "Engagement score",
-  "retention", "Recall / Retention", "diff_short_form_education", "SF_Edu", "Short-Form Education", "Recall improvement (post - pre)",
-  "retention", "Recall / Retention", "diff_short_form_entertainment", "SF_Ent", "Short-Form Entertainment", "Recall improvement (post - pre)",
-  "retention", "Recall / Retention", "diff_long_form_education", "LF_Edu", "Long-Form Education", "Recall improvement (post - pre)",
-  "retention", "Recall / Retention", "diff_long_form_entertainment", "LF_Ent", "Long-Form Entertainment", "Recall improvement (post - pre)"
+  "retention", "Retention", "diff_short_form_education", "SF_Edu", "Short-Form Education", "Retention (post - pre)",
+  "retention", "Retention", "diff_short_form_entertainment", "SF_Ent", "Short-Form Entertainment", "Retention (post - pre)",
+  "retention", "Retention", "diff_long_form_education", "LF_Edu", "Long-Form Education", "Retention (post - pre)",
+  "retention", "Retention", "diff_long_form_entertainment", "LF_Ent", "Long-Form Entertainment", "Retention (post - pre)"
 )
 
 # Locate and source the shared participant-exclusion helper from either the
@@ -115,6 +115,29 @@ source_exclusion_helpers <- function() {
   source(helper_path, local = parent.frame())
 }
 source_exclusion_helpers()
+
+# Locate and source the shared figure-styling helpers (theme, overlay caption,
+# display-name loader) using the same lookup strategy as the exclusion helper so
+# CLI runs and test harnesses both resolve the file.
+source_figure_style_helpers <- function() {
+  args_all <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args_all, value = TRUE)
+  script_dir <- if (length(file_arg) > 0) {
+    dirname(normalizePath(sub("^--file=", "", file_arg[[1]])))
+  } else {
+    getwd()
+  }
+  candidates <- c(
+    file.path(getwd(), "r_figure_style.R"),
+    file.path(script_dir, "r_figure_style.R")
+  )
+  helper_path <- candidates[file.exists(candidates)][1]
+  if (is.na(helper_path)) {
+    stop("Could not locate r_figure_style.R. Run from repo root or place helper beside the script.")
+  }
+  source(helper_path, local = parent.frame())
+}
+source_figure_style_helpers()
 
 # Parse simple `--key value` CLI arguments. The defaults intentionally mirror
 # the final merged Homer3 + SFV dataset used by the inferential behavioral
@@ -411,7 +434,6 @@ write_behavior_distribution_plot <- function(
   x_labels,
   filename_suffix,
   plot_title,
-  plot_subtitle,
   width,
   height,
   dpi
@@ -430,8 +452,6 @@ write_behavior_distribution_plot <- function(
     stop(paste0("Domain metadata is inconsistent for domain '", domain_name, "'."))
   }
 
-  n_subjects <- n_distinct(plot_df$subject_id)
-
   # Re-apply factor levels immediately before plotting so any downstream joins
   # or CSV round trips cannot reorder the x-axis alphabetically.
   render_df <- plot_df %>%
@@ -440,59 +460,64 @@ write_behavior_distribution_plot <- function(
       x_display = factor(.data[[x_display_col]], levels = x_labels[x_levels])
     )
 
-  # Violin + jitter + mean/SD overlays follows the existing beta distribution
-  # plot style and avoids summary-only bars for publication figures.
-  p <- ggplot(render_df, aes(x = .data$x_display, y = .data$score)) +
+  # A zero reference line is only meaningful where scores can be negative
+  # (recall improvement = post - pre); engagement scores never cross zero.
+  add_zero_line <- isTRUE(any(render_df$score < 0, na.rm = TRUE))
+
+  # Violin + jitter + mean/SD overlays avoid summary-only bars for publication
+  # figures and share the neural beta-distribution figure style.
+  p <- ggplot(render_df, aes(x = .data$x_display, y = .data$score))
+  if (add_zero_line) {
+    p <- p + geom_hline(yintercept = 0, linetype = "dashed", color = "grey65", linewidth = 0.4)
+  }
+  p <- p +
     geom_violin(
       aes(fill = .data$x_level),
       trim = FALSE,
-      alpha = 0.24,
-      color = "#595959",
-      linewidth = 0.35,
+      alpha = 0.22,
+      color = "grey55",
+      linewidth = 0.4,
       na.rm = TRUE
     ) +
     geom_point(
-      aes(color = .data$x_level),
+      aes(fill = .data$x_level),
       position = position_jitter(width = 0.08, height = 0, seed = 1),
+      shape = 21,
       size = 2.1,
-      alpha = 0.88,
+      stroke = 0.3,
+      color = "white",
+      alpha = 0.9,
       na.rm = TRUE
     ) +
     stat_summary(
       fun.data = mean_sdl_1,
       geom = "errorbar",
-      width = 0.16,
+      width = 0.14,
       linewidth = 0.6,
-      color = "#222222",
+      color = "grey15",
       na.rm = TRUE
     ) +
     stat_summary(
       fun = mean,
       geom = "point",
       shape = 23,
-      size = 3.25,
-      stroke = 0.8,
+      size = 3.1,
+      stroke = 0.9,
       fill = "white",
-      color = "#222222",
+      color = "grey15",
       na.rm = TRUE
     ) +
     scale_fill_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
-    scale_color_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
+    scale_y_continuous(expand = expansion(mult = c(0.03, 0.06))) +
     labs(
       title = plot_title,
-      subtitle = paste0(plot_subtitle, " | n=", n_subjects),
       x = NULL,
       y = score_label
     ) +
-    theme_minimal(base_size = 12) +
+    theme_sfv_pub(base_size = 12) +
     theme(
-      plot.title = element_text(face = "bold", size = 14),
-      plot.subtitle = element_text(color = "#4b4b4b", size = 10.5),
-      panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
-      axis.text.x = element_text(face = "bold", color = "#222222"),
-      axis.title.y = element_text(face = "bold"),
-      plot.margin = margin(12, 14, 12, 14)
+      axis.text.x = element_text(face = "bold", color = "grey20", size = rel(0.95), lineheight = 0.95)
     )
 
   base_name <- paste0(sanitize_filename_component(domain_name), "_", filename_suffix)
@@ -526,7 +551,6 @@ write_behavior_plot <- function(domain_df, domain_name, out_dir, width, height, 
     x_labels = CONDITION_LABELS,
     filename_suffix = "score_distribution",
     plot_title = paste0(unique(domain_df$domain_label), " scores by video condition"),
-    plot_subtitle = "Excluded-subject manifest applied | complete-case within domain",
     width = width,
     height = height,
     dpi = dpi
@@ -720,8 +744,7 @@ run_plotting <- function(
         x_levels = CONTENT_LEVELS,
         x_labels = CONTENT_LABELS,
         filename_suffix = "content_marginal_score_distribution",
-        plot_title = paste0(unique(content_df$domain_label), " content marginal scores"),
-        plot_subtitle = "Subject-level content marginal means averaged across video length",
+        plot_title = paste0(unique(content_df$domain_label), " scores by content type"),
         width = width,
         height = height,
         dpi = dpi
@@ -751,8 +774,7 @@ run_plotting <- function(
         x_levels = LENGTH_LEVELS,
         x_labels = LENGTH_LABELS,
         filename_suffix = "length_marginal_score_distribution",
-        plot_title = paste0(unique(length_df$domain_label), " length marginal scores"),
-        plot_subtitle = "Subject-level length marginal means averaged across content",
+        plot_title = paste0(unique(length_df$domain_label), " scores by video length"),
         width = width,
         height = height,
         dpi = dpi

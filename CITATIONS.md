@@ -300,10 +300,10 @@
   - **Title:** The Proof and Measurement of Association between Two Things
   - **First Author:** Spearman
   - **Year:** 1904
-  - **Usage:** Spearman rank correlation for exploratory channel-behavior screening and sensitivity analyses
-  - **Reasoning:** Foundational reference for Spearman's rank correlation. Used here because several behavioral outcomes are bounded or only plausibly monotonic with neural effects, making a rank-based sensitivity check more defensible than assuming linear-normal relationships for every association.
+  - **Usage:** Spearman rank correlation for exploratory channel-behavior screening
+  - **Reasoning:** Foundational reference for Spearman's rank correlation. Used here where continuous or ordinal-like behavioral variables are screened against channel-level beta estimates as monotonic associations. The standalone ROI-mean correlation workflow is Pearson-only.
   - **Link:** https://doi.org/10.2307/1412159
-  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `tests/validate_correlational_relationships_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`
 
 - **Bonett, D. G. (2020)**
   - **Title:** Point-biserial correlation: Interval estimation, hypothesis testing, meta-analysis, and sample size determination
@@ -331,15 +331,6 @@
   - **Reasoning:** Provides the variance-stabilizing transformation underlying the confidence intervals reported for Pearson correlations in the post-hoc pooled long/short analyses, the supplementary raw-behavior versus pooled-neural association analyses, and the standalone pairwise behavioral screening analysis.
   - **Link:** http://hdl.handle.net/2440/15169
   - **Source:** `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
-
-- **Cleveland, W. S. (1979)**
-  - **Title:** Robust Locally Weighted Regression and Smoothing Scatterplots
-  - **First Author:** Cleveland
-  - **Year:** 1979
-  - **Usage:** LOESS trend line for Spearman correlation figures
-  - **Reasoning:** Provides the classic locally weighted smoothing approach used here to visualize monotonic Spearman relationships without imposing the linear model that underlies Pearson plots. This makes the plot annotation consistent with the rank-based inferential target while still showing the local trend in the original measurement scale.
-  - **Link:** https://doi.org/10.1080/01621459.1979.10481038
-  - **Source:** `analyze_correlational_relationships_roi_means.R`, `README.md`, `CITATIONS.md`
 
 - **Bender, R., & Lange, S. (2001)**
   - **Title:** Adjusting for multiple testing - when and how?

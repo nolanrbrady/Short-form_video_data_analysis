@@ -537,11 +537,6 @@ plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, 
       text_color = if_else(abs(.data$pearson_r) > 0.5, "white", "grey15")
     )
 
-  n_tested <- nrow(plot_df)
-  n_min <- min(results$n_complete[results$analysis_status == "tested"], na.rm = TRUE)
-  n_max <- max(results$n_complete[results$analysis_status == "tested"], na.rm = TRUE)
-  n_range <- if (n_min == n_max) as.character(n_min) else paste0(n_min, " to ", n_max)
-
   p <- ggplot(plot_df, aes(x = .data$var_x_index, y = .data$var_y_index)) +
     geom_tile(aes(fill = .data$pearson_r), color = "white", linewidth = 0.6) +
     # Neutral diagonal tiles hosting the variable names.
@@ -578,8 +573,8 @@ plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, 
       guide = guide_colorbar(
         title.position = "top",
         title.hjust = 0.5,
-        barwidth = grid::unit(9, "lines"),
-        barheight = grid::unit(0.7, "lines"),
+        barwidth = grid::unit(15, "lines"),
+        barheight = grid::unit(1.2, "lines"),
         ticks.colour = "grey30",
         frame.colour = "grey30"
       )
@@ -592,12 +587,7 @@ plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, 
       subtitle = bquote("Pearson " * italic(r) * "; asterisks denote Benjamini-Hochberg FDR-adjusted significance (" *
         "*" * italic(q) * " < .05, ** " * italic(q) * " < .01, *** " * italic(q) * " < .001)."),
       x = NULL,
-      y = NULL,
-      caption = paste0(
-        "n = ", n_range, " participants per pair (pairwise-complete); ", n_tested, " unique pairs.\n",
-        "Recruitment Order is a subject-ID-derived recruitment/order diagnostic, not a substantive trait. ",
-        "Short-form Video Frequency and Daily Duration are ordinal 0-3 codes treated numerically."
-      )
+      y = NULL
     ) +
     # Park the legend inside the otherwise-empty upper-right triangle.
     theme_minimal(base_size = 11) +
@@ -607,11 +597,10 @@ plot_lower_triangle_correlation_matrix <- function(results, variables, outputs, 
       axis.ticks = element_blank(),
       plot.title = element_text(face = "bold", size = 17, margin = margin(b = 3)),
       plot.subtitle = element_text(size = 10, margin = margin(b = 6), color = "grey25"),
-      plot.caption = element_text(size = 8.5, hjust = 0, color = "grey35", margin = margin(t = 10)),
-      legend.position = c(0.82, 0.78),
+      legend.position = c(0.8, 0.8),
       legend.direction = "horizontal",
-      legend.title = element_text(size = 10),
-      legend.text = element_text(size = 9),
+      legend.title = element_text(size = 13),
+      legend.text = element_text(size = 11),
       plot.margin = margin(14, 14, 12, 14)
     )
 

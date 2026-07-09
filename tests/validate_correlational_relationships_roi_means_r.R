@@ -141,24 +141,22 @@ main <- function() {
   spearman_csv <- method_specific_out_csv(out_csv, "spearman")
   assert_true(file.exists(out_csv), "missing combined ROI-mean CSV")
   assert_true(file.exists(pearson_csv), "missing ROI-mean Pearson CSV")
-  assert_true(file.exists(spearman_csv), "missing ROI-mean Spearman CSV")
+  assert_true(!file.exists(spearman_csv), "ROI-mean Spearman CSV should not be written")
 
   results <- read_csv(out_csv, show_col_types = FALSE)
   pearson <- read_csv(pearson_csv, show_col_types = FALSE)
-  spearman <- read_csv(spearman_csv, show_col_types = FALSE)
 
-  assert_true(nrow(results) == 32, "unexpected number of standalone ROI-mean rows")
+  assert_true(nrow(results) == 16, "unexpected number of standalone ROI-mean rows")
   assert_true(nrow(pearson) == 16, "unexpected number of standalone Pearson rows")
-  assert_true(nrow(spearman) == 16, "unexpected number of standalone Spearman rows")
   assert_true(all(results$behavior_run_type == "pooled_format"), "standalone output should contain only pooled behavior rows")
   assert_true(all(results$neural_level == "roi"), "standalone output should contain only ROI rows")
   assert_true(all(results$analysis_tier == "primary"), "standalone output should contain only primary-tier rows")
   assert_true(setequal(unique(results$behavior_run), c("engagement", "retention")), "unexpected behavior runs in standalone output")
   assert_true(setequal(unique(results$format_pool), c("long", "short")), "unexpected format pools in standalone output")
-  assert_true(setequal(unique(results$association_method), c("pearson", "spearman")), "unexpected association methods in standalone output")
+  assert_true(identical(unique(results$association_method), "pearson"), "standalone ROI-mean output should be Pearson-only")
 
   family_counts <- results %>% count(.data$family_id, name = "n_family")
-  assert_true(nrow(family_counts) == 8, "unexpected number of multiple-testing families")
+  assert_true(nrow(family_counts) == 4, "unexpected number of multiple-testing families")
   assert_true(all(family_counts$n_family == 4), "each standalone family should contain four ROI targets")
 
   joined_counts <- results %>% select("family_id", "family_n_tested") %>% distinct()
@@ -173,7 +171,6 @@ main <- function() {
   assert_true(all(family_summaries$max_abs_diff < 1e-12), "standalone BH-FDR values do not match manual implementation")
 
   assert_true(all(pearson$association_method == "pearson"), "Pearson CSV should contain only Pearson rows")
-  assert_true(all(spearman$association_method == "spearman"), "Spearman CSV should contain only Spearman rows")
 
   sig_rows <- results %>% filter(.data$analysis_status == "tested", is.finite(.data$p_unc), .data$p_unc < 0.05)
   if (nrow(sig_rows) > 0) {
@@ -215,7 +212,8 @@ main <- function() {
       .data$neural_name == "L_DLPFC",
       .data$chrom == "HbO"
     )
-  assert_true(nrow(forced_sig) == 2, "forced-signal validation did not find the expected Pearson and Spearman target rows")
+  assert_true(nrow(forced_sig) == 1, "forced-signal validation did not find the expected Pearson target row")
+  assert_true(forced_sig$association_method[[1]] == "pearson", "forced-signal validation should be Pearson-only")
   assert_true(all(is.finite(forced_sig$association_estimate) & forced_sig$association_estimate > 0.99), "forced-signal correlations were weaker than expected")
   assert_true(all(is.finite(forced_sig$p_unc) & forced_sig$p_unc < 0.05), "forced-signal rows were not uncorrected-significant")
   assert_true(all(!is.na(forced_sig$plot_file)), "forced-signal significant rows did not record plot paths")

@@ -837,7 +837,7 @@ Purpose:
 - Run only the pooled-format ROI-mean x behavioral-mean subset as its own standalone analysis.
 - Restrict behavioral rows to pooled `engagement` and pooled `retention`.
 - Restrict neural rows to pooled ROI means for `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, and `L_DMPFC (HbO)`.
-- Keep the same missingness rules, Pearson/Spearman metrics, BH-FDR handling, and optional figure generation as the broader correlation workflow.
+- Keep the same missingness rules, Pearson metric, BH-FDR handling, and optional figure generation as the broader correlation workflow.
 - The script clears `data/results/correlational_relationships_roi_means/` before each run so stale CSVs and PNGs do not persist.
 
 Example:
@@ -855,8 +855,7 @@ Rscript analyze_correlational_relationships_roi_means.R \
 Outputs:
 - `data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv`
 - `data/results/correlational_relationships_roi_means/pairwise_correlations_r_pearson.csv`
-- `data/results/correlational_relationships_roi_means/pairwise_correlations_r_spearman.csv`
-- `data/results/correlational_relationships_roi_means/figures/` (Pearson rows use a linear fit; Spearman rows use a dashed LOESS smoother when `p_unc < 0.05` under the default ROI-means plan)
+- `data/results/correlational_relationships_roi_means/figures/` (Pearson rows use a linear fit when `p_unc < 0.05` under the default ROI-means plan)
 
 Validation:
 

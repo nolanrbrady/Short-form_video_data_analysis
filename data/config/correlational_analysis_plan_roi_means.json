@@ -28,8 +28,7 @@
     }
   ],
   "association_methods": [
-    "pearson",
-    "spearman"
+    "pearson"
   ],
   "multiple_testing": {
     "adjust_method": "BH",
@@ -43,8 +42,7 @@
   "figures": {
     "policy": "significant_only",
     "plot_association_methods": [
-      "pearson",
-      "spearman"
+      "pearson"
     ]
   },
   "beta_missingness": {

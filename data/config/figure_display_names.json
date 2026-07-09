@@ -1,0 +1,39 @@
+{
+  "description": "Central mapping from internal analysis codes to publication-ready display names for figure titles, axes, and legends. Keys are the computational source of truth used across the R analysis scripts; values are human-readable labels rendered only in figures.",
+  "roi": {
+    "R_VMPFC": "Right VMPFC",
+    "R_DMPFC": "Right DMPFC",
+    "R_DLPFC": "Right DLPFC",
+    "L_VMPFC": "Left VMPFC",
+    "L_DMPFC": "Left DMPFC",
+    "L_DLPFC": "Left DLPFC",
+    "M_VMPFC": "Medial VMPFC",
+    "M_DMPFC": "Medial DMPFC"
+  },
+  "condition": {
+    "SF_Edu": "Short-Form\nEducation",
+    "SF_Ent": "Short-Form\nEntertainment",
+    "LF_Edu": "Long-Form\nEducation",
+    "LF_Ent": "Long-Form\nEntertainment"
+  },
+  "format": {
+    "Short": "Short-Form",
+    "Long": "Long-Form"
+  },
+  "content": {
+    "Education": "Education",
+    "Entertainment": "Entertainment"
+  },
+  "behavior_run": {
+    "engagement": "Engagement",
+    "retention": "Retention"
+  },
+  "format_pool": {
+    "short": "Short-Form",
+    "long": "Long-Form"
+  },
+  "chrom": {
+    "HbO": "HbO",
+    "HbR": "HbR"
+  }
+}

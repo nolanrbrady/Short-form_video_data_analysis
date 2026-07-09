@@ -63,6 +63,39 @@ PLOT_PALETTE <- c(
   LF_Edu = "#8f2d56"
 )
 
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
+# theme_sfv_pub() and load_figure_display_names() are shared across the plotting
+# scripts and live in r_figure_style.R, sourced below.
+
+# Map internal level codes for an effect's x-axis to their publication labels.
+effect_level_labels <- function(effect, display_names) {
+  if (identical(effect, "interaction")) return(unlist(display_names$condition))
+  if (identical(effect, "format")) return(unlist(display_names$format))
+  if (identical(effect, "content")) return(unlist(display_names$content))
+  stop(paste0("Unsupported effect for axis labels: ", effect))
+}
+
+# Render a normalized channel id (e.g. "S07_D07") in the manuscript's hyphenated,
+# unpadded form (e.g. "S7-D7").
+format_channel_display <- function(channel) {
+  m <- regmatches(channel, regexec("^S0*([0-9]+)_D0*([0-9]+)$", channel))[[1]]
+  if (length(m) == 3) {
+    return(paste0("S", m[[2]], "-D", m[[3]]))
+  }
+  gsub("_", "-", channel)
+}
+
+# Publication title fragment for the plotted unit (readable ROI name or channel).
+display_unit_title <- function(analysis_level, unit_id, chrom, display_names) {
+  chrom_label <- unname(display_names$chrom[[chrom]] %||% chrom)
+  if (identical(analysis_level, "roi")) {
+    roi_label <- unname(display_names$roi[[unit_id]] %||% unit_id)
+    return(paste0(roi_label, " (", chrom_label, ")"))
+  }
+  paste0("Channel ", format_channel_display(unit_id), " (", chrom_label, ")")
+}
+
 source_exclusion_helpers <- function() {
   args_all <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args_all, value = TRUE)
@@ -83,11 +116,35 @@ source_exclusion_helpers <- function() {
 }
 source_exclusion_helpers()
 
+# Locate and source the shared figure-styling helpers (theme, overlay caption,
+# display-name loader) using the same lookup strategy as the exclusion helper so
+# CLI runs and test harnesses both resolve the file.
+source_figure_style_helpers <- function() {
+  args_all <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args_all, value = TRUE)
+  script_dir <- if (length(file_arg) > 0) {
+    dirname(normalizePath(sub("^--file=", "", file_arg[[1]])))
+  } else {
+    getwd()
+  }
+  candidates <- c(
+    file.path(getwd(), "r_figure_style.R"),
+    file.path(script_dir, "r_figure_style.R")
+  )
+  helper_path <- candidates[file.exists(candidates)][1]
+  if (is.na(helper_path)) {
+    stop("Could not locate r_figure_style.R. Run from repo root or place helper beside the script.")
+  }
+  source(helper_path, local = parent.frame())
+}
+source_figure_style_helpers()
+
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
     input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     roi_json = "data/config/roi_definition.json",
+    figure_names_json = "data/config/figure_display_names.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",
     channel_results_tidy_csv = "data/results/format_content_lmm_main_effects_tidy_r.csv",
     roi_results_tidy_csv = "data/results/format_content_lmm_roi_main_effects_tidy_r.csv",
@@ -516,72 +573,66 @@ build_plot_bundle <- function(sub_complete, analysis_level, unit_id, chrom, effe
   build_main_effect_plot_bundle(sub_complete, analysis_level, unit_id, chrom, effect)
 }
 
-plot_subtitle <- function(effect, plot_mode, n_subjects) {
-  if (identical(plot_mode, "interaction_conditions")) {
-    return(paste0("FDR-significant interaction | raw condition betas | n=", n_subjects))
-  }
-  paste0("FDR-significant ", effect, " main effect | subject-level marginal means | n=", n_subjects)
-}
-
-write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, effect, out_dir) {
-  n_subjects <- n_distinct(point_df$subject_id)
-  plot_mode <- if (identical(effect, "interaction")) "interaction_conditions" else "main_effect_marginal"
+write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, effect, out_dir, display_names) {
   x_levels <- effect_group_levels(effect)
-  x_label <- if (identical(effect, "interaction")) "Condition" else str_to_title(effect)
-  title_prefix <- if (identical(analysis_level, "channel")) "Channel" else "ROI"
-  title_text <- paste(title_prefix, unit_id, chrom, "beta distribution")
-  subtitle_text <- plot_subtitle(effect, plot_mode, n_subjects)
+  level_labels <- effect_level_labels(effect, display_names)
+  x_label <- if (identical(effect, "interaction")) "Video condition" else str_to_title(effect)
+  title_text <- paste0(display_unit_title(analysis_level, unit_id, chrom, display_names), " activation")
   width_in <- if (identical(effect, "interaction")) 7.5 else 6.5
 
   plot_df <- point_df %>%
     mutate(plot_level = factor(.data$plot_level, levels = x_levels))
 
   p <- ggplot(plot_df, aes(x = .data$plot_level, y = .data$beta_plot_value)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey65", linewidth = 0.4) +
     geom_violin(
       aes(fill = .data$plot_level),
       trim = FALSE,
       alpha = 0.22,
-      color = "#5f5f5f",
-      linewidth = 0.35,
+      color = "grey55",
+      linewidth = 0.4,
       na.rm = TRUE
     ) +
     geom_point(
-      aes(color = .data$plot_level),
+      aes(fill = .data$plot_level),
       position = position_jitter(width = 0.08, height = 0, seed = 1),
+      shape = 21,
       size = 2.1,
-      alpha = 0.88
+      stroke = 0.3,
+      color = "white",
+      alpha = 0.9,
+      na.rm = TRUE
     ) +
     stat_summary(
       fun.data = mean_sdl_1,
       geom = "errorbar",
-      width = 0.16,
-      linewidth = 0.55,
-      color = "#222222",
+      width = 0.14,
+      linewidth = 0.6,
+      color = "grey15",
       na.rm = TRUE
     ) +
     stat_summary(
       fun = mean,
       geom = "point",
       shape = 23,
-      size = 3.2,
-      stroke = 0.8,
+      size = 3.1,
+      stroke = 0.9,
       fill = "white",
-      color = "#222222",
+      color = "grey15",
       na.rm = TRUE
     ) +
     scale_fill_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
-    scale_color_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
+    scale_x_discrete(labels = level_labels) +
+    scale_y_continuous(labels = scales::label_number(scale = 1e5, accuracy = 0.1)) +
     labs(
       title = title_text,
-      subtitle = subtitle_text,
       x = x_label,
-      y = "Beta value"
+      y = expression(bold("Beta value (" * 10^-5 * " a.u.)"))
     ) +
-    theme_minimal(base_size = 12) +
+    theme_sfv_pub(base_size = 12) +
     theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank(),
-      axis.text.x = element_text(face = "bold")
+      panel.grid.major.x = element_blank(),
+      axis.text.x = element_text(face = "bold", color = "grey20", size = rel(0.95), lineheight = 0.95)
     )
 
   file_name <- paste0(
@@ -592,12 +643,12 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
   )
   out_path <- file.path(out_dir, file_name)
   suppressMessages(
-    ggplot2::ggsave(filename = out_path, plot = p, width = width_in, height = 5, dpi = 300)
+    ggplot2::ggsave(filename = out_path, plot = p, width = width_in, height = 5.2, dpi = 300)
   )
   out_path
 }
 
-plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, out_dir) {
+plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, out_dir, display_names) {
   unit_id <- hit_row[[unit_col]][[1]]
   chrom_name <- hit_row[["chrom"]][[1]]
   effect_name <- hit_row[["effect"]][[1]]
@@ -629,7 +680,8 @@ plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, o
     unit_id = unit_id,
     chrom = chrom_name,
     effect = effect_name,
-    out_dir = out_dir
+    out_dir = out_dir,
+    display_names = display_names
   )
 
   list(
@@ -642,6 +694,7 @@ run_plotting <- function(
   input_csv,
   roi_json,
   exclude_subjects_json,
+  figure_names_json = "data/config/figure_display_names.json",
   channel_results_tidy_csv,
   roi_results_tidy_csv,
   alpha,
@@ -649,6 +702,10 @@ run_plotting <- function(
 ) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
+  display_names <- load_figure_display_names(
+    figure_names_json,
+    required_sections = c("roi", "condition", "format", "content", "chrom")
+  )
   df_merged <- load_merged_input(input_csv)
   excluded <- apply_subject_exclusions(
     df = df_merged,
@@ -677,7 +734,8 @@ run_plotting <- function(
         analysis_level = "channel",
         unit_col = "channel",
         hit_row = hit,
-        out_dir = out_dir
+        out_dir = out_dir,
+        display_names = display_names
       )
       figure_paths <- c(figure_paths, plotted$figure_path)
       audit_rows[[length(audit_rows) + 1]] <- plotted$audit_df
@@ -692,7 +750,8 @@ run_plotting <- function(
         analysis_level = "roi",
         unit_col = "roi",
         hit_row = hit,
-        out_dir = out_dir
+        out_dir = out_dir,
+        display_names = display_names
       )
       figure_paths <- c(figure_paths, plotted$figure_path)
       audit_rows[[length(audit_rows) + 1]] <- plotted$audit_df
@@ -723,6 +782,7 @@ main <- function() {
   outputs <- run_plotting(
     input_csv = args$input_csv,
     roi_json = args$roi_json,
+    figure_names_json = args$figure_names_json,
     exclude_subjects_json = args$exclude_subjects_json,
     channel_results_tidy_csv = args$channel_results_tidy_csv,
     roi_results_tidy_csv = args$roi_results_tidy_csv,

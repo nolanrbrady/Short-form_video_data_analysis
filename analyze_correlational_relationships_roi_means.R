@@ -14,8 +14,6 @@
 #     practice (Poldrack, 2007).
 #   - Pearson is the primary metric, with Fisher-z confidence intervals
 #     (Pearson, 1896; Fisher, 1921).
-#   - Spearman is retained as a sensitivity metric for bounded outcomes
-#     (Spearman, 1904).
 #   - BH-FDR is applied within declared inferential families rather than across
 #     unrelated questions (Benjamini & Hochberg, 1995; Bender & Lange, 2001).
 
@@ -66,11 +64,46 @@ TARGET_ROI_SPECS <- tibble::tribble(
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
+# Locate and source the shared figure-styling helpers (theme, overlay caption,
+# display-name loader) using the same lookup strategy as the exclusion helper so
+# CLI runs and test harnesses both resolve the file.
+source_figure_style_helpers <- function() {
+  args_all <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args_all, value = TRUE)
+  script_dir <- if (length(file_arg) > 0) {
+    dirname(normalizePath(sub("^--file=", "", file_arg[[1]])))
+  } else {
+    getwd()
+  }
+  candidates <- c(
+    file.path(getwd(), "r_figure_style.R"),
+    file.path(script_dir, "r_figure_style.R")
+  )
+  helper_path <- candidates[file.exists(candidates)][1]
+  if (is.na(helper_path)) {
+    stop("Could not locate r_figure_style.R. Run from repo root or place helper beside the script.")
+  }
+  source(helper_path, local = parent.frame())
+}
+source_figure_style_helpers()
+
+# APA-style numeric formatting for on-plot statistics (leading zero stripped).
+strip_leading_zero <- function(x) sub("^(-?)0\\.", "\\1.", x)
+
+format_estimate <- function(x) strip_leading_zero(formatC(x, digits = 2, format = "f"))
+
+format_p_apa <- function(x) {
+  if (is.na(x)) return("= NA")
+  if (x < 0.001) return("< .001")
+  paste0("= ", strip_leading_zero(formatC(x, digits = 3, format = "f")))
+}
+
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   defaults <- list(
     input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     roi_json = "data/config/roi_definition.json",
+    figure_names_json = "data/config/figure_display_names.json",
     analysis_plan_json = "data/config/correlational_analysis_plan_roi_means.json",
     exclude_subjects_json = "data/config/excluded_subjects.json",
     out_csv = "data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv",
@@ -272,7 +305,7 @@ load_analysis_plan <- function(plan_json_path) {
   validate_unique_names(behavior_names, "behavior_runs.name")
 
   association_methods <- normalize_json_string_array(plan_obj$association_methods, "association_methods")
-  supported_methods <- c("pearson", "spearman")
+  supported_methods <- c("pearson")
   bad_methods <- setdiff(association_methods, supported_methods)
   if (length(bad_methods) > 0) {
     stop(
@@ -763,39 +796,28 @@ compute_association <- function(sub_complete, alpha, min_subjects, association_m
     ))
   }
 
-  if (association_method == "spearman") {
-    cor_fit <- suppressWarnings(stats::cor.test(
-      x = sub_complete$behavior_value,
-      y = sub_complete$neural_value,
-      method = "spearman",
-      exact = FALSE,
-      alternative = "two.sided"
-    ))
-    return(list(
-      status = "tested",
-      skip_reason = NA_character_,
-      n_complete = n_complete,
-      association_estimate = unname(cor_fit$estimate),
-      r_squared = NA_real_,
-      p_unc = cor_fit$p.value,
-      ci95_low = NA_real_,
-      ci95_high = NA_real_,
-      slope = NA_real_,
-      intercept = NA_real_
-    ))
-  }
-
   stop(paste0("Unhandled association method: ", association_method))
 }
 
-plot_association <- function(sub_complete, row, out_fig_dir) {
-  estimate_label <- if (row$association_method[[1]] == "spearman") "rho" else "r"
+plot_association <- function(sub_complete, row, out_fig_dir, display_names) {
+  roi_display <- unname(display_names$roi[[row$neural_name[[1]]]] %||% row$neural_name[[1]])
+  chrom_display <- unname(display_names$chrom[[row$chrom[[1]]]] %||% row$chrom[[1]])
+  behavior_display <- unname(display_names$behavior_run[[row$behavior_run[[1]]]] %||% row$behavior_run[[1]])
+  format_display <- unname(display_names$format_pool[[row$format_pool[[1]]]] %||% row$format_pool[[1]])
+
+  # On-plot statistics, APA-style. Pearson panels report Fisher-z 95% CIs.
+  ci_part <- if (is.finite(row$ci95_low) && is.finite(row$ci95_high)) {
+    paste0("  [", format_estimate(row$ci95_low), ", ", format_estimate(row$ci95_high), "]")
+  } else {
+    ""
+  }
+  # Exploratory analysis: the on-plot statistics are reported uncorrected, so
+  # only the uncorrected p-value is shown (FDR q remains in the CSV outputs).
   annotation_lines <- c(
-    paste0("n = ", row$n_complete),
-    paste0(estimate_label, " = ", formatC(row$association_estimate, digits = 3, format = "f")),
-    paste0("p = ", format.pval(row$p_unc, digits = 3, eps = 1e-4)),
-    paste0("q = ", format.pval(row$p_fdr, digits = 3, eps = 1e-4))
+    paste0("r = ", format_estimate(row$association_estimate), ci_part),
+    paste0("p ", format_p_apa(row$p_unc), "    n = ", row$n_complete)
   )
+
   file_stub <- sanitize_slug(paste(
     row$behavior_run,
     row$format_pool,
@@ -805,54 +827,56 @@ plot_association <- function(sub_complete, row, out_fig_dir) {
     sep = "_"
   ))
   file_path <- file.path(out_fig_dir, paste0(file_stub, ".png"))
-  x_anchor <- min(sub_complete$behavior_value, na.rm = TRUE)
-  y_anchor <- max(sub_complete$neural_value, na.rm = TRUE)
+
+  # Anchor the stats block in whichever top corner the trend line leaves empty:
+  # a negative association sweeps toward the lower-right, so the upper-right is
+  # clear, and vice versa.
+  x_rng <- range(sub_complete$behavior_value, na.rm = TRUE)
+  y_top <- max(sub_complete$neural_value, na.rm = TRUE)
+  negative_trend <- isTRUE(row$association_estimate[[1]] < 0)
+  x_anchor <- if (negative_trend) x_rng[[2]] else x_rng[[1]]
+  h_just <- if (negative_trend) 1 else 0
 
   p <- ggplot(sub_complete, aes(x = .data$behavior_value, y = .data$neural_value)) +
-    geom_point(size = 2.2, alpha = 0.85, color = "#1b4d3e")
-
-  if (row$association_method[[1]] == "pearson") {
-    p <- p + geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "#c04b2c", fill = "#f1c9b8")
-  } else {
-    # Use a local smoother for Spearman plots so the visual summary matches the
-    # monotonic, rank-based intent more closely than a forced linear fit.
-    p <- p + geom_smooth(
-      method = "loess",
+    geom_smooth(
+      method = "lm",
       formula = y ~ x,
       se = TRUE,
       color = "#c04b2c",
-      fill = "#f1c9b8",
-      linetype = "dashed"
-    )
-  }
-
-  p <- p +
+      fill = "#c04b2c",
+      alpha = 0.14,
+      linewidth = 1
+    ) +
+    geom_point(
+      shape = 21,
+      size = 2.6,
+      stroke = 0.3,
+      fill = "#1b4d3e",
+      color = "white",
+      alpha = 0.9
+    ) +
     annotate(
       "label",
       x = x_anchor,
-      y = y_anchor,
+      y = y_top,
       label = paste(annotation_lines, collapse = "\n"),
-      hjust = 0,
+      hjust = h_just,
       vjust = 1,
-      linewidth = 0.25,
-      size = 3.2
+      fill = "white",
+      alpha = 0.7,
+      lineheight = 1.15,
+      size = 3.3,
+      color = "grey15"
     ) +
+    scale_y_continuous(labels = scales::label_number(scale = 1e5, accuracy = 0.1)) +
     labs(
-      title = paste0(row$neural_name, " ", row$chrom, " ", row$format_pool, " mean vs ", row$behavior_run),
-      subtitle = paste0(
-        "Target: ROI | Metric: ", row$association_method, " | Tier: ", row$analysis_tier,
-        if (row$association_method[[1]] == "spearman") " | LOESS smoother shown for rank-based trend visualization" else ""
-      ),
-      x = paste0(row$behavior_run, " ", row$format_pool, " mean"),
-      y = paste0("Neural ", row$format_pool, " mean")
+      title = paste0(roi_display, " (", chrom_display, ") vs ", behavior_display),
+      x = paste0(behavior_display, " (", format_display, " mean)"),
+      y = bquote(bold(.(paste0(roi_display, " ", chrom_display)) ~ "(" * 10^-5 ~ "a.u.)"))
     ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank()
-    )
+    theme_sfv_pub(base_size = 12)
 
-  suppressMessages(ggplot2::ggsave(filename = file_path, plot = p, width = 7, height = 5, dpi = 300))
+  suppressMessages(ggplot2::ggsave(filename = file_path, plot = p, width = 7, height = 5.2, dpi = 300))
   file_path
 }
 
@@ -863,6 +887,10 @@ main <- function() {
   dir.create(args$out_fig_dir, recursive = TRUE, showWarnings = FALSE)
 
   roi_map <- load_roi_definition(args$roi_json)
+  display_names <- load_figure_display_names(
+    args$figure_names_json,
+    required_sections = c("roi", "behavior_run", "format_pool", "chrom")
+  )
   analysis_plan <- load_analysis_plan(args$analysis_plan_json)
   loaded <- load_merged_input(args$input_csv, args$exclude_subjects_json, analysis_plan, roi_map)
   df_merged <- loaded$data
@@ -885,11 +913,7 @@ main <- function() {
     tidyr::crossing(
       tibble::tibble(
         association_method = analysis_plan$association_methods,
-        association_method_tier = ifelse(
-          analysis_plan$association_methods == "pearson",
-          "primary_metric",
-          "sensitivity_metric"
-        )
+        association_method_tier = "primary_metric"
       )
     ) %>%
     group_by(
@@ -1004,7 +1028,8 @@ main <- function() {
     results$plot_file[[idx]] <- plot_association(
       sub_complete = plot_data_map[[pair_key]],
       row = row,
-      out_fig_dir = args$out_fig_dir
+      out_fig_dir = args$out_fig_dir,
+      display_names = display_names
     )
   }
 
