@@ -22,8 +22,10 @@ from process_sociodemographic import (
     RACE_CATEGORIES,
     RACE_OUTPUT_NAMES,
     col_by_qid_and_label_contains,
+    encode_education_years,
     encode_multi_select_indicators,
     encode_single_select_indicators,
+    validate_education_years_encoding,
     validate_subject_ids,
 )
 
@@ -154,6 +156,91 @@ def test_sociodemographic_single_select_encoding_does_not_mutate_input() -> None
     pd.testing.assert_series_equal(education, education_before)
 
 
+def test_sociodemographic_education_years_maps_current_categories_without_mutating() -> None:
+    """Education years must be an explicit codebook proxy, not inferred or imputed.
+
+    Scientific risk guarded against: silently treating degree labels as arbitrary
+    integers would make downstream Pearson correlations depend on implementation
+    order rather than the study's auditable years-of-education codebook. The
+    expected values are valid because they come directly from the planned
+    `education_years_encoding.json` mapping for the current Qualtrics labels.
+    """
+    education = pd.Series(["High school", "Associates", "Bachelor's", "Master's", pd.NA])
+    education_before = education.copy(deep=True)
+    encoding = {
+        "high_school": 12,
+        "associates": 14,
+        "bachelor": 16,
+        "master": 18,
+        "phd": 21,
+    }
+
+    years = encode_education_years(education, encoding)
+
+    assert years.name == "education_years"
+    assert years.tolist()[:4] == [12.0, 14.0, 16.0, 18.0]
+    assert pd.isna(years.iloc[4])
+    pd.testing.assert_series_equal(education, education_before)
+
+
+def test_sociodemographic_education_years_rejects_incomplete_or_non_numeric_config() -> None:
+    """The education-years codebook must fail hard when it cannot support Q2.
+
+    Scientific risk guarded against: a missing or text-valued codebook entry
+    could silently turn a degree category into missing data or an object column,
+    changing pairwise complete cases and correlations. The expected failure is
+    valid because all current Q2 categories have required config keys.
+    """
+    incomplete = {"high_school": 12, "associates": 14, "bachelor": 16}
+    try:
+        validate_education_years_encoding(incomplete)
+    except ValueError as exc:
+        assert "missing required education-years config keys" in str(exc)
+        assert "master" in str(exc)
+    else:
+        raise AssertionError("Expected incomplete education-years config to fail hard.")
+
+    non_numeric = {"high_school": 12, "associates": 14, "bachelor": "sixteen", "master": 18}
+    try:
+        validate_education_years_encoding(non_numeric)
+    except ValueError as exc:
+        assert "non-numeric education-years config values" in str(exc)
+        assert "bachelor" in str(exc)
+    else:
+        raise AssertionError("Expected non-numeric education-years config to fail hard.")
+
+
+def test_sociodemographic_education_indicators_are_unchanged_by_years_proxy() -> None:
+    """Adding the proxy column must not alter existing one-hot education values.
+
+    Scientific risk guarded against: adding a continuous proxy for exploratory
+    correlations should be purely additive and must not change the nominal
+    indicator encoding used for demographics reporting. The expected matrix is
+    the established one-hot representation for the current Q2 categories.
+    """
+    education = pd.Series(["High school", "Associates", "Bachelor's", "Master's"])
+    indicators = encode_single_select_indicators(
+        education,
+        EDUCATION_CATEGORIES,
+        EDUCATION_OUTPUT_NAMES,
+        name="highest degree completed (Q2)",
+    )
+    _ = encode_education_years(
+        education,
+        {"high_school": 12, "associates": 14, "bachelor": 16, "master": 18},
+    )
+
+    expected = pd.DataFrame(
+        {
+            "education_high_school": [1.0, 0.0, 0.0, 0.0],
+            "education_associates": [0.0, 1.0, 0.0, 0.0],
+            "education_bachelors": [0.0, 0.0, 1.0, 0.0],
+            "education_masters": [0.0, 0.0, 0.0, 1.0],
+        }
+    )
+    pd.testing.assert_frame_equal(indicators, expected)
+
+
 def test_sociodemographic_education_q2_disambiguates_duplicate_qids_by_label() -> None:
     columns = pd.MultiIndex.from_tuples(
         [
@@ -177,6 +264,9 @@ def main() -> None:
     test_sociodemographic_race_rejects_unmapped_categories()
     test_sociodemographic_single_select_indicators_reject_unmapped_values()
     test_sociodemographic_single_select_encoding_does_not_mutate_input()
+    test_sociodemographic_education_years_maps_current_categories_without_mutating()
+    test_sociodemographic_education_years_rejects_incomplete_or_non_numeric_config()
+    test_sociodemographic_education_indicators_are_unchanged_by_years_proxy()
     test_sociodemographic_education_q2_disambiguates_duplicate_qids_by_label()
     print("[PASS] validate_combined_data_generation_py")
 

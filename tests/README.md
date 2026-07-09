@@ -234,6 +234,7 @@ Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset an
 - `recruitment_order_proxy` is derived from normalized `subject_id`
 - it uses pairwise complete cases for each variable pair
 - known positive and negative synthetic pairs recover the expected Pearson correlations
+- the exploratory `education_years` proxy is included in the declared matrix and treated as numeric Pearson input
 - ordinal SFV-use variables are treated as numeric Pearson inputs
 - an underpowered synthetic pair is skipped with `n_complete<6`, excluded from the FDR CSV, and left without q-value/significance flags
 - global BH-FDR q-values match `p.adjust(..., method = "BH")`

@@ -173,6 +173,15 @@
   - **Link:** https://doi.org/10.1097/EDE.0000000000000105
   - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`
 
+- **Galobardes, B., Shaw, M., Lawlor, D. A., Lynch, J. W., & Davey Smith, G. (2006)**
+  - **Title:** Indicators of socioeconomic position (part 1)
+  - **First Author:** Galobardes
+  - **Year:** 2006
+  - **Usage:** Education as a socioeconomic/demographic covariate
+  - **Reasoning:** Supports treating education as an interpretable socioeconomic covariate while documenting that the added `education_years` field is an approximate study-codebook proxy for exploratory screening, not a directly measured continuous duration variable.
+  - **Link:** https://doi.org/10.1136/jech.2004.023531
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`, `README.md`, `ANALYSIS_SPEC.md`, `tests/validate_combined_data_generation_py.py`
+
 ## Questionnaires
 
 - **Kroenke, K., Strine, T. W., Spitzer, R. L., Williams, J. B. W., Berry, J. T., & Mokdad, A. H. (2009)**

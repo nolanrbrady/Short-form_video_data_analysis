@@ -27,6 +27,7 @@ expected_variables <- c(
   "diff_long_form_education",
   "diff_long_form_entertainment",
   "age",
+  "education_years",
   "recruitment_order_proxy",
   "sfv_frequency",
   "sfv_daily_duration",
@@ -80,6 +81,7 @@ make_input <- function() {
     diff_long_form_education = c(10, 8, 9, 7, 5, 6, 4, 2, 3, 1),
     diff_long_form_entertainment = c(1, 4, 2, 5, 3, 7, 6, 8, 9, 10),
     age = age,
+    education_years = age * 2,
     sfv_frequency = c(NA, NA, NA, 0, 1, 2, 3, 0, 1, 2),
     sfv_daily_duration = c(0, 1, 2, NA, NA, NA, 3, 2, 1, 0),
     asrs_total = c(10, 12, 11, 14, 13, 16, 15, 18, 17, 20),
@@ -483,6 +485,14 @@ main <- function() {
   assert_true(nrow(age_phq) == 1, "missing age/phq_total row")
   assert_true(age_phq$analysis_status[[1]] == "tested", "age/phq_total should be tested")
   assert_true(abs(age_phq$pearson_r[[1]] - 1.0) < 1e-12, "expected perfect positive Pearson correlation for age/phq_total")
+
+  age_education_years <- find_pair(out, "age", "education_years")
+  assert_true(nrow(age_education_years) == 1, "missing age/education_years row")
+  assert_true(age_education_years$analysis_status[[1]] == "tested", "age/education_years should be tested")
+  assert_true(
+    abs(age_education_years$pearson_r[[1]] - 1.0) < 1e-12,
+    "expected perfect positive Pearson correlation for age/education_years in the synthetic proxy fixture"
+  )
 
   age_gad <- find_pair(out, "age", "gad_total")
   assert_true(nrow(age_gad) == 1, "missing age/gad_total row")

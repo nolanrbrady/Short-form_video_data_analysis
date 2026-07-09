@@ -100,6 +100,14 @@ from the Qualtrics export `qualtrics/final_SF_demographic_data.csv`.
   - One-hot indicators from Q2 highest degree completed.
   - Encoded as nominal indicators to avoid imposing equal spacing between degree categories.
 
+- `education_years`
+  - Exploratory approximate-years proxy from Q2 highest degree completed, using
+    `data/config/education_years_encoding.json` (`High school` = 12, `Associates` = 14,
+    `Bachelor's` = 16, `Master's` = 18 in the current codebook).
+  - This is not a directly measured continuous education-duration variable; the original
+    one-hot degree indicators remain the nominal education representation.
+  - Encoding reference: Galobardes et al. (2006); see `CITATIONS.md`.
+
 - `pd_status`
   - Binary indicator from a Yes/No item (encoded: `No = 0`, `Yes = 1`).
 

@@ -25,9 +25,10 @@ Outputs (to data/tabular/generated_data/):
 
 from __future__ import annotations
 
+import json
 from math import ceil
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Mapping, Sequence, Tuple
 
 try:
     import pandas as pd
@@ -133,6 +134,15 @@ EDUCATION_OUTPUT_NAMES = {
     "Associates": "education_associates",
     "Bachelor's": "education_bachelors",
     "Master's": "education_masters",
+}
+
+EDUCATION_YEAR_CONFIG_KEYS = ["high_school", "associates", "bachelor", "master"]
+
+EDUCATION_CATEGORY_TO_YEAR_KEY = {
+    "High school": "high_school",
+    "Associates": "associates",
+    "Bachelor's": "bachelor",
+    "Master's": "master",
 }
 
 # Behavior switches (kept explicit for paper reproducibility).
@@ -252,6 +262,72 @@ def encode_single_select_indicators(
         },
         index=series.index,
     )
+
+
+def validate_education_years_encoding(raw_encoding: Mapping[str, object]) -> Dict[str, float]:
+    """
+    Validate the degree-to-years codebook used for the exploratory education proxy.
+
+    The exact year values are a study codebook decision stored in JSON. Education is
+    retained as one-hot degree indicators for nominal reporting, while this additional
+    proxy supports exploratory socioeconomic/covariate screening only (Galobardes
+    et al., 2006; see CITATIONS.md).
+    """
+    missing = sorted(set(EDUCATION_YEAR_CONFIG_KEYS).difference(raw_encoding.keys()))
+    if missing:
+        raise ValueError(
+            "education_years_encoding.json is missing required education-years config keys: "
+            f"{missing}"
+        )
+
+    validated: Dict[str, float] = {}
+    non_numeric: list[str] = []
+    for key, value in raw_encoding.items():
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            non_numeric.append(key)
+            continue
+        if pd.isna(numeric_value):
+            non_numeric.append(key)
+            continue
+        validated[key] = numeric_value
+
+    if non_numeric:
+        raise ValueError(
+            "education_years_encoding.json contains non-numeric education-years config values: "
+            f"{sorted(non_numeric)}"
+        )
+
+    return validated
+
+
+def load_education_years_encoding(path: Path) -> Dict[str, float]:
+    """Load and validate the JSON codebook for `education_years`."""
+    if not path.exists():
+        raise FileNotFoundError(f"Education-years config not found: {path}")
+    with path.open("r", encoding="utf-8") as f:
+        raw_encoding = json.load(f)
+    if not isinstance(raw_encoding, dict):
+        raise ValueError("education_years_encoding.json must be a JSON object.")
+    return validate_education_years_encoding(raw_encoding)
+
+
+def encode_education_years(series: pd.Series, education_years_encoding: Mapping[str, float]) -> pd.Series:
+    """
+    Map Q2 highest-degree labels to approximate years using the study JSON codebook.
+
+    Missing Q2 responses remain missing; unknown degree labels fail hard so the
+    exploratory Pearson matrix cannot silently change its complete-case set.
+    """
+    fail_on_unmapped(series, EDUCATION_CATEGORIES, "highest degree completed (Q2)")
+    validated_encoding = validate_education_years_encoding(education_years_encoding)
+    mapping = {
+        category: validated_encoding[year_key]
+        for category, year_key in EDUCATION_CATEGORY_TO_YEAR_KEY.items()
+    }
+    cleaned = clean_text_responses(series)
+    return cleaned.map(mapping).astype(float).rename("education_years")
 
 
 def encode_multi_select_indicators(
@@ -389,6 +465,8 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     tabular_dir = root / "data" / "tabular" / "generated_data"
     tabular_dir.mkdir(parents=True, exist_ok=True)
+    education_years_encoding_path = root / "data" / "config" / "education_years_encoding.json"
+    education_years_encoding = load_education_years_encoding(education_years_encoding_path)
 
     df = load_qualtrics_multilevel_csv(in_path)
     print(f"Loaded {in_path.name}: rows={len(df)}, cols={df.shape[1]}")
@@ -448,6 +526,7 @@ def main() -> None:
         EDUCATION_OUTPUT_NAMES,
         name="highest degree completed (Q2)",
     )
+    education_years = encode_education_years(df[education_col], education_years_encoding)
 
     report_unmapped(df[pd_col], PD_YES_NO, "pd_status (Q16)")
     pd_status = encode_ordinal(df[pd_col], PD_YES_NO).rename("pd_status")
@@ -526,6 +605,7 @@ def main() -> None:
             race_indicators,
             sex_indicators,
             education_indicators,
+            education_years,
             pd_status,
             sfv_frequency,
             sfv_daily_duration,

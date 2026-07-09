@@ -158,6 +158,8 @@ python audit_check.py
 - Race/ethnicity, sex, and education are encoded as explicit indicator columns. Q12 race supports
   comma-separated multiple selections, so selected race categories are preserved as separate
   indicators; Q11 Hispanic/Latino identity is retained as its own binary ethnicity indicator.
+  `education_years` is also added as an exploratory approximate-years proxy from
+  `data/config/education_years_encoding.json`; the original education indicators are retained.
   Unknown category labels fail hard instead of being silently coerced.
 
 Command:
@@ -1016,6 +1018,7 @@ Behavioral variable set under the default plan:
 - `diff_long_form_education`
 - `diff_long_form_entertainment`
 - `age`
+- `education_years` (exploratory approximate-years proxy from the study codebook)
 - `recruitment_order_proxy` (derived from normalized `subject_id`)
 - `sfv_frequency`
 - `sfv_daily_duration`
@@ -1027,6 +1030,7 @@ Behavioral variable set under the default plan:
 
 Method and missingness policy:
 - Pearson correlation for every tested pair, with Fisher-z confidence intervals and global BH-FDR q-values.
+- `education_years` is treated as an exploratory approximate-years proxy, not a directly measured continuous education-duration variable.
 - `sfv_frequency` and `sfv_daily_duration` are ordinal 0-3 codes but are intentionally treated as numeric, equally spaced scores in this Pearson diagnostic screen.
 - Pairwise complete cases only for each variable pair.
 - No imputation is performed.

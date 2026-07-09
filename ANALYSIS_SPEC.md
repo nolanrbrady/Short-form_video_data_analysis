@@ -915,6 +915,7 @@ Default behavioral variables:
 - `diff_long_form_education`
 - `diff_long_form_entertainment`
 - `age`
+- `education_years`
 - `recruitment_order_proxy` (derived from normalized `subject_id`)
 - `sfv_frequency`
 - `sfv_daily_duration`
@@ -943,6 +944,7 @@ Required support files:
 - All declared behavioral variables must be numeric/coercible to numeric; non-numeric values are a hard error.
 - Each tested pair uses pairwise complete cases only.
 - No imputation is allowed.
+- `education_years` is an exploratory approximate-years proxy from the study codebook, not a directly measured continuous education-duration variable.
 
 ## Statistical outputs
 

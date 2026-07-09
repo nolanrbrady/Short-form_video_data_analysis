@@ -11,6 +11,7 @@
     "diff_long_form_education",
     "diff_long_form_entertainment",
     "age",
+    "education_years",
     "recruitment_order_proxy",
     "sfv_frequency",
     "sfv_daily_duration",

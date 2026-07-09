@@ -24,7 +24,12 @@ FIR_COL_PATTERN = re.compile(r"^(S\d+_D\d+)_Cond(\d{2})_(HbO|HbR)_Basis(\d{3})$"
 
 def trapezoid_integral(y: np.ndarray, x: np.ndarray) -> float:
     """Integrate `y` over `x` with NumPy's trapezoidal rule API across versions."""
-    trapezoid_fn = getattr(np, "trapezoid", np.trapz)
+    if hasattr(np, "trapezoid"):
+        trapezoid_fn = np.trapezoid
+    elif hasattr(np, "trapz"):
+        trapezoid_fn = np.trapz
+    else:
+        raise AttributeError("NumPy exposes neither 'trapezoid' nor legacy 'trapz'.")
     return float(trapezoid_fn(y, x))
 
 
