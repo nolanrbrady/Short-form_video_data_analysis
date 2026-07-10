@@ -874,7 +874,8 @@ plot_association <- function(sub_complete, row, out_fig_dir, display_names) {
       x = paste0(behavior_display, " (", format_display, " mean)"),
       y = bquote(bold(.(paste0(roi_display, " ", chrom_display)) ~ "(" * 10^-5 ~ "a.u.)"))
     ) +
-    theme_sfv_pub(base_size = 12)
+    theme_sfv_pub(base_size = 12) +
+    theme(plot.title = element_text(hjust = 0.5))
 
   suppressMessages(ggplot2::ggsave(filename = file_path, plot = p, width = 7, height = 5.2, dpi = 300))
   file_path

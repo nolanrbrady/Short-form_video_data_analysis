@@ -754,7 +754,8 @@ plot_pairwise_correlation <- function(sub_complete, row, out_fig_dir) {
     ) +
     theme_minimal(base_size = 12) +
     theme(
-      plot.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5),
       panel.grid.minor = element_blank()
     )
 
