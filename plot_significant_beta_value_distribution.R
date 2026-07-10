@@ -148,6 +148,8 @@ parse_args <- function() {
     exclude_subjects_json = "data/config/excluded_subjects.json",
     channel_results_tidy_csv = "data/results/format_content_lmm_main_effects_tidy_r.csv",
     roi_results_tidy_csv = "data/results/format_content_lmm_roi_main_effects_tidy_r.csv",
+    channel_posthoc_csv = "data/results/format_content_lmm_posthoc_pairwise_r.csv",
+    roi_posthoc_csv = "data/results/format_content_lmm_roi_posthoc_pairwise_r.csv",
     alpha = 0.05,
     out_dir = "data/results/beta_value_distribution"
   )
@@ -475,6 +477,37 @@ load_significant_hits <- function(results_csv, unit_col, alpha) {
     arrange(.data$p_fdr, .data[[unit_col]], .data$chrom, .data$effect)
 }
 
+# Load the post-hoc pairwise contrasts used to annotate interaction figures.
+# These follow-up comparisons are computed uncorrected (only when the omnibus
+# interaction is significant), so their p_unc is the value shown on the figure.
+load_posthoc_pairwise <- function(path, unit_col) {
+  if (!file.exists(path)) {
+    stop(paste0("Post-hoc pairwise CSV not found: ", path, ". Run the format/content LMM first."))
+  }
+  df <- read_csv(path, show_col_types = FALSE)
+  assert_required_columns(df, c(unit_col, "chrom", "condition_a", "condition_b", "p_unc"), path)
+  df
+}
+
+# Look up the uncorrected p-value for one unordered condition pair from a unit's
+# post-hoc pairwise contrasts; fail fast if the expected contrast is absent.
+posthoc_pairwise_p <- function(posthoc_df, unit_col, unit_id, chrom, cond_a, cond_b) {
+  row <- posthoc_df %>%
+    filter(
+      .data[[unit_col]] == unit_id,
+      .data$chrom == chrom,
+      (.data$condition_a == cond_a & .data$condition_b == cond_b) |
+        (.data$condition_a == cond_b & .data$condition_b == cond_a)
+    )
+  if (nrow(row) != 1) {
+    stop(paste0(
+      "Expected exactly one post-hoc contrast ", cond_a, " vs ", cond_b,
+      " for ", unit_id, " ", chrom, "; found ", nrow(row), "."
+    ))
+  }
+  row$p_unc[[1]]
+}
+
 sanitize_filename_component <- function(x) {
   gsub("[^A-Za-z0-9_]+", "_", as.character(x))
 }
@@ -573,7 +606,7 @@ build_plot_bundle <- function(sub_complete, analysis_level, unit_id, chrom, effe
   build_main_effect_plot_bundle(sub_complete, analysis_level, unit_id, chrom, effect)
 }
 
-write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, effect, out_dir, display_names) {
+write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, effect, out_dir, display_names, brackets = list()) {
   x_levels <- effect_group_levels(effect)
   level_labels <- effect_level_labels(effect, display_names)
   x_label <- if (identical(effect, "interaction")) "Video condition" else str_to_title(effect)
@@ -582,6 +615,33 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
 
   plot_df <- point_df %>%
     mutate(plot_level = factor(.data$plot_level, levels = x_levels))
+
+  # Significance brackets: one span for the two-level main-effect figures (FDR
+  # main-effect p); several post-hoc spans for the interaction figure. Only
+  # significant contrasts get a bracket (non-significant spans are omitted).
+  # Brackets whose x-ranges overlap are stacked onto higher tiers to avoid collision.
+  brackets <- Filter(function(b) significance_stars(b$p) != "n.s.", brackets)
+  have_brackets <- length(brackets) > 0
+  y_finite <- plot_df$beta_plot_value[is.finite(plot_df$beta_plot_value)]
+  y_max <- max(y_finite)
+  y_range <- diff(range(y_finite))
+  bracket_base_y <- y_max + 0.12 * y_range
+  bracket_tick <- 0.03 * y_range
+  tier_gap <- 0.11 * y_range
+
+  bracket_tiers <- integer(length(brackets))
+  for (i in seq_along(brackets)) {
+    used <- integer(0)
+    for (j in seq_len(i - 1L)) {
+      overlaps <- max(brackets[[i]]$x1, brackets[[j]]$x1) <= min(brackets[[i]]$x2, brackets[[j]]$x2)
+      if (overlaps) used <- c(used, bracket_tiers[[j]])
+    }
+    tier <- 0L
+    while (tier %in% used) tier <- tier + 1L
+    bracket_tiers[[i]] <- tier
+  }
+  max_tier <- if (have_brackets) max(bracket_tiers) else 0L
+  top_expand <- if (have_brackets) 0.14 + (max_tier + 1L) * 0.08 else 0.05
 
   p <- ggplot(plot_df, aes(x = .data$plot_level, y = .data$beta_plot_value)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "grey65", linewidth = 0.4) +
@@ -623,7 +683,10 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
     ) +
     scale_fill_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
     scale_x_discrete(labels = level_labels) +
-    scale_y_continuous(labels = scales::label_number(scale = 1e5, accuracy = 0.1)) +
+    scale_y_continuous(
+      labels = scales::label_number(scale = 1e5, accuracy = 0.1),
+      expand = expansion(mult = c(0.05, top_expand))
+    ) +
     labs(
       title = title_text,
       x = x_label,
@@ -631,9 +694,18 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
     ) +
     theme_sfv_pub(base_size = 12) +
     theme(
+      plot.title = element_text(face = "bold", size = rel(1.22), color = "grey10", hjust = 0.5, margin = margin(b = 2)),
       panel.grid.major.x = element_blank(),
       axis.text.x = element_text(face = "bold", color = "grey20", size = rel(0.95), lineheight = 0.95)
     )
+
+  for (i in seq_along(brackets)) {
+    br <- brackets[[i]]
+    p <- p + significance_bracket(
+      x1 = br$x1, x2 = br$x2, y = bracket_base_y + bracket_tiers[[i]] * tier_gap,
+      label = significance_stars(br$p), tick = bracket_tick
+    )
+  }
 
   file_name <- paste0(
     analysis_level, "_",
@@ -648,10 +720,11 @@ write_distribution_plot <- function(point_df, analysis_level, unit_id, chrom, ef
   out_path
 }
 
-plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, out_dir, display_names) {
+plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, out_dir, display_names, posthoc_df) {
   unit_id <- hit_row[[unit_col]][[1]]
   chrom_name <- hit_row[["chrom"]][[1]]
   effect_name <- hit_row[["effect"]][[1]]
+  p_fdr <- hit_row[["p_fdr"]][[1]]
 
   sub <- df_source %>%
     filter(.data[[unit_col]] == .env$unit_id, .data$chrom == .env$chrom_name)
@@ -665,6 +738,22 @@ plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, o
         ". This indicates a mismatch between the result table and the plotting input."
       )
     )
+  }
+
+  # Main-effect figures get one FDR bracket across their two levels. The
+  # interaction figure gets post-hoc simple-effect contrasts (x positions follow
+  # CONDITION_LEVELS = SF_Edu, SF_Ent, LF_Ent, LF_Edu): the two content-within-
+  # format contrasts (x1-2, x3-4) plus the SF_Ent vs LF_Ent format-within-
+  # entertainment contrast (x2-3), which is stacked on a higher tier.
+  posthoc_p <- function(a, b) posthoc_pairwise_p(posthoc_df, unit_col, unit_id, chrom_name, a, b)
+  brackets <- if (identical(effect_name, "interaction")) {
+    list(
+      list(x1 = 1, x2 = 2, p = posthoc_p("SF_Edu", "SF_Ent")),
+      list(x1 = 3, x2 = 4, p = posthoc_p("LF_Ent", "LF_Edu")),
+      list(x1 = 2, x2 = 3, p = posthoc_p("SF_Ent", "LF_Ent"))
+    )
+  } else {
+    list(list(x1 = 1, x2 = 2, p = p_fdr))
   }
 
   bundle <- build_plot_bundle(
@@ -681,7 +770,8 @@ plot_significant_hit <- function(df_source, analysis_level, unit_col, hit_row, o
     chrom = chrom_name,
     effect = effect_name,
     out_dir = out_dir,
-    display_names = display_names
+    display_names = display_names,
+    brackets = brackets
   )
 
   list(
@@ -697,6 +787,8 @@ run_plotting <- function(
   figure_names_json = "data/config/figure_display_names.json",
   channel_results_tidy_csv,
   roi_results_tidy_csv,
+  channel_posthoc_csv = "data/results/format_content_lmm_posthoc_pairwise_r.csv",
+  roi_posthoc_csv = "data/results/format_content_lmm_roi_posthoc_pairwise_r.csv",
   alpha,
   out_dir
 ) {
@@ -723,6 +815,19 @@ run_plotting <- function(
   sig_channel_hits <- load_significant_hits(channel_results_tidy_csv, "channel", alpha)
   sig_roi_hits <- load_significant_hits(roi_results_tidy_csv, "roi", alpha)
 
+  # Post-hoc contrasts are only needed to annotate interaction figures, so load
+  # them lazily to avoid requiring the tables when no interaction hit is plotted.
+  channel_posthoc <- if (any(sig_channel_hits$effect == "interaction")) {
+    load_posthoc_pairwise(channel_posthoc_csv, "channel")
+  } else {
+    NULL
+  }
+  roi_posthoc <- if (any(sig_roi_hits$effect == "interaction")) {
+    load_posthoc_pairwise(roi_posthoc_csv, "roi")
+  } else {
+    NULL
+  }
+
   audit_rows <- list()
   figure_paths <- character()
 
@@ -735,7 +840,8 @@ run_plotting <- function(
         unit_col = "channel",
         hit_row = hit,
         out_dir = out_dir,
-        display_names = display_names
+        display_names = display_names,
+        posthoc_df = channel_posthoc
       )
       figure_paths <- c(figure_paths, plotted$figure_path)
       audit_rows[[length(audit_rows) + 1]] <- plotted$audit_df
@@ -751,7 +857,8 @@ run_plotting <- function(
         unit_col = "roi",
         hit_row = hit,
         out_dir = out_dir,
-        display_names = display_names
+        display_names = display_names,
+        posthoc_df = roi_posthoc
       )
       figure_paths <- c(figure_paths, plotted$figure_path)
       audit_rows[[length(audit_rows) + 1]] <- plotted$audit_df
@@ -786,6 +893,8 @@ main <- function() {
     exclude_subjects_json = args$exclude_subjects_json,
     channel_results_tidy_csv = args$channel_results_tidy_csv,
     roi_results_tidy_csv = args$roi_results_tidy_csv,
+    channel_posthoc_csv = args$channel_posthoc_csv,
+    roi_posthoc_csv = args$roi_posthoc_csv,
     alpha = args$alpha,
     out_dir = args$out_dir
   )

@@ -119,6 +119,33 @@ write_toy_roi_results <- function(path) {
   write_csv(df, path)
 }
 
+# Toy post-hoc pairwise tables so the interaction figure's content-within-format
+# brackets resolve without depending on gitignored pipeline outputs. Only the
+# S04_D02 HbR interaction is plotted, so it needs the two queried contrasts.
+write_toy_channel_posthoc <- function(path) {
+  df <- tibble::tibble(
+    channel = c("S04_D02", "S04_D02", "S04_D02"),
+    chrom = c("HbR", "HbR", "HbR"),
+    condition_a = c("SF_Edu", "LF_Ent", "SF_Ent"),
+    condition_b = c("SF_Ent", "LF_Edu", "LF_Ent"),
+    p_unc = c(0.0008, 0.21, 0.006)
+  )
+  write_csv(df, path)
+}
+
+write_toy_roi_posthoc <- function(path) {
+  # No ROI interaction hit is significant in the fixture, so this is never
+  # queried; it only needs the required columns to satisfy loading.
+  df <- tibble::tibble(
+    roi = "L_DMPFC",
+    chrom = "HbO",
+    condition_a = "SF_Edu",
+    condition_b = "SF_Ent",
+    p_unc = 0.5
+  )
+  write_csv(df, path)
+}
+
 test_significant_hit_discovery <- function(channel_results, roi_results) {
   sig_channel <- plot_env$load_significant_hits(channel_results, "channel", 0.05)
   sig_roi <- plot_env$load_significant_hits(roi_results, "roi", 0.05)
@@ -168,6 +195,8 @@ test_run_plotting_outputs <- function(
   exclusions_json,
   channel_results,
   roi_results,
+  channel_posthoc,
+  roi_posthoc,
   out_dir
 ) {
   outputs <- plot_env$run_plotting(
@@ -176,6 +205,8 @@ test_run_plotting_outputs <- function(
     exclude_subjects_json = exclusions_json,
     channel_results_tidy_csv = channel_results,
     roi_results_tidy_csv = roi_results,
+    channel_posthoc_csv = channel_posthoc,
+    roi_posthoc_csv = roi_posthoc,
     alpha = 0.05,
     out_dir = out_dir
   )
@@ -265,6 +296,8 @@ test_cli_execution <- function(
   exclusions_json,
   channel_results,
   roi_results,
+  channel_posthoc,
+  roi_posthoc,
   out_dir
 ) {
   audit_csv <- file.path(out_dir, "plotted_beta_values.csv")
@@ -275,6 +308,8 @@ test_cli_execution <- function(
     "--exclude_subjects_json", shQuote(exclusions_json),
     "--channel_results_tidy_csv", shQuote(channel_results),
     "--roi_results_tidy_csv", shQuote(roi_results),
+    "--channel_posthoc_csv", shQuote(channel_posthoc),
+    "--roi_posthoc_csv", shQuote(roi_posthoc),
     "--alpha", "0.05",
     "--out_dir", shQuote(out_dir)
   )
@@ -294,6 +329,8 @@ main <- function() {
   exclusions_json <- file.path(tmp, "excluded_subjects.json")
   channel_results <- file.path(tmp, "channel_results.csv")
   roi_results <- file.path(tmp, "roi_results.csv")
+  channel_posthoc <- file.path(tmp, "channel_posthoc.csv")
+  roi_posthoc <- file.path(tmp, "roi_posthoc.csv")
   out_dir <- file.path(tmp, "out")
   cli_out_dir <- file.path(tmp, "out_cli")
 
@@ -302,6 +339,8 @@ main <- function() {
   write_toy_exclusions(exclusions_json)
   write_toy_channel_results(channel_results)
   write_toy_roi_results(roi_results)
+  write_toy_channel_posthoc(channel_posthoc)
+  write_toy_roi_posthoc(roi_posthoc)
 
   test_significant_hit_discovery(channel_results, roi_results)
   test_plot_geometry_source()
@@ -312,6 +351,8 @@ main <- function() {
     exclusions_json = exclusions_json,
     channel_results = channel_results,
     roi_results = roi_results,
+    channel_posthoc = channel_posthoc,
+    roi_posthoc = roi_posthoc,
     out_dir = out_dir
   )
   test_cli_execution(
@@ -320,6 +361,8 @@ main <- function() {
     exclusions_json = exclusions_json,
     channel_results = channel_results,
     roi_results = roi_results,
+    channel_posthoc = channel_posthoc,
+    roi_posthoc = roi_posthoc,
     out_dir = cli_out_dir
   )
 

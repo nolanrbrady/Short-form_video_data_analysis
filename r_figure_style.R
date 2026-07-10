@@ -58,3 +58,43 @@ load_figure_display_names <- function(path, required_sections) {
   }
   obj
 }
+
+# Map a p-value to conventional significance asterisks; non-significant returns
+# "n.s." so a labeled bracket is still informative.
+significance_stars <- function(p) {
+  if (is.na(p)) {
+    return("n.s.")
+  }
+  if (p < 0.001) {
+    return("***")
+  }
+  if (p < 0.01) {
+    return("**")
+  }
+  if (p < 0.05) {
+    return("*")
+  }
+  "n.s."
+}
+
+# Build a horizontal significance bracket (connecting bar with two down-ticks)
+# and a centered label above it, returned as a list of ggplot layers in data
+# coordinates. `y` is the bar height, `tick` the drop of the bracket ends.
+significance_bracket <- function(x1, x2, y, label, tick, color = "grey20") {
+  star_only <- !identical(label, "n.s.")
+  list(
+    annotate("segment", x = x1, xend = x2, y = y, yend = y, color = color, linewidth = 0.5),
+    annotate("segment", x = x1, xend = x1, y = y, yend = y - tick, color = color, linewidth = 0.5),
+    annotate("segment", x = x2, xend = x2, y = y, yend = y - tick, color = color, linewidth = 0.5),
+    annotate(
+      "text",
+      x = (x1 + x2) / 2,
+      y = y,
+      label = label,
+      vjust = if (star_only) 0.2 else -0.3,
+      size = if (star_only) 5.2 else 3.6,
+      fontface = if (star_only) "bold" else "plain",
+      color = color
+    )
+  )
+}

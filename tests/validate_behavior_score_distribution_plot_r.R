@@ -117,11 +117,13 @@ test_plot_geometry_source <- function() {
 # artifacts, exclusion behavior, domain-specific complete-case membership,
 # condition ordering, zero preservation, exact content marginal mean arithmetic,
 # and summary CSV row counts.
-test_run_plotting_outputs <- function(input_csv, exclusions_json, out_dir) {
+test_run_plotting_outputs <- function(input_csv, exclusions_json, out_dir, main_effects_csv) {
   outputs <- plot_env$run_plotting(
     input_csv = input_csv,
     exclude_subjects_json = exclusions_json,
     out_dir = out_dir,
+    engagement_main_csv = main_effects_csv,
+    retention_main_csv = main_effects_csv,
     width = 6,
     height = 4,
     dpi = 120
@@ -130,14 +132,17 @@ test_run_plotting_outputs <- function(input_csv, exclusions_json, out_dir) {
   expected_figures <- file.path(
     out_dir,
     c(
-      "engagement_score_distribution.png",
-      "retention_score_distribution.png",
       "engagement_content_marginal_score_distribution.png",
       "retention_content_marginal_score_distribution.png",
       "retention_length_marginal_score_distribution.png"
     )
   )
   assert_true(all(file.exists(expected_figures)), "Expected PNG behavior figures were not created.")
+  assert_true(
+    !file.exists(file.path(out_dir, "engagement_score_distribution.png")) &&
+      !file.exists(file.path(out_dir, "retention_score_distribution.png")),
+    "Raw four-condition figures should no longer be generated."
+  )
   assert_true(file.exists(outputs$audit_csv_path), "Expected plotted behavior audit CSV was not created.")
   assert_true(file.exists(outputs$summary_csv_path), "Expected behavior summary CSV was not created.")
 
@@ -345,6 +350,18 @@ write_controlled_lmm_alignment_input <- function(path) {
 # plot audit rows. This intentionally uses the audit output rather than
 # recomputing from source columns, so the test validates the values that would be
 # inspected downstream.
+# Minimal behavior LMM main-effect table (effect + p_fdr) so the plotting code's
+# significance-label lookup is satisfied without depending on gitignored pipeline
+# outputs. The p-values are arbitrary; the assertions here check plotted values,
+# not the significance stars.
+write_toy_main_effects_csv <- function(path) {
+  df <- tibble::tibble(
+    effect = c("length", "content", "interaction"),
+    p_fdr = c(0.02, 0.001, 0.5)
+  )
+  readr::write_csv(df, path)
+}
+
 content_contrast_from_plot_audit <- function(audit_df, domain_name) {
   wide <- audit_df %>%
     filter(.data$plot_type == "content_marginal", .data$domain == domain_name) %>%
@@ -366,11 +383,13 @@ length_contrast_from_plot_audit <- function(audit_df, domain_name) {
 # contrast. This does not claim real-data plot points are age-adjusted; it proves
 # alignment in a case where raw marginal and model-estimated content effects
 # should be identical.
-test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json) {
+test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json, main_effects_csv) {
   outputs <- plot_env$run_plotting(
     input_csv = input_csv,
     exclude_subjects_json = exclusions_json,
     out_dir = tempfile("behavior_lmm_alignment_out_"),
+    engagement_main_csv = main_effects_csv,
+    retention_main_csv = main_effects_csv,
     width = 6,
     height = 4,
     dpi = 120
@@ -398,15 +417,17 @@ test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, 
   )
 }
 
-test_length_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json) {
+test_length_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json, main_effects_csv) {
   outputs <- plot_env$run_plotting(
     input_csv = input_csv,
     exclude_subjects_json = exclusions_json,
     out_dir = tempfile("behavior_length_lmm_alignment_out_"),
+    engagement_main_csv = main_effects_csv,
+    retention_main_csv = main_effects_csv,
     width = 6,
     height = 4,
     dpi = 120,
-    plot_types = c("length_marginal", "raw_condition")
+    plot_types = c("length_marginal")
   )
 
   retention_input <- retention_lmm_env$load_retention_input(input_csv, exclusions_json)
@@ -470,12 +491,14 @@ test_missing_column_failure <- function(input_csv, exclusions_json) {
 
 # Exercise the CLI path, not only in-memory function calls. This catches argument
 # parsing, default output writing, and script entry-point regressions.
-test_cli_execution <- function(input_csv, exclusions_json, out_dir) {
+test_cli_execution <- function(input_csv, exclusions_json, out_dir, main_effects_csv) {
   args <- c(
     shQuote(SCRIPT_PATH),
     "--input_csv", shQuote(input_csv),
     "--exclude_subjects_json", shQuote(exclusions_json),
     "--out_dir", shQuote(out_dir),
+    "--engagement_main_csv", shQuote(main_effects_csv),
+    "--retention_main_csv", shQuote(main_effects_csv),
     "--width", "6",
     "--height", "4",
     "--dpi", "120"
@@ -500,20 +523,22 @@ main <- function() {
   cli_out_dir <- file.path(tmp, "out_cli")
   controlled_csv <- file.path(tmp, "controlled_lmm_alignment.csv")
   exclude_none_json <- file.path(tmp, "excluded_none.json")
+  main_effects_csv <- file.path(tmp, "toy_behavior_main_effects.csv")
 
   write_toy_input(input_csv)
   write_toy_exclusions(exclusions_json)
   write_controlled_lmm_alignment_input(controlled_csv)
+  write_toy_main_effects_csv(main_effects_csv)
   writeLines("[]", exclude_none_json)
 
   test_plot_geometry_source()
-  test_run_plotting_outputs(input_csv, exclusions_json, out_dir)
+  test_run_plotting_outputs(input_csv, exclusions_json, out_dir, main_effects_csv)
   test_lmm_preprocessing_agreement(input_csv, exclusions_json)
-  test_content_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json)
-  test_length_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json)
+  test_content_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json, main_effects_csv)
+  test_length_marginal_contrast_matches_lmm_when_expected(controlled_csv, exclude_none_json, main_effects_csv)
   test_non_numeric_failure(input_csv, exclusions_json)
   test_missing_column_failure(input_csv, exclusions_json)
-  test_cli_execution(input_csv, exclusions_json, cli_out_dir)
+  test_cli_execution(input_csv, exclusions_json, cli_out_dir, main_effects_csv)
 
   writeLines("[PASS] validate_behavior_score_distribution_plot_r")
 }

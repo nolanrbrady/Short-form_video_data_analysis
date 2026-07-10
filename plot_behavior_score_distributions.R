@@ -47,7 +47,6 @@ suppressPackageStartupMessages({
 # source of truth and defines display labels separately so changing plot text
 # cannot silently change condition logic.
 CONDITION_LEVELS <- c("SF_Edu", "SF_Ent", "LF_Edu", "LF_Ent")
-ENGAGEMENT_CONDITION_LEVELS <- c("SF_Edu", "LF_Edu", "SF_Ent", "LF_Ent")
 CONTENT_LEVELS <- c("Education", "Entertainment")
 LENGTH_LEVELS <- c("Short", "Long")
 CONDITION_LABELS <- c(
@@ -148,6 +147,8 @@ parse_args <- function() {
   defaults <- list(
     input_csv = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv",
     exclude_subjects_json = "data/config/excluded_subjects.json",
+    engagement_main_csv = "data/results/engagement_format_content_lmm_main_effects_r.csv",
+    retention_main_csv = "data/results/retention_format_content_lmm_main_effects_r.csv",
     out_dir = "data/results/behavior_score_distribution",
     width = 7.0,
     height = 5.0,
@@ -422,6 +423,45 @@ sanitize_filename_component <- function(x) {
   gsub("[^A-Za-z0-9_]+", "_", as.character(x))
 }
 
+# Load the adjusted main-effect p-values from the engagement and retention LMM
+# result tables so significance labels on the marginal (main-effect) figures
+# match the reported inferential models rather than any freshly recomputed test.
+load_behavior_effect_pvalues <- function(engagement_csv, retention_csv) {
+  read_one <- function(path, domain) {
+    if (!file.exists(path)) {
+      stop(paste0(
+        "Behavior LMM main-effect CSV not found: ", path,
+        ". Run analyze_", domain, "_format_content_lmm.R before plotting."
+      ))
+    }
+    df <- read_csv(path, show_col_types = FALSE)
+    assert_required_columns(df, c("effect", "p_fdr"), path)
+    df %>% transmute(
+      domain = domain,
+      effect = as.character(.data$effect),
+      p_fdr = as.numeric(.data$p_fdr)
+    )
+  }
+  bind_rows(
+    read_one(engagement_csv, "engagement"),
+    read_one(retention_csv, "retention")
+  )
+}
+
+# Look up a single domain x effect adjusted p-value for a marginal figure's
+# significance label. The behavior LMMs label the length factor "length".
+behavior_effect_pvalue <- function(effect_pvalues, domain, effect) {
+  row <- effect_pvalues %>%
+    filter(.data$domain == !!domain, .data$effect == !!effect)
+  if (nrow(row) != 1) {
+    stop(paste0(
+      "Expected exactly one ", domain, " '", effect,
+      "' main-effect p-value; found ", nrow(row), "."
+    ))
+  }
+  row$p_fdr[[1]]
+}
+
 # Internal generic writer for violin/jitter + mean/SD distribution figures.
 # Plot-level differences are limited to x-axis grouping and labels.
 write_behavior_distribution_plot <- function(
@@ -436,7 +476,8 @@ write_behavior_distribution_plot <- function(
   plot_title,
   width,
   height,
-  dpi
+  dpi,
+  sig_p = NA_real_
 ) {
   if (nrow(plot_df) == 0) {
     stop(paste0("No plotted rows remained for domain '", domain_name, "'."))
@@ -463,6 +504,17 @@ write_behavior_distribution_plot <- function(
   # A zero reference line is only meaningful where scores can be negative
   # (recall improvement = post - pre); engagement scores never cross zero.
   add_zero_line <- isTRUE(any(render_df$score < 0, na.rm = TRUE))
+
+  # A single significance bracket spanning the two groups is only drawn for the
+  # two-level main-effect (marginal) figures, and only when the LMM's adjusted
+  # p-value is significant (non-significant spans are omitted).
+  add_bracket <- !is.na(sig_p) && length(x_levels) == 2 && significance_stars(sig_p) != "n.s."
+  y_finite <- render_df$score[is.finite(render_df$score)]
+  y_max <- max(y_finite)
+  y_range <- diff(range(y_finite))
+  bracket_y <- y_max + 0.14 * y_range
+  bracket_tick <- 0.03 * y_range
+  top_expand <- if (add_bracket) 0.22 else 0.06
 
   # Violin + jitter + mean/SD overlays avoid summary-only bars for publication
   # figures and share the neural beta-distribution figure style.
@@ -508,7 +560,7 @@ write_behavior_distribution_plot <- function(
       na.rm = TRUE
     ) +
     scale_fill_manual(values = PLOT_PALETTE[x_levels], guide = "none") +
-    scale_y_continuous(expand = expansion(mult = c(0.03, 0.06))) +
+    scale_y_continuous(expand = expansion(mult = c(0.03, top_expand))) +
     labs(
       title = plot_title,
       x = NULL,
@@ -516,9 +568,17 @@ write_behavior_distribution_plot <- function(
     ) +
     theme_sfv_pub(base_size = 12) +
     theme(
+      plot.title = element_text(face = "bold", size = rel(1.22), color = "grey10", hjust = 0.5, margin = margin(b = 2)),
       panel.grid.major.x = element_blank(),
       axis.text.x = element_text(face = "bold", color = "grey20", size = rel(0.95), lineheight = 0.95)
     )
+
+  if (add_bracket) {
+    p <- p + significance_bracket(
+      x1 = 1, x2 = 2, y = bracket_y,
+      label = significance_stars(sig_p), tick = bracket_tick
+    )
+  }
 
   base_name <- paste0(sanitize_filename_component(domain_name), "_", filename_suffix)
   png_path <- file.path(out_dir, paste0(base_name, ".png"))
@@ -526,35 +586,6 @@ write_behavior_distribution_plot <- function(
     ggplot2::ggsave(filename = png_path, plot = p, width = width, height = height, dpi = dpi)
   )
   png_path
-}
-
-# Write a four-condition raw-score distribution plot for one behavioral domain.
-# These figures answer: "What did subjects score in each of the four study
-# conditions after exclusions and complete-case filtering?"
-write_behavior_plot <- function(domain_df, domain_name, out_dir, width, height, dpi) {
-  # For engagement, place short- and long-form entertainment together to align
-  # with a content-major comparison in the same figure. Retention keeps the
-  # historical order to preserve existing reporting convention.
-  condition_levels <- if (unique(domain_df$domain) == "engagement") {
-    ENGAGEMENT_CONDITION_LEVELS
-  } else {
-    CONDITION_LEVELS
-  }
-
-  write_behavior_distribution_plot(
-    plot_df = domain_df,
-    domain_name = domain_name,
-    out_dir = out_dir,
-    x_level_col = "condition",
-    x_display_col = "condition_display",
-    x_levels = condition_levels,
-    x_labels = CONDITION_LABELS,
-    filename_suffix = "score_distribution",
-    plot_title = paste0(unique(domain_df$domain_label), " scores by video condition"),
-    width = width,
-    height = height,
-    dpi = dpi
-  )
 }
 
 # Summarize every plotted data layer for auditability. The `plot_type` column is
@@ -599,15 +630,21 @@ run_plotting <- function(
   input_csv,
   exclude_subjects_json,
   out_dir,
+  engagement_main_csv = "data/results/engagement_format_content_lmm_main_effects_r.csv",
+  retention_main_csv = "data/results/retention_format_content_lmm_main_effects_r.csv",
   width = 7.0,
   height = 5.0,
   dpi = 300L,
-  plot_types = c("raw_condition", "content_marginal", "length_marginal")
+  plot_types = c("content_marginal", "length_marginal")
 ) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-  supported_plot_types <- c("raw_condition", "content_marginal", "length_marginal")
+  supported_plot_types <- c("content_marginal", "length_marginal")
   requested_plot_types <- match.arg(plot_types, choices = supported_plot_types, several.ok = TRUE)
+
+  # Adjusted main-effect p-values drive the significance labels on the marginal
+  # (main-effect) figures.
+  effect_pvalues <- load_behavior_effect_pvalues(engagement_main_csv, retention_main_csv)
 
   df <- load_behavior_input(input_csv, exclude_subjects_json)
   df_long <- reshape_behavior_scores(df)
@@ -709,27 +746,6 @@ run_plotting <- function(
 
   figure_paths <- list()
   for (domain_name in unique(BEHAVIOR_COL_MAP$domain)) {
-    if ("raw_condition" %in% requested_plot_types) {
-      # Four-condition descriptive figure.
-      domain_df <- audit_df %>%
-        filter(.data$plot_type == "raw_condition", .data$domain == domain_name) %>%
-        mutate(
-          condition = factor(.data$condition, levels = CONDITION_LEVELS),
-          condition_display = factor(
-            CONDITION_LABELS[as.character(.data$condition)],
-            levels = CONDITION_LABELS[CONDITION_LEVELS]
-          )
-        )
-      figure_paths[[domain_name]] <- write_behavior_plot(
-        domain_df = domain_df,
-        domain_name = domain_name,
-        out_dir = out_dir,
-        width = width,
-        height = height,
-        dpi = dpi
-      )
-    }
-
     if ("content_marginal" %in% requested_plot_types) {
       # Content marginal display: each point is a subject-level mean across video
       # length. These are raw descriptive values, not age-adjusted model EMMs.
@@ -747,7 +763,8 @@ run_plotting <- function(
         plot_title = paste0(unique(content_df$domain_label), " scores by content type"),
         width = width,
         height = height,
-        dpi = dpi
+        dpi = dpi,
+        sig_p = behavior_effect_pvalue(effect_pvalues, domain_name, "content")
       )
     }
 
@@ -777,7 +794,8 @@ run_plotting <- function(
         plot_title = paste0(unique(length_df$domain_label), " scores by video length"),
         width = width,
         height = height,
-        dpi = dpi
+        dpi = dpi,
+        sig_p = behavior_effect_pvalue(effect_pvalues, domain_name, "length")
       )
     }
   }
@@ -800,6 +818,8 @@ main <- function() {
     input_csv = args$input_csv,
     exclude_subjects_json = args$exclude_subjects_json,
     out_dir = args$out_dir,
+    engagement_main_csv = args$engagement_main_csv,
+    retention_main_csv = args$retention_main_csv,
     width = args$width,
     height = args$height,
     dpi = args$dpi
