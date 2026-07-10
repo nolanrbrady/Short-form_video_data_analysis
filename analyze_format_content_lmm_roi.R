@@ -25,7 +25,7 @@
 #     (Poldrack, 2007; see CITATIONS.md).
 #
 # Model (per ROI x chromophore)
-#   - Omnibus LMM: beta ~ format_c * content_c + age + (1|subject_id)
+#   - Omnibus LMM: beta ~ format_c * content_c + age + education_years + (1|subject_id)
 #     with numeric sum coding:
 #       format_c  = -0.5 (Short), +0.5 (Long)
 #       content_c = -0.5 (Entertainment), +0.5 (Education)
@@ -33,7 +33,7 @@
 # Missingness / pruned channels (repo policy)
 #   - Derived FIR-to-AUC beta tables encode pruned channels as NA (do not impute).
 #   - Complete-case within ROI/chrom (subject must have all 4 conditions present).
-#   - Age is a required omnibus covariate and must be complete after subject exclusions.
+#   - Age and education_years are required omnibus covariates and must be complete after subject exclusions.
 #
 # Multiple testing correction
 #   - BH-FDR separately per chromophore and per effect across ROIs.
@@ -319,7 +319,7 @@ load_merged_input <- function(input_csv) {
   # Preferred path for ROI analysis:
   # consume pre-merged wide table so covariates and beta columns are already co-located.
   df <- read_csv(input_csv, show_col_types = FALSE)
-  assert_required_columns(df, c("subject_id", "age"), input_csv)
+  assert_required_columns(df, c("subject_id", "age", "education_years"), input_csv)
   beta_cols <- names(df)[str_detect(names(df), "^S\\d+_D\\d+_Cond\\d{2}_(HbO|HbR)$")]
   if (length(beta_cols) == 0) {
     stop(
@@ -332,7 +332,7 @@ load_merged_input <- function(input_csv) {
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
-  df <- coerce_numeric_strict(df, "age")
+  df <- coerce_numeric_strict(df, c("age", "education_years"))
 
   dup <- df %>%
     count(subject_id, name = "n_rows") %>%
@@ -362,7 +362,7 @@ reshape_to_long <- function(df_merged) {
   if (length(beta_cols) == 0) stop("No beta columns matched pattern like 'S01_D01_Cond01_HbO'.")
 
   df_merged %>%
-    select(subject_id, age, all_of(beta_cols)) %>%
+    select(subject_id, age, education_years, all_of(beta_cols)) %>%
     pivot_longer(cols = all_of(beta_cols), names_to = "beta_col", values_to = "beta") %>%
     extract(
       col = "beta_col",
@@ -437,7 +437,7 @@ aggregate_to_roi <- function(df_long, roi_map) {
   # extraction strategy in neuroimaging; see Poldrack (2007) in CITATIONS.md.
   df_long %>%
     inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
-    group_by(subject_id, age, roi, chrom, condition, format, content, format_c, content_c) %>%
+    group_by(subject_id, age, education_years, roi, chrom, condition, format, content, format_c, content_c) %>%
     summarize(
       n_channels_in_roi = n_distinct(channel),
       n_channels_nonmissing = sum(!is.na(beta)),
@@ -461,11 +461,16 @@ complete_case_subjects <- function(sub) {
 fit_factorial_lmm <- function(sub_complete) {
   # Per-ROI × chrom LMM with random intercept for subject (within-subject design).
   # References: Laird & Ware (1982); Bates et al. (2015), see `CITATIONS.md`.
-  # Age enters additively as a subject-level omnibus covariate.
+  # Age and the study-codebook education-years proxy enter additively as
+  # subject-level omnibus covariates (Galobardes et al., 2006; see CITATIONS.md).
   # Inference: fixed-effect tests are extracted with Kenward-Roger denominator df
   # via lmerTest + pbkrtest (Kenward & Roger, 1997; Halekoh & Højsgaard, 2014).
   sub_complete <- sub_complete %>% mutate(beta = .data$beta * NEURAL_LMM_RESPONSE_SCALE)
-  lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = sub_complete, REML = TRUE)
+  lmerTest::lmer(
+    beta ~ format_c * content_c + age + education_years + (1 | subject_id),
+    data = sub_complete,
+    REML = TRUE
+  )
 }
 
 fit_condition_lmm <- function(sub_complete) {
@@ -589,6 +594,7 @@ main <- function() {
   )
   df_merged <- excluded$data
   assert_covariate_complete(df_merged, "age", "format_content_roi")
+  assert_covariate_complete(df_merged, "education_years", "format_content_roi")
 
   df_long <- reshape_to_long(df_merged)
   validate_roi_channels(df_long, roi_map)
@@ -601,7 +607,7 @@ main <- function() {
   cat("[data] channels mapped to ROIs:", length(unique(roi_map$channel)), "\n")
   cat("[data] ROIs detected:", length(rois), "\n")
   cat("[data] chromophores detected:", paste(sort(unique(df_roi$chrom)), collapse = ", "), "\n")
-  cat("[model] omnibus covariate adjustment: age\n")
+  cat("[model] omnibus covariate adjustment: age + education_years\n")
   cat("[model] internal neural response scaling: beta * ", NEURAL_LMM_RESPONSE_SCALE, " for fitting; outputs are back-transformed to original beta units\n", sep = "")
 
   main_rows <- list()

@@ -127,6 +127,7 @@ Each beta column represents:
 Analysis requires conversion from wide → long with fields:
 - `subject_id`
 - `age`
+- `education_years`
 - `channel` (e.g., `S01_D01`)
 - `chrom` (`HbO` or `HbR`)
 - `condition` (one of: `SF_Edu`, `SF_Ent`, `LF_Ent`, `LF_Edu`)
@@ -137,7 +138,7 @@ Analysis requires conversion from wide → long with fields:
 
 Complete-case rule (within channel/chromophore):
 - For a given (channel, chromophore), **only subjects with all 4 conditions present (non-missing beta)** are included.
-- `age` is a required subject-level omnibus covariate: it must exist, be numeric, and be complete after subject exclusions or the script fails hard.
+- `age` and `education_years` are required subject-level omnibus covariates: both must exist, be numeric, and be complete after subject exclusions or the script fails hard.
 
 ---
 
@@ -146,7 +147,7 @@ Complete-case rule (within channel/chromophore):
 Model form:
 - One model per **(channel × chromophore)**.
 - Linear mixed model with random intercept for subject:
-  - `beta ~ format_c * content_c + age + (1 | subject_id)`
+  - `beta ~ format_c * content_c + age + education_years + (1 | subject_id)`
 
 Coding (required):
 - Use numeric sum/effect coding with ±0.5:
@@ -165,7 +166,7 @@ Significance threshold:
 R implementation notes:
 - LMM via `lme4::lmer`, with fixed-effect p-values/df from Kenward-Roger Type-III tests via `lmerTest` + `pbkrtest`.
 - For the 1-df omnibus terms, the R script derives the reported SE from the same Kenward-Roger F statistic used for signed t, so `estimate / se` reconstructs `t` in publication tables.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
 - Post-hoc via `emmeans`, using the existing condition-only follow-up model.
@@ -275,7 +276,7 @@ Inference is performed **per ROI**.
 
 Primary CSV input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
-  - Must include one row per subject (`subject_id`), a numeric `age` column, and Homer beta columns matching:
+  - Must include one row per subject (`subject_id`), numeric `age` and `education_years` columns, and Homer beta columns matching:
     - `S##_D##_Cond##_HbO`
     - `S##_D##_Cond##_HbR`
 
@@ -311,7 +312,7 @@ ROI summary construction:
 
 Complete-case inclusion rule (within ROI/chrom):
 - Keep only subjects with non-missing ROI beta in all 4 conditions.
-- `age` is a required subject-level omnibus covariate: it must exist, be numeric, and be complete after subject exclusions or the script fails hard.
+- `age` and `education_years` are required subject-level omnibus covariates: both must exist, be numeric, and be complete after subject exclusions or the script fails hard.
 
 ---
 
@@ -328,7 +329,7 @@ Effect coding:
 - `content_c = -0.5` (Entertainment), `+0.5` (Education)
 
 Primary model (per ROI × chrom):
-- `beta ~ format_c * content_c + age + (1 | subject_id)`
+- `beta ~ format_c * content_c + age + education_years + (1 | subject_id)`
 
 Inference and post-hoc:
 - Main effects reported for Format, Content, and Interaction.
@@ -336,7 +337,7 @@ Inference and post-hoc:
   standard error, Kenward-Roger denominator df, signed t-statistic, 95% CI,
   uncorrected p-value, and BH-FDR q-value for each ROI × chromophore × effect row.
   For the 1-df omnibus terms, `estimate / se` reconstructs the reported signed t.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 - For numerical conditioning, the implemented R script may fit the neural response after multiplying beta by one fixed global constant (`1e6`), but reported estimates/CIs are back-transformed into the original beta units before output.
 - Implemented outputs also include a boolean `converged` flag based on captured mixed-model convergence warnings so any numerically suspect fits remain auditable in the result tables.
 - Post-hoc pairwise condition contrasts (6 total) run only when ROI/chrom interaction
@@ -395,6 +396,7 @@ Primary CSV input:
 Required columns:
 - `subject_id`
 - `age`
+- `education_years`
 - `diff_short_form_education`
 - `diff_short_form_entertainment`
 - `diff_long_form_education`
@@ -404,11 +406,11 @@ Required columns:
 
 - `subject_id` is normalized by extracting digits and converting to integer.
 - Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
-- Required retention columns and `age` must all exist; missing columns are a hard error.
+- Required retention columns, `age`, and `education_years` must all exist; missing columns are a hard error.
 - Retention inputs must come from the recall preprocessing script using the invalid-question manifest (`data/config/recall_invalid_questions.json`) so `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task scoring denominators, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`.
 - Retention preprocessing must also apply `data/config/recall_question_aliases.json`; currently this maps pre-task `Q39` to canonical post-task/key item `Q22`.
-- Retention columns and `age` must be numeric/coercible to numeric; non-numeric values are a hard error.
-- `age` must be complete after subject exclusions; any remaining missing value is a hard error.
+- Retention columns, `age`, and `education_years` must be numeric/coercible to numeric; non-numeric values are a hard error.
+- `age` and `education_years` must be complete after subject exclusions; any remaining missing value is a hard error.
 
 ## Condition mapping and coding
 
@@ -433,7 +435,7 @@ Effect coding:
 
 Model:
 - One subject-level LMM:
-  - `retention_diff ~ length_c * content_c + age + (1 | subject_id)`
+  - `retention_diff ~ length_c * content_c + age + education_years + (1 | subject_id)`
 
 Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
 - estimate, SE, df, t, uncorrected p, Holm-adjusted p, Wald 95% CI
@@ -443,7 +445,7 @@ Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
 R implementation notes:
 - Fit with `lmerTest::lmer` (REML).
 - p-values from `lmerTest` (Satterthwaite df approximation).
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 
 ## Multiple testing correction
 
@@ -488,12 +490,12 @@ Validation script:
 Must verify:
 - deterministic analytic recovery of known Length/Content/Interaction effects
 - end-to-end coefficient recovery in synthetic data with known generating parameters
-- direct agreement with an age-adjusted reference omnibus fit
+- direct agreement with an age- and education-adjusted reference omnibus fit
 - manual Holm agreement with output adjusted p-values
 - post-hoc gating behavior (on/off)
 - complete-case behavior for `NA`
 - retention `0` handling as valid (not missing)
-- fail-hard behavior for duplicates, missing columns, missing `age`, and non-numeric values
+- fail-hard behavior for duplicates, missing columns, missing `age` or `education_years`, and non-numeric values
 
 ---
 
@@ -516,6 +518,7 @@ Primary CSV input:
 Required columns:
 - `subject_id`
 - `age`
+- `education_years`
 - `sf_education_engagement`
 - `sf_entertainment_engagement`
 - `lf_education_engagement`
@@ -525,9 +528,9 @@ Required columns:
 
 - `subject_id` is normalized by extracting digits and converting to integer.
 - Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
-- Required engagement columns and `age` must all exist; missing columns are a hard error.
-- Engagement columns and `age` must be numeric/coercible to numeric; non-numeric values are a hard error.
-- `age` must be complete after subject exclusions; any remaining missing value is a hard error.
+- Required engagement columns, `age`, and `education_years` must all exist; missing columns are a hard error.
+- Engagement columns, `age`, and `education_years` must be numeric/coercible to numeric; non-numeric values are a hard error.
+- `age` and `education_years` must be complete after subject exclusions; any remaining missing value is a hard error.
 
 ## Condition mapping and coding
 
@@ -552,7 +555,7 @@ Effect coding:
 
 Model:
 - One subject-level LMM:
-  - `engagement ~ length_c * content_c + age + (1 | subject_id)`
+  - `engagement ~ length_c * content_c + age + education_years + (1 | subject_id)`
 
 Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
 - estimate, SE, df, t, uncorrected p, Holm-adjusted p, Wald 95% CI
@@ -562,7 +565,7 @@ Reported quantities (for `length_c`, `content_c`, `length_c:content_c`):
 R implementation notes:
 - Fit with `lmerTest::lmer` (REML).
 - p-values from `lmerTest` (Satterthwaite df approximation).
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 
 ## Multiple testing correction
 
@@ -607,12 +610,12 @@ Validation script:
 Must verify:
 - deterministic analytic recovery of known Length/Content/Interaction effects
 - end-to-end coefficient recovery in synthetic data with known generating parameters
-- direct agreement with an age-adjusted reference omnibus fit
+- direct agreement with an age- and education-adjusted reference omnibus fit
 - manual Holm agreement with output adjusted p-values
 - post-hoc gating behavior (on/off)
 - complete-case behavior for `NA`
 - engagement `0` handling as valid (not missing)
-- fail-hard behavior for duplicates, missing columns, missing `age`, and non-numeric values
+- fail-hard behavior for duplicates, missing columns, missing `age` or `education_years`, and non-numeric values
 
 ---
 

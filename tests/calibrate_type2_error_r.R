@@ -95,6 +95,10 @@ make_age_years <- function(n_subjects) {
   seq(18, by = 1, length.out = n_subjects)
 }
 
+make_education_years <- function(n_subjects) {
+  rep(c(12, 16, 18, 14), length.out = n_subjects)
+}
+
 cond_grid <- function() {
   tibble::tibble(
     cond = c("01", "02", "03", "04"),
@@ -148,6 +152,7 @@ generate_combined <- function(n_subjects, age_years = make_age_years(n_subjects)
   tibble::tibble(
     subject_id = ids$combined_subject,
     age = age_years,
+    education_years = make_education_years(n_subjects),
     pd_status = rep(0, n_subjects)
   )
 }
@@ -178,6 +183,7 @@ generate_retention_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed, age_y
   tibble::tibble(
     subject_id = sid,
     age = age_years,
+    education_years = make_education_years(n_subjects),
     diff_short_form_education = make_cell(grid$format_c[[1]], grid$content_c[[1]]),
     diff_short_form_entertainment = make_cell(grid$format_c[[2]], grid$content_c[[2]]),
     diff_long_form_entertainment = make_cell(grid$format_c[[3]], grid$content_c[[3]]),
@@ -199,6 +205,7 @@ generate_engagement_alt <- function(n_subjects, bL, bC, bI, noise_sd, seed, age_
   tibble::tibble(
     subject_id = sid,
     age = age_years,
+    education_years = make_education_years(n_subjects),
     sf_education_engagement = make_cell(grid$format_c[[1]], grid$content_c[[1]]),
     sf_entertainment_engagement = make_cell(grid$format_c[[2]], grid$content_c[[2]]),
     lf_entertainment_engagement = make_cell(grid$format_c[[3]], grid$content_c[[3]]),

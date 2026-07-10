@@ -548,10 +548,10 @@ Order / dependencies:
   so covariates and beta columns are available in one file.
 
 Model (per channel × chromophore):
-- Omnibus LMM: `beta ~ format_c * content_c + age + (1 | subject_id)`
+- Omnibus LMM: `beta ~ format_c * content_c + age + education_years + (1 | subject_id)`
 - Coding: `format_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
-- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- `age` and `education_years` are required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 - Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
 - The R tidy main-effects table reports estimate, Kenward-Roger-consistent standard error, Kenward-Roger denominator df, signed t-statistic, 95% CI, uncorrected p-value, and BH-FDR q-value for each channel x chromophore x effect row. For the 1-df omnibus terms, the reported SE is derived from the same Kenward-Roger F statistic used for the signed t value, so `estimate / se` reconstructs `t`.
@@ -618,10 +618,10 @@ ROI beta construction:
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as `NaN` and are not imputed.
 
 Model / inference:
-- Omnibus LMM (per ROI × chrom): `beta ~ format_c * content_c + age + (1 | subject_id)`
+- Omnibus LMM (per ROI × chrom): `beta ~ format_c * content_c + age + education_years + (1 | subject_id)`
 - Same coding and interaction-gated post-hoc policy as C2.
-- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- `age` and `education_years` are required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 - BH-FDR is applied separately per chromophore and per effect across ROIs.
 - For numerical conditioning, the R script fits the neural models on a fixed internal response scale (`beta * 1e6`) and back-transforms reported estimates, CIs, and post-hoc mean differences into the original beta units before writing outputs.
 - Output tables include a boolean `converged` column based on captured mixed-model convergence warnings so flagged fits remain auditable without being silently dropped.
@@ -653,15 +653,15 @@ Rscript tests/validate_pipeline_c_roi_r.R
 
 Input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
-  (must contain `subject_id`, `age`, and:
+  (must contain `subject_id`, `age`, `education_years`, and:
   `diff_short_form_education`, `diff_short_form_entertainment`,
   `diff_long_form_education`, `diff_long_form_entertainment`)
 
 Model:
-- Omnibus LMM: `retention_diff ~ length_c * content_c + age + (1 | subject_id)`
+- Omnibus LMM: `retention_diff ~ length_c * content_c + age + education_years + (1 | subject_id)`
 - Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
-- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- `age` and `education_years` are required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 
 Missingness policy:
 - Complete-case by subject across the 4 retention conditions.
@@ -703,15 +703,15 @@ Rscript tests/validate_retention_pipeline_r.R
 
 Input:
 - `data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv`
-  (must contain `subject_id`, `age`, and:
+  (must contain `subject_id`, `age`, `education_years`, and:
   `sf_education_engagement`, `sf_entertainment_engagement`,
   `lf_education_engagement`, `lf_entertainment_engagement`)
 
 Model:
-- Omnibus LMM: `engagement ~ length_c * content_c + age + (1 | subject_id)`
+- Omnibus LMM: `engagement ~ length_c * content_c + age + education_years + (1 | subject_id)`
 - Coding: `length_c = -0.5 (Short), +0.5 (Long)`; `content_c = -0.5 (Entertainment), +0.5 (Education)`
-- `age` is required, must be numeric, and must be complete after subject exclusions or the script fails hard.
-- The current omnibus covariate adjustment includes `age` only; `sfv_daily_duration` is deferred until its missingness is resolved upstream.
+- `age` and `education_years` are required, must be numeric, and must be complete after subject exclusions or the script fails hard.
+- The current omnibus covariate adjustment includes `age` and the study-codebook `education_years` proxy; `sfv_daily_duration` remains deferred until its missingness is resolved upstream.
 
 Missingness policy:
 - Complete-case by subject across the 4 engagement conditions.

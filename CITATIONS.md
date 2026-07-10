@@ -178,9 +178,9 @@
   - **First Author:** Galobardes
   - **Year:** 2006
   - **Usage:** Education as a socioeconomic/demographic covariate
-  - **Reasoning:** Supports treating education as an interpretable socioeconomic covariate while documenting that the added `education_years` field is an approximate study-codebook proxy for exploratory screening, not a directly measured continuous duration variable.
+  - **Reasoning:** Supports treating education as an interpretable socioeconomic covariate while documenting that `education_years` is an approximate study-codebook proxy, not a directly measured continuous duration variable. The proxy is included additively with age in the channelwise, ROI, retention, and engagement omnibus mixed models following the completed covariate sensitivity analysis.
   - **Link:** https://doi.org/10.1136/jech.2004.023531
-  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`, `README.md`, `ANALYSIS_SPEC.md`, `tests/validate_combined_data_generation_py.py`
+  - **Source:** `process_sociodemographic.py`, `sfv_data_description.md`, `README.md`, `ANALYSIS_SPEC.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `tests/validate_combined_data_generation_py.py`
 
 ## Questionnaires
 
@@ -247,7 +247,7 @@
   - **First Author:** Kuznetsova
   - **Year:** 2017
   - **Usage:** Fixed-effect tests in linear mixed models
-  - **Reasoning:** Justifies the `lmerTest` implementation used for mixed-model fixed-effect inference across analyses in this repo, including the age-adjusted omnibus models and the channelwise/ROI scripts that pair `lmerTest` with Kenward-Roger denominator df calculations.
+  - **Reasoning:** Justifies the `lmerTest` implementation used for mixed-model fixed-effect inference across analyses in this repo, including the age- and education-adjusted omnibus models and the channelwise/ROI scripts that pair `lmerTest` with Kenward-Roger denominator df calculations.
   - **Link:** https://doi.org/10.18637/jss.v082.i13
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 
@@ -256,7 +256,7 @@
   - **First Author:** Kenward
   - **Year:** 1997
   - **Usage:** Kenward-Roger denominator degrees of freedom, F-test approximation, and internally consistent 1-df SE/t reporting
-  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation used for fixed-effect tests in the channelwise and ROI format×content LMM scripts, including their age-adjusted omnibus models. For 1-df omnibus terms, the scripts derive reported SEs from the same Kenward-Roger F statistic used for signed t so publication tables do not mix default Wald SEs with KR df/t/p.
+  - **Reasoning:** Primary methodological reference for the Kenward-Roger approximation used for fixed-effect tests in the channelwise and ROI format×content LMM scripts, including their age- and education-adjusted omnibus models. For 1-df omnibus terms, the scripts derive reported SEs from the same Kenward-Roger F statistic used for signed t so publication tables do not mix default Wald SEs with KR df/t/p.
   - **Link:** https://doi.org/10.2307/2533558
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_real_model_diagnostics_r.R`, `ANALYSIS_SPEC.md`
 
@@ -265,7 +265,7 @@
   - **First Author:** Halekoh
   - **Year:** 2014
   - **Usage:** R implementation of Kenward-Roger tests via `pbkrtest`
-  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df, F statistics, and p-values for `lmer` models in the age-adjusted channelwise and ROI omnibus analyses. The channelwise and ROI scripts use those 1-df KR F statistics to derive reported SEs that reconstruct the signed t statistics.
+  - **Reasoning:** Justifies the software implementation path used by the R scripts to obtain Kenward-Roger denominator df, F statistics, and p-values for `lmer` models in the age- and education-adjusted channelwise and ROI omnibus analyses. The channelwise and ROI scripts use those 1-df KR F statistics to derive reported SEs that reconstruct the signed t statistics.
   - **Link:** https://doi.org/10.18637/jss.v059.i09
   - **Source:** `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_real_model_diagnostics_r.R`, `ANALYSIS_SPEC.md`
 
@@ -274,7 +274,7 @@
   - **First Author:** Satterthwaite
   - **Year:** 1946
   - **Usage:** Approximate degrees of freedom (Satterthwaite)
-  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) in the retention and engagement LMM analyses, including the additive age-adjusted omnibus fits.
+  - **Reasoning:** Foundational reference for the Satterthwaite df approximation used (via `lmerTest`) in the retention and engagement LMM analyses, including the additive age- and education-adjusted omnibus fits.
   - **Link:** https://doi.org/10.2307/3002019
   - **Source:** `analyze_retention_format_content_lmm.R`, `analyze_engagement_format_content_lmm.R`, `ANALYSIS_SPEC.md`, `README.md`
 

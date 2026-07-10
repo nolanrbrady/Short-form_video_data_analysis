@@ -14,7 +14,7 @@
 #       Content: Education vs Entertainment
 #
 # Model
-#   - Omnibus LMM: retention_diff ~ length_c * content_c + age + (1|subject_id)
+#   - Omnibus LMM: retention_diff ~ length_c * content_c + age + education_years + (1|subject_id)
 #     with numeric sum coding:
 #       length_c  = -0.5 (Short), +0.5 (Long)
 #       content_c = -0.5 (Entertainment), +0.5 (Education)
@@ -23,7 +23,7 @@
 #   - Complete-case within subject for retention outcomes:
 #     retain only subjects with all 4 retention condition values present.
 #   - IMPORTANT: retention zeros are treated as valid values (not missing).
-#   - Age is a required omnibus covariate and must be complete after subject exclusions.
+#   - Age and education_years are required omnibus covariates and must be complete after subject exclusions.
 #
 # Effect Sizes
 #   - Partial eta-squared (eta2_p) is calculated from the t-statistic and Satterthwaite df:
@@ -209,11 +209,11 @@ assert_covariate_complete <- function(df, covariate_col, context_label) {
 # Enforces one-row-per-subject integrity before any modeling.
 load_retention_input <- function(input_csv, exclude_subjects_json) {
   df <- read_csv(input_csv, show_col_types = FALSE)
-  assert_required_columns(df, c("subject_id", "age", REQUIRED_DIFF_COLS), input_csv)
+  assert_required_columns(df, c("subject_id", "age", "education_years", REQUIRED_DIFF_COLS), input_csv)
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
-  df <- coerce_numeric_strict(df, c("age", REQUIRED_DIFF_COLS))
+  df <- coerce_numeric_strict(df, c("age", "education_years", REQUIRED_DIFF_COLS))
 
   dup <- df %>%
     count(subject_id, name = "n_rows") %>%
@@ -239,6 +239,7 @@ load_retention_input <- function(input_csv, exclude_subjects_json) {
   )
   df_excluded <- excluded$data
   assert_covariate_complete(df_excluded, "age", "retention")
+  assert_covariate_complete(df_excluded, "education_years", "retention")
   df_excluded
 }
 
@@ -246,7 +247,7 @@ load_retention_input <- function(input_csv, exclude_subjects_json) {
 # Mapping is explicit to avoid ambiguous category parsing.
 reshape_to_long <- function(df) {
   df %>%
-    select(subject_id, age, all_of(REQUIRED_DIFF_COLS)) %>%
+    select(subject_id, age, education_years, all_of(REQUIRED_DIFF_COLS)) %>%
     pivot_longer(cols = all_of(REQUIRED_DIFF_COLS), names_to = "diff_col", values_to = "retention_diff") %>%
     mutate(
       condition = case_when(
@@ -294,10 +295,11 @@ complete_case_subjects <- function(df_long) {
 fit_factorial_lmm <- function(df_cc) {
   # Random-intercept mixed model for repeated measures.
   # References: Laird & Ware (1982); Bates et al. (2015), see `CITATIONS.md`.
-  # Age enters additively as a subject-level omnibus covariate.
+  # Age and the study-codebook education-years proxy enter additively as
+  # subject-level omnibus covariates (Galobardes et al., 2006; see CITATIONS.md).
   # Inference: Satterthwaite-approximated df via lmerTest (Kuznetsova et al., 2017).
   lmerTest::lmer(
-    retention_diff ~ length_c * content_c + age + (1 | subject_id),
+    retention_diff ~ length_c * content_c + age + education_years + (1 | subject_id),
     data = df_cc,
     REML = TRUE
   )
@@ -354,7 +356,7 @@ main <- function() {
   cat("[data] input subjects:", n_subjects_raw, "\n")
   cat("[data] complete-case subjects:", n_subjects_cc, "\n")
   cat("[data] complete-case observations:", n_obs_cc, "\n")
-  cat("[model] omnibus covariate adjustment: age\n")
+  cat("[model] omnibus covariate adjustment: age + education_years\n")
 
   if (n_subjects_cc < args$min_subjects) {
     stop(

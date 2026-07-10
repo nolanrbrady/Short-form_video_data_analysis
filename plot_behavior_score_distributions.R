@@ -748,7 +748,7 @@ run_plotting <- function(
   for (domain_name in unique(BEHAVIOR_COL_MAP$domain)) {
     if ("content_marginal" %in% requested_plot_types) {
       # Content marginal display: each point is a subject-level mean across video
-      # length. These are raw descriptive values, not age-adjusted model EMMs.
+      # length. These are raw descriptive values, not covariate-adjusted model EMMs.
       content_df <- audit_df %>%
         filter(.data$plot_type == "content_marginal", .data$domain == domain_name)
       figure_paths[[paste0(domain_name, "_content_marginal")]] <- write_behavior_distribution_plot(
@@ -770,7 +770,7 @@ run_plotting <- function(
 
     if ("length_marginal" %in% requested_plot_types && domain_name %in% LENGTH_PLOTTED_DOMAINS) {
       # Retention length marginal display: each point is a subject-level mean
-      # across content. These are raw descriptive values, not age-adjusted model
+      # across content. These are raw descriptive values, not covariate-adjusted model
       # EMMs.
       length_df <- audit_df %>%
         filter(.data$plot_type == "length_marginal", .data$domain == domain_name) %>%

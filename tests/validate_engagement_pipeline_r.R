@@ -6,7 +6,7 @@
 # - Verify `analyze_engagement_format_content_lmm.R` implements:
 #   - Required-column and subject_id integrity checks (fail hard)
 #   - 2x2 condition mapping and +/-0.5 effect coding
-#   - age-adjusted omnibus model (`+ age`) with fail-hard covariate validation
+#   - age- and education-adjusted omnibus model with fail-hard covariate validation
 #   - Complete-case rule (subject must have all 4 engagement values)
 #   - Engagement zero handling as valid data (not missing)
 #   - Holm correction across the 3 planned omnibus effects
@@ -35,6 +35,10 @@ source("r_emmeans_posthoc_helpers.R", local = TRUE)
 
 make_age_years <- function(n_subjects) {
   seq(18, by = 1, length.out = n_subjects)
+}
+
+make_education_years <- function(n_subjects) {
+  rep(c(12, 16, 18, 14), length.out = n_subjects)
 }
 
 holm_adjust_manual <- function(p_values) {
@@ -76,6 +80,7 @@ generate_engagement <- function(n_subjects, b0, bL, bC, bI, b_age = 0.10, noise_
   tibble::tibble(
     subject_id = sid,
     age = age_years,
+    education_years = make_education_years(n_subjects),
     sf_education_engagement = make_cell(-0.5, +0.5),
     sf_entertainment_engagement = make_cell(-0.5, -0.5),
     lf_education_engagement = make_cell(+0.5, +0.5),
@@ -219,9 +224,9 @@ main <- function() {
   assert_true(abs(est_content[[1]] - truth$content) < tol, "content estimate not close to generating truth")
   assert_true(abs(est_inter[[1]] - truth$interaction) < tol, "interaction estimate not close to generating truth")
 
-  # 2a) Direct reference-model agreement for the age-adjusted omnibus fit.
+  # 2a) Direct reference-model agreement for the age- and education-adjusted omnibus fit.
   ref_long <- df %>%
-    select(subject_id, age, sf_education_engagement, sf_entertainment_engagement, lf_education_engagement, lf_entertainment_engagement) %>%
+    select(subject_id, age, education_years, sf_education_engagement, sf_entertainment_engagement, lf_education_engagement, lf_entertainment_engagement) %>%
     pivot_longer(
       cols = c(sf_education_engagement, sf_entertainment_engagement, lf_education_engagement, lf_entertainment_engagement),
       names_to = "eng_col",
@@ -246,7 +251,7 @@ main <- function() {
         TRUE ~ NA_real_
       )
     )
-  ref_model <- lmerTest::lmer(engagement ~ length_c * content_c + age + (1 | subject_id), data = ref_long, REML = TRUE)
+  ref_model <- lmerTest::lmer(engagement ~ length_c * content_c + age + education_years + (1 | subject_id), data = ref_long, REML = TRUE)
   ref_coefs <- summary(ref_model)$coefficients
   for (term_map in list(c("length", "length_c"), c("content", "content_c"), c("interaction", "length_c:content_c"))) {
     out_row <- main_df %>% filter(effect == term_map[[1]])
@@ -414,7 +419,7 @@ main <- function() {
   )
   assert_true(run_missing$status != 0, "expected failure on missing required column")
 
-  # 11) Age is required and must be complete/numeric after exclusions.
+  # 11) Age and education_years are required and must be complete/numeric after exclusions.
   df_missing_age <- df %>% select(-age)
   input_missing_age <- file.path(tmp, "engagement_missing_age.csv")
   write_csv(df_missing_age, input_missing_age)
@@ -450,6 +455,42 @@ main <- function() {
     exclude_json = exclude_none
   )
   assert_true(run_age_bad$status != 0, "expected failure on non-numeric age values")
+
+  df_missing_education <- df %>% select(-education_years)
+  input_missing_education <- file.path(tmp, "engagement_missing_education.csv")
+  write_csv(df_missing_education, input_missing_education)
+  run_missing_education <- run_analysis(
+    input_missing_education,
+    file.path(tmp, "main_missing_education.csv"),
+    file.path(tmp, "posthoc_missing_education.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_missing_education$status != 0, "expected failure on missing education_years column")
+
+  df_education_na <- df
+  df_education_na$education_years[[3]] <- NA_real_
+  input_education_na <- file.path(tmp, "engagement_education_na.csv")
+  write_csv(df_education_na, input_education_na)
+  run_education_na <- run_analysis(
+    input_education_na,
+    file.path(tmp, "main_education_na.csv"),
+    file.path(tmp, "posthoc_education_na.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_education_na$status != 0, "expected failure on missing education_years values")
+
+  df_education_bad <- df
+  df_education_bad$education_years <- as.character(df_education_bad$education_years)
+  df_education_bad$education_years[[2]] <- "not_numeric"
+  input_education_bad <- file.path(tmp, "engagement_education_bad.csv")
+  write_csv(df_education_bad, input_education_bad)
+  run_education_bad <- run_analysis(
+    input_education_bad,
+    file.path(tmp, "main_education_bad.csv"),
+    file.path(tmp, "posthoc_education_bad.csv"),
+    exclude_json = exclude_none
+  )
+  assert_true(run_education_bad$status != 0, "expected failure on non-numeric education_years values")
 
   # 12) Fail hard on non-numeric engagement entry.
   df_bad <- df

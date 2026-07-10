@@ -6,7 +6,7 @@
 # - Verify that `analyze_format_content_lmm_channelwise.R` adheres to `ANALYSIS_SPEC.md`:
 #   - Subject ID normalization (`sub_0001` aligns with `0001`/`1`)
 #   - Condition mapping + ±0.5 effect coding
-#   - Age-adjusted omnibus model (`+ age`) with fail-hard covariate validation
+#   - Age- and education-adjusted omnibus model with fail-hard covariate validation
 #   - Pruned-channel policy: treat NA as missing
 #   - Complete-case within channel×chrom (all 4 conditions required)
 #   - BH-FDR families per chrom × effect across channels
@@ -90,6 +90,10 @@ assert_script_uses_kr_consistent_se <- function(script_path) {
     !grepl("summary(model)$coefficients", text, fixed = TRUE),
     "analysis script still extracts default coefficient-table SEs for KR-reported main effects"
   )
+  assert_true(
+    grepl("format_c * content_c + age + education_years", text, fixed = TRUE),
+    "analysis script must include both age and education_years in the omnibus model"
+  )
 }
 
 make_subject_ids <- function(n_subjects) {
@@ -103,6 +107,10 @@ make_subject_ids <- function(n_subjects) {
 
 make_age_years <- function(n_subjects) {
   seq(18, by = 1, length.out = n_subjects)
+}
+
+make_education_years <- function(n_subjects) {
+  rep(c(12, 16, 18, 14), length.out = n_subjects)
 }
 
 cond_grid <- function() {
@@ -167,6 +175,7 @@ generate_combined <- function(n_subjects, age_years = make_age_years(n_subjects)
   tibble::tibble(
     subject_id = ids$combined_subject,
     age = age_years,
+    education_years = make_education_years(n_subjects),
     pd_status = rep(0, n_subjects)
   )
 }
@@ -176,6 +185,7 @@ build_reference_long <- function(merged, channel_name, chrom_name) {
     transmute(
       subject_id = as.integer(str_extract(.data$subject_id, "\\d+")),
       age = .data$age,
+      education_years = .data$education_years,
       SF_Edu = .data[[paste0(channel_name, "_Cond01_", chrom_name)]],
       SF_Ent = .data[[paste0(channel_name, "_Cond02_", chrom_name)]],
       LF_Ent = .data[[paste0(channel_name, "_Cond03_", chrom_name)]],
@@ -367,12 +377,12 @@ main <- function() {
     assert_true(abs(est_int[[1]] - pars$bI) < tol, paste0("interaction estimate off for S01_D01 ", chrom_name))
   }
 
-  # 3a) Direct reference-model agreement for one representative channel/chrom with age adjustment.
+  # 3a) Direct reference-model agreement for one representative channel/chrom with age and education adjustment.
   ref_long <- build_reference_long(merged, channel_name = "S01_D01", chrom_name = "HbO") %>%
     group_by(subject_id) %>%
     filter(n_distinct(condition) == 4) %>%
     ungroup()
-  ref_model <- lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = ref_long, REML = TRUE)
+  ref_model <- lmerTest::lmer(beta ~ format_c * content_c + age + education_years + (1 | subject_id), data = ref_long, REML = TRUE)
   ref_anova <- anova(ref_model, ddf = "Kenward-Roger", type = 3)
   ref_coefs <- summary(ref_model)$coefficients
   for (term_map in list(c("format", "format_c"), c("content", "content_c"), c("interaction", "format_c:content_c"))) {
@@ -488,7 +498,7 @@ main <- function() {
     "absent exclusion ID should not change per-row n_subjects"
   )
 
-  # 6d) Age is required and must be complete/numeric after exclusions.
+  # 6d) Age and education_years are required and must be complete/numeric after exclusions.
   merged_missing_age_col <- merged %>% select(-age)
   merged_missing_age_col_csv <- file.path(tmp, "merged_missing_age_col.csv")
   write_csv(merged_missing_age_col, merged_missing_age_col_csv)
@@ -533,6 +543,51 @@ main <- function() {
     exclude_json = exclude_none
   )
   assert_true(status_age_bad != 0, "expected failure on non-numeric age values")
+
+  merged_missing_education_col <- merged %>% select(-education_years)
+  merged_missing_education_col_csv <- file.path(tmp, "merged_missing_education_col.csv")
+  write_csv(merged_missing_education_col, merged_missing_education_col_csv)
+  status_missing_education_col <- run_analysis(
+    input_csv = merged_missing_education_col_csv,
+    out_main = file.path(tmp, "main_missing_education_col.csv"),
+    out_main_tidy = file.path(tmp, "main_missing_education_col_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_missing_education_col.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_missing_education_col != 0, "expected failure on missing education_years column")
+
+  merged_education_na <- merged
+  merged_education_na$education_years[[3]] <- NA_real_
+  merged_education_na_csv <- file.path(tmp, "merged_education_na.csv")
+  write_csv(merged_education_na, merged_education_na_csv)
+  status_education_na <- run_analysis(
+    input_csv = merged_education_na_csv,
+    out_main = file.path(tmp, "main_education_na.csv"),
+    out_main_tidy = file.path(tmp, "main_education_na_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_education_na.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_education_na != 0, "expected failure on missing education_years values")
+
+  merged_education_bad <- merged
+  merged_education_bad$education_years <- as.character(merged_education_bad$education_years)
+  merged_education_bad$education_years[[4]] <- "not_numeric"
+  merged_education_bad_csv <- file.path(tmp, "merged_education_bad.csv")
+  write_csv(merged_education_bad, merged_education_bad_csv)
+  status_education_bad <- run_analysis(
+    input_csv = merged_education_bad_csv,
+    out_main = file.path(tmp, "main_education_bad.csv"),
+    out_main_tidy = file.path(tmp, "main_education_bad_tidy.csv"),
+    out_posthoc = file.path(tmp, "posthoc_education_bad.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_education_bad != 0, "expected failure on non-numeric education_years values")
 
   # 7) Duplicate subject_id should fail hard (data integrity)
   merged_dup <- bind_rows(merged, merged %>% slice(1))

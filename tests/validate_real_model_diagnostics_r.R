@@ -67,7 +67,7 @@ normalize_channel_id <- function(x, context_label) {
 
 load_input <- function() {
   df <- read_csv(INPUT_CSV, show_col_types = FALSE)
-  required <- c("subject_id", "age")
+  required <- c("subject_id", "age", "education_years")
   missing <- setdiff(required, names(df))
   if (length(missing) > 0) {
     stop("Merged input is missing required columns: ", paste(missing, collapse = ", "))
@@ -75,10 +75,11 @@ load_input <- function() {
   df <- df %>%
     mutate(
       subject_id = normalize_subject_id(.data$subject_id, "subject_id"),
-      age = suppressWarnings(as.numeric(.data$age))
+      age = suppressWarnings(as.numeric(.data$age)),
+      education_years = suppressWarnings(as.numeric(.data$education_years))
     )
-  if (any(is.na(df$age))) {
-    stop("Age contains missing/non-numeric values after coercion.")
+  if (any(is.na(df$age)) || any(is.na(df$education_years))) {
+    stop("Age or education_years contains missing/non-numeric values after coercion.")
   }
   apply_subject_exclusions(df, "subject_id", EXCLUSIONS_JSON, "real_model_diagnostics")$data
 }
@@ -88,7 +89,7 @@ reshape_channel_long <- function(df) {
   if (length(beta_cols) == 0) stop("No Homer beta columns found in merged input.")
 
   df %>%
-    select(subject_id, age, all_of(beta_cols)) %>%
+    select(subject_id, age, education_years, all_of(beta_cols)) %>%
     pivot_longer(all_of(beta_cols), names_to = "beta_col", values_to = "beta") %>%
     extract(
       "beta_col",
@@ -128,7 +129,7 @@ load_roi_map <- function() {
 aggregate_roi_long <- function(channel_long, roi_map) {
   channel_long %>%
     inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
-    group_by(subject_id, age, roi, chrom, condition, format_c, content_c) %>%
+    group_by(subject_id, age, education_years, roi, chrom, condition, format_c, content_c) %>%
     summarize(beta = if (all(is.na(beta))) NA_real_ else mean(beta, na.rm = TRUE), .groups = "drop")
 }
 
@@ -144,7 +145,11 @@ complete_case_subjects <- function(sub) {
 
 fit_factorial <- function(sub_complete) {
   sub_complete <- sub_complete %>% mutate(beta = .data$beta * NEURAL_LMM_RESPONSE_SCALE)
-  lmerTest::lmer(beta ~ format_c * content_c + age + (1 | subject_id), data = sub_complete, REML = TRUE)
+  lmerTest::lmer(
+    beta ~ format_c * content_c + age + education_years + (1 | subject_id),
+    data = sub_complete,
+    REML = TRUE
+  )
 }
 
 back_transform <- function(x) {

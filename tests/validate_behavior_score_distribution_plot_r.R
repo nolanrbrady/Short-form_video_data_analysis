@@ -81,6 +81,7 @@ write_toy_input <- function(path) {
   df <- tibble::tibble(
     subject_id = c("0001", "0002", "0003", "0004", "0005"),
     age = c(18, 19, 20, 21, 22),
+    education_years = c(12, 16, 14, 18, 12),
     sf_education_engagement = c(1.0, 0.0, 3.0, NA_real_, 9.0),
     sf_entertainment_engagement = c(2.0, 1.0, 4.0, 4.0, 9.0),
     lf_education_engagement = c(3.0, 2.0, 5.0, 5.0, 9.0),
@@ -326,6 +327,7 @@ test_lmm_preprocessing_agreement <- function(input_csv, exclusions_json) {
 write_controlled_lmm_alignment_input <- function(path) {
   subject_id <- sprintf("%04d", seq_len(10))
   age <- seq(18, by = 1, length.out = length(subject_id))
+  education_years <- rep(c(12, 16, 18, 14), length.out = length(subject_id))
   subject_shift <- c(-0.35, 0.22, -0.08, 0.41, -0.27, 0.10, -0.44, 0.31, -0.16, 0.26)
   short_deviation <- c(-0.20, 0.05, 0.18, -0.12, 0.09, -0.05, 0.16, -0.18, 0.11, -0.04)
   long_deviation <- c(0.14, -0.10, 0.07, 0.20, -0.16, 0.04, -0.09, 0.12, -0.06, -0.15)
@@ -333,6 +335,7 @@ write_controlled_lmm_alignment_input <- function(path) {
   df <- tibble::tibble(
     subject_id = subject_id,
     age = age,
+    education_years = education_years,
     sf_education_engagement = 3.0 + subject_shift + short_deviation + 0.5,
     sf_entertainment_engagement = 3.0 + subject_shift + short_deviation - 0.5,
     lf_education_engagement = 3.0 + subject_shift + long_deviation + 0.5,
@@ -380,7 +383,7 @@ length_contrast_from_plot_audit <- function(audit_df, domain_name) {
 
 # Fit the same LMM functions used by the inferential scripts on the controlled
 # fixture and compare their `content_c` coefficient to the plotted marginal
-# contrast. This does not claim real-data plot points are age-adjusted; it proves
+# contrast. This does not claim real-data plot points are covariate-adjusted; it proves
 # alignment in a case where raw marginal and model-estimated content effects
 # should be identical.
 test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, exclusions_json, main_effects_csv) {
@@ -409,11 +412,11 @@ test_content_marginal_contrast_matches_lmm_when_expected <- function(input_csv, 
 
   assert_true(
     abs(engagement_plot_contrast - engagement_content_est) < 1e-9,
-    "In controlled no-age-effect engagement data, plotted Education-Entertainment contrast should equal LMM content estimate."
+    "In controlled no-covariate-effect engagement data, plotted Education-Entertainment contrast should equal LMM content estimate."
   )
   assert_true(
     abs(retention_plot_contrast - retention_content_est) < 1e-9,
-    "In controlled no-age-effect retention data, plotted Education-Entertainment contrast should equal LMM content estimate."
+    "In controlled no-covariate-effect retention data, plotted Education-Entertainment contrast should equal LMM content estimate."
   )
 }
 
