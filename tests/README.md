@@ -230,8 +230,8 @@ Runs `analyze_behavior_pairwise_correlations.R` on a synthetic merged dataset an
 - it writes a full all-attempted CSV and an all-tested BH-FDR CSV
 - it emits the lower-triangle matrix as PNG and PDF
 - incomplete variable-figure-label configs fail hard and identify the omitted label
-- the exact requested variable set is used and `pd_status` is absent
-- `recruitment_order_proxy` is derived from normalized `subject_id`
+- the exact requested variable set is used and both `pd_status` and `recruitment_order_proxy` are absent
+- plans that attempt to include `recruitment_order_proxy` fail hard
 - it uses pairwise complete cases for each variable pair
 - known positive and negative synthetic pairs recover the expected Pearson correlations
 - the exploratory `education_years` proxy is included in the declared matrix and treated as numeric Pearson input

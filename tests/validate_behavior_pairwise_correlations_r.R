@@ -28,7 +28,6 @@ expected_variables <- c(
   "diff_long_form_entertainment",
   "age",
   "education_years",
-  "recruitment_order_proxy",
   "sfv_frequency",
   "sfv_daily_duration",
   "asrs_total",
@@ -43,13 +42,6 @@ write_plan_json <- function(path) {
     version = 1,
     description = "Validation plan for the behavior pairwise correlation matrix.",
     variables = expected_variables,
-    derived_variables = list(
-      list(
-        name = "recruitment_order_proxy",
-        source = "subject_id",
-        transform = "normalized_numeric_subject_id"
-      )
-    ),
     figures = list(
       lower_triangle = list(
         filename_stem = "behavior_pairwise_correlation_lower_triangle"
@@ -174,30 +166,16 @@ load_plan_reference <- function(plan_json) {
     identical(variables, expected_variables),
     "real-data plan variable order does not match the validated behavior-pairwise contract"
   )
-  derived <- plan$derived_variables %||% list()
-  assert_true(length(derived) == 1, "real-data plan should define exactly one derived variable")
   assert_true(
-    identical(
-      list(
-        name = derived[[1]]$name,
-        source = derived[[1]]$source,
-        transform = derived[[1]]$transform
-      ),
-      list(
-        name = "recruitment_order_proxy",
-        source = "subject_id",
-        transform = "normalized_numeric_subject_id"
-      )
-    ),
-    "real-data plan derived-variable definition is not the expected recruitment-order proxy"
+    !("recruitment_order_proxy" %in% variables),
+    "real-data plan must exclude recruitment_order_proxy"
   )
   list(variables = variables)
 }
 
 load_reference_input <- function(input_csv, exclude_json, plan) {
   df <- read_csv(input_csv, show_col_types = FALSE)
-  required_input_cols <- setdiff(plan$variables, "recruitment_order_proxy")
-  required_input_cols <- unique(c(required_input_cols, "subject_id"))
+  required_input_cols <- unique(c(plan$variables, "subject_id"))
   missing <- setdiff(required_input_cols, names(df))
   assert_true(
     length(missing) == 0,
@@ -210,7 +188,6 @@ load_reference_input <- function(input_csv, exclude_json, plan) {
     length(dup_ids) == 0,
     paste("reference audit found duplicate normalized subject IDs:", paste(dup_ids, collapse = ", "))
   )
-  df$recruitment_order_proxy <- as.numeric(df$subject_id)
   df <- coerce_numeric_reference(df, plan$variables)
 
   excluded_payload <- jsonlite::fromJSON(exclude_json, simplifyVector = TRUE)
@@ -332,8 +309,8 @@ assert_logical_columns_equal <- function(actual, expected, col_name) {
 
 audit_real_dataset_against_independent_reference <- function(tmp) {
   # This audit is intentionally independent of `analyze_behavior_pairwise_correlations.R`:
-  # it reads the public input/config files, rebuilds the derived subject-ID proxy,
-  # reapplies exclusions, recomputes every Pearson test and BH-FDR q-value, and
+  # it reads the public input/config files, reapplies exclusions, recomputes
+  # every Pearson test and BH-FDR q-value, and
   # compares the exported CSVs pair-by-pair. The scientific risk is silent
   # drift in the real publication dataset that a small synthetic fixture cannot catch.
   real_out_dir <- file.path(tmp, "real_output")
@@ -409,6 +386,7 @@ main <- function() {
   exclude_json <- file.path(input_dir, "excluded.json")
   label_json <- file.path(input_dir, "variable_figure_names.json")
   incomplete_label_json <- file.path(input_dir, "variable_figure_names_incomplete.json")
+  recruitment_order_plan_json <- file.path(input_dir, "plan_with_recruitment_order.json")
   out_csv <- file.path(out_dir, "behavior_pairwise_correlations_r.csv")
   out_fdr_csv <- file.path(out_dir, "behavior_pairwise_correlations_fdr_r.csv")
   out_sig_csv <- file.path(out_dir, "behavior_pairwise_correlations_significant_r.csv")
@@ -423,6 +401,22 @@ main <- function() {
   input_df <- make_input()
   write_csv(input_df, input_csv)
   write_plan_json(plan_json)
+  recruitment_order_plan <- list(
+    version = 1,
+    description = "Invalid validation plan that attempts to restore recruitment order.",
+    variables = c(expected_variables, "recruitment_order_proxy"),
+    figures = list(
+      lower_triangle = list(
+        filename_stem = "behavior_pairwise_correlation_lower_triangle"
+      )
+    )
+  )
+  jsonlite::write_json(
+    recruitment_order_plan,
+    path = recruitment_order_plan_json,
+    auto_unbox = TRUE,
+    pretty = TRUE
+  )
   write_variable_figure_names_json(label_json)
   write_variable_figure_names_json(incomplete_label_json, setdiff(expected_variables, "gad_total"))
   writeLines("[]", exclude_json)
@@ -432,6 +426,22 @@ main <- function() {
   assert_true(
     any(grepl("missing labels.*gad_total|gad_total.*missing labels", incomplete_label_run$stdout, ignore.case = TRUE)),
     "missing figure-label config failure should identify the omitted variable"
+  )
+
+  recruitment_order_run <- run_script(
+    input_csv,
+    recruitment_order_plan_json,
+    exclude_json,
+    file.path(tmp, "recruitment_order_output"),
+    label_json
+  )
+  assert_true(
+    recruitment_order_run$status != 0,
+    "analysis script should fail when a plan includes recruitment_order_proxy"
+  )
+  assert_true(
+    any(grepl("recruitment order is excluded", recruitment_order_run$stdout, ignore.case = TRUE)),
+    "recruitment-order plan failure should state that recruitment order is excluded"
   )
 
   run <- run_script(input_csv, plan_json, exclude_json, out_dir, label_json)
@@ -462,6 +472,10 @@ main <- function() {
     "old per-pair regression/plot columns should be removed"
   )
   assert_true(!any(out$var_x == "pd_status" | out$var_y == "pd_status"), "pd_status should be absent")
+  assert_true(
+    !any(out$var_x == "recruitment_order_proxy" | out$var_y == "recruitment_order_proxy"),
+    "recruitment_order_proxy should be absent"
+  )
 
   observed_variables <- unique(c(out$var_x, out$var_y))
   assert_true(
@@ -506,10 +520,6 @@ main <- function() {
     abs(age_frequency$pearson_r[[1]] - expected_frequency_r) < 1e-12,
     "sfv_frequency should be treated as numeric Pearson input in this workflow"
   )
-
-  id_age <- find_pair(out, "recruitment_order_proxy", "age")
-  assert_true(nrow(id_age) == 1, "missing recruitment_order_proxy/age row")
-  assert_true(abs(id_age$pearson_r[[1]] - 1.0) < 1e-12, "recruitment_order_proxy should derive from normalized subject_id")
 
   tested <- out %>% filter(.data$analysis_status == "tested", is.finite(.data$p_unc))
   expected_q <- p.adjust(tested$p_unc, method = "BH")

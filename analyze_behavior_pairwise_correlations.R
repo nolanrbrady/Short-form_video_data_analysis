@@ -8,8 +8,8 @@
 #   - Restrict the analysis to an explicit behavior-only variable list declared
 #     in `data/config/behavior_pairwise_correlation_plan.json`.
 #   - Compute one Pearson correlation per unique unordered behavioral pair.
-#   - Include `recruitment_order_proxy` only as a subject-ID-derived diagnostic
-#     for possible recruitment/order artifacts, not as a substantive behavior.
+#   - Exclude recruitment order and subject-ID-derived proxies from the
+#     behavioral correlation family.
 #
 # Rationale
 #   - Pearson (1896): product-moment correlation for continuous pairwise
@@ -17,8 +17,6 @@
 #   - Fisher (1921): confidence intervals for Pearson r via Fisher-z.
 #   - Benjamini & Hochberg (1995): global FDR correction across the full
 #     behavioral pairwise screening family.
-#   - Simmons et al. (2011): subject-ID correlations are labeled as exploratory
-#     diagnostics to avoid undisclosed flexibility or substantive overclaiming.
 #   - Kriegeskorte et al. (2009): the resulting associations are exploratory
 #     and should not be overinterpreted as confirmatory evidence.
 
@@ -143,37 +141,6 @@ load_variable_figure_labels <- function(label_json_path, variables) {
   labels
 }
 
-normalize_derived_variables <- function(x) {
-  if (is.null(x)) {
-    return(list())
-  }
-  if (!is.list(x) || is.data.frame(x)) {
-    stop("Behavior pairwise correlation plan 'derived_variables' must be an array of objects.")
-  }
-
-  lapply(seq_along(x), function(i) {
-    item <- x[[i]]
-    if (!is.list(item) || is.data.frame(item)) {
-      stop(paste0("Derived variable entry ", i, " must be a JSON object."))
-    }
-    name <- as.character(item$name %||% NA_character_)
-    source <- as.character(item$source %||% NA_character_)
-    transform <- as.character(item$transform %||% NA_character_)
-    if (!nzchar(name) || !nzchar(source) || !nzchar(transform)) {
-      stop(paste0("Derived variable entry ", i, " must define name, source, and transform."))
-    }
-    if (transform != "normalized_numeric_subject_id") {
-      stop(
-        paste0(
-          "Unsupported derived variable transform for '", name, "': ",
-          transform
-        )
-      )
-    }
-    list(name = name, source = source, transform = transform)
-  })
-}
-
 load_analysis_plan <- function(plan_json_path) {
   if (!file.exists(plan_json_path)) {
     stop(paste0("Behavior pairwise correlation plan file not found: ", plan_json_path))
@@ -211,27 +178,13 @@ load_analysis_plan <- function(plan_json_path) {
     )
   }
 
-  derived_variables <- normalize_derived_variables(plan_obj$derived_variables)
-  derived_names <- vapply(derived_variables, function(x) x$name, character(1))
-  if (length(derived_names) > 0) {
-    if (anyDuplicated(derived_names) > 0) {
-      dup <- unique(derived_names[duplicated(derived_names)])
-      stop(
-        paste0(
-          "Behavior pairwise correlation plan contains duplicate derived variables: ",
-          paste(dup, collapse = ", ")
-        )
+  if ("recruitment_order_proxy" %in% variables) {
+    stop(
+      paste0(
+        "Behavior pairwise correlation plan must not include ",
+        "'recruitment_order_proxy'; recruitment order is excluded from this analysis."
       )
-    }
-    missing_derived <- setdiff(derived_names, variables)
-    if (length(missing_derived) > 0) {
-      stop(
-        paste0(
-          "Derived variables must also appear in the declared variable order: ",
-          paste(missing_derived, collapse = ", ")
-        )
-      )
-    }
+    )
   }
 
   figures_obj <- plan_obj$figures %||% list()
@@ -250,8 +203,6 @@ load_analysis_plan <- function(plan_json_path) {
   list(
     version = version,
     variables = variables,
-    base_variables = setdiff(variables, derived_names),
-    derived_variables = derived_variables,
     figures = list(
       lower_triangle = list(filename_stem = filename_stem)
     )
@@ -338,42 +289,13 @@ add_matrix_output_paths <- function(outputs, filename_stem) {
   outputs
 }
 
-add_derived_variables <- function(df, derived_variables) {
-  out <- df
-  for (derived in derived_variables) {
-    if (!(derived$source %in% names(out))) {
-      stop(
-        paste0(
-          "Cannot derive '", derived$name, "' because source column '",
-          derived$source, "' is absent."
-        )
-      )
-    }
-    if (derived$name %in% names(out)) {
-      stop(
-        paste0(
-          "Cannot derive '", derived$name,
-          "' because the input already contains a column with that name."
-        )
-      )
-    }
-    if (derived$transform == "normalized_numeric_subject_id") {
-      # Simmons et al. (2011; see CITATIONS.md): this ID-derived value is only
-      # an exploratory recruitment/order diagnostic, never a substantive trait.
-      out[[derived$name]] <- as.numeric(normalize_subject_id(out[[derived$source]], derived$source))
-    }
-  }
-  out
-}
-
 load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan) {
   df <- read_csv(input_csv, show_col_types = FALSE)
   if (!("subject_id" %in% names(df))) {
     stop(paste0("Expected column 'subject_id' in merged input: ", input_csv))
   }
 
-  derived_sources <- unique(vapply(analysis_plan$derived_variables, function(x) x$source, character(1)))
-  assert_required_columns(df, unique(c(analysis_plan$base_variables, derived_sources)), input_csv)
+  assert_required_columns(df, analysis_plan$variables, input_csv)
 
   df <- df %>%
     mutate(subject_id = normalize_subject_id(.data$subject_id, "subject_id"))
@@ -391,7 +313,6 @@ load_behavior_input <- function(input_csv, exclude_subjects_json, analysis_plan)
     )
   }
 
-  df <- add_derived_variables(df, analysis_plan$derived_variables)
   df <- coerce_numeric_strict(df, analysis_plan$variables)
 
   excluded <- apply_subject_exclusions(
@@ -656,7 +577,7 @@ main <- function() {
   tested_idx <- results$analysis_status == "tested" & is.finite(results$p_unc)
   if (any(tested_idx)) {
     # Benjamini & Hochberg (1995; see CITATIONS.md): one global FDR family for
-    # this exploratory behavioral-pairwise screen, including the ID diagnostic.
+    # this exploratory behavioral-pairwise screen.
     results$p_fdr[tested_idx] <- stats::p.adjust(results$p_unc[tested_idx], method = "BH")
     results$significant_fdr[tested_idx] <- results$p_fdr[tested_idx] < args$alpha
   }

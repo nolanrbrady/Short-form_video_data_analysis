@@ -902,7 +902,7 @@ Must verify:
 - fail-hard behavior for duplicate IDs and malformed required inputs
 
 # ANALYSIS_SPEC — Standalone Pairwise Behavioral Correlations
-Last updated: 2026-07-08
+Last updated: 2026-08-06
 
 ## Scope
 
@@ -919,7 +919,6 @@ Default behavioral variables:
 - `diff_long_form_entertainment`
 - `age`
 - `education_years`
-- `recruitment_order_proxy` (derived from normalized `subject_id`)
 - `sfv_frequency`
 - `sfv_daily_duration`
 - `asrs_total`
@@ -941,9 +940,9 @@ Required support files:
 ## Missingness and data integrity
 
 - `subject_id` is normalized by extracting digits and converting to integer.
-- `recruitment_order_proxy` is derived from normalized `subject_id` after duplicate-ID checks and is retained only as an exploratory recruitment/order artifact diagnostic.
+- Recruitment order and subject-ID-derived proxies are excluded from the behavioral correlation family.
 - Input must contain exactly one row per normalized `subject_id`; duplicates are a hard error.
-- All declared non-derived behavioral variables and all derived-variable source columns must exist in the merged CSV; missing columns are a hard error.
+- All declared behavioral variables must exist in the merged CSV; missing columns are a hard error.
 - All declared behavioral variables must be numeric/coercible to numeric; non-numeric values are a hard error.
 - Each tested pair uses pairwise complete cases only.
 - No imputation is allowed.
@@ -962,7 +961,7 @@ Required support files:
   - `p_fdr`
   - `significant_fdr`
   - `ci95_low`, `ci95_high`
-- Apply BH-FDR once across every tested row in this workflow, including `recruitment_order_proxy` pairs.
+- Apply BH-FDR once across every tested row in this workflow.
 - `sfv_frequency` and `sfv_daily_duration` are ordinal 0-3 codes but are intentionally treated as numeric, equally spaced scores in this Pearson diagnostic screen.
 - `pd_status` is not part of this workflow.
 
@@ -991,8 +990,8 @@ Validation script:
 - `tests/validate_behavior_pairwise_correlations_r.R`
 
 Must verify:
-- the exact requested variable set is used and `pd_status` is absent
-- `recruitment_order_proxy` is derived from normalized `subject_id`
+- the exact requested variable set is used and both `pd_status` and `recruitment_order_proxy` are absent
+- a plan that attempts to include `recruitment_order_proxy` fails hard
 - a known positive synthetic pair recovers a perfect positive Pearson correlation
 - a known negative synthetic pair recovers a perfect negative Pearson correlation
 - ordinal SFV variables are treated as numeric Pearson inputs

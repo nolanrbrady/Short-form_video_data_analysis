@@ -220,7 +220,7 @@
   - **Usage:** Transparent disclosure of study-specific recall-item exclusions and exploratory recruitment-order diagnostics
   - **Reasoning:** Supports making all analysis exclusions explicit and auditable. Used here to justify storing invalid recall questions and Qualtrics ID aliases in versioned manifests, keeping excluded items visible in audit outputs, and documenting that `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task retention denominators because they were identified as invalid assessment items across the full study, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`; also documents the pre-task `Q39` to canonical `Q22` scoring alias. Also supports explicitly labeling subject-ID-derived correlations as exploratory recruitment-order diagnostics rather than primary evidence.
   - **Link:** https://doi.org/10.1177/0956797611417632
-  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
 
 # Statistical Analysis
 

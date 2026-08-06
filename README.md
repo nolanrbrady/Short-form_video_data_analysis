@@ -999,7 +999,7 @@ python tests/validate_channel_behavior_relationships_py.py
 Purpose:
 - Screen pairwise associations among the explicitly declared behavioral variables in the same merged CSV used by `analyze_correlational_relationships.R`.
 - Keep the analysis exploratory and apply one global Benjamini-Hochberg FDR correction across all tested behavioral pairs.
-- Include `recruitment_order_proxy`, derived from normalized `subject_id`, only as a recruitment/order diagnostic and not as a substantive behavioral trait.
+- Exclude recruitment order and subject-ID-derived proxies from the behavioral correlation family.
 - Generate one lower-triangle correlation matrix with Pearson `r` and BH-FDR `q` values in each tested cell.
 - Clear `data/results/behavior_pairwise_correlations/` before each run so stale CSVs and PNGs do not persist.
 
@@ -1019,7 +1019,6 @@ Behavioral variable set under the default plan:
 - `diff_long_form_entertainment`
 - `age`
 - `education_years` (exploratory approximate-years proxy from the study codebook)
-- `recruitment_order_proxy` (derived from normalized `subject_id`)
 - `sfv_frequency`
 - `sfv_daily_duration`
 - `asrs_total`
@@ -1034,7 +1033,6 @@ Method and missingness policy:
 - `sfv_frequency` and `sfv_daily_duration` are ordinal 0-3 codes but are intentionally treated as numeric, equally spaced scores in this Pearson diagnostic screen.
 - Pairwise complete cases only for each variable pair.
 - No imputation is performed.
-- `recruitment_order_proxy` is interpreted only as a recruitment/order artifact check.
 
 Example:
 
