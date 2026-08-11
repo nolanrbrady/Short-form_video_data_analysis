@@ -6,8 +6,7 @@
 # - Verify that significant-hit discovery uses the tidy LMM outputs with p_fdr < alpha.
 # - Verify subject exclusions and channel/ROI complete-case filtering match the
 #   inferential sample logic.
-# - Verify ROI aggregation uses the mean across available non-missing member
-#   channels.
+# - Verify ROI aggregation uses the inferential 2-of-3 channel-completeness rule.
 # - Verify main-effect plots use subject-level marginal means across the
 #   orthogonal factor.
 # - Verify interaction plots retain the 4 raw conditions rather than collapsing.
@@ -66,15 +65,18 @@ write_toy_merged_csv <- function(path) {
     S03_D04_Cond01_HbO = c(2.0, 4.0, 5.0, 9.0),
     S03_D04_Cond02_HbO = c(3.0, 4.0, 6.0, 9.0),
     S03_D04_Cond03_HbO = c(4.0, 6.0, 7.0, 9.0),
-    S03_D04_Cond04_HbO = c(5.0, 7.0, 8.0, 9.0)
+    S03_D04_Cond04_HbO = c(5.0, 7.0, 8.0, 9.0),
+    S04_D02_Cond01_HbO = c(1.5, 3.0, 4.0, 9.0),
+    S04_D02_Cond02_HbO = c(2.5, 4.0, 5.0, 9.0),
+    S04_D02_Cond03_HbO = c(3.5, 5.0, 6.0, 9.0),
+    S04_D02_Cond04_HbO = c(4.5, 6.0, 7.0, 9.0)
   )
   write_csv(df, path, na = "")
 }
 
 write_toy_roi_json <- function(path) {
   payload <- list(
-    L_DMPFC = c("S03_D02", "S03_D04"),
-    R_DLPFC = c("S07_D07")
+    L_DMPFC = c("S03_D02", "S03_D04", "S04_D02")
   )
   writeLines(toJSON(payload, auto_unbox = TRUE), path)
 }
@@ -199,6 +201,10 @@ test_run_plotting_outputs <- function(
   roi_posthoc,
   out_dir
 ) {
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  stale_plot <- file.path(out_dir, "roi_stale_HbO_format_beta_distribution.png")
+  writeLines("stale", stale_plot)
+
   outputs <- plot_env$run_plotting(
     input_csv = merged_csv,
     roi_json = roi_json,
@@ -222,6 +228,7 @@ test_run_plotting_outputs <- function(
 
   assert_true(length(outputs$figure_paths) == 3, "Expected 3 output figures.")
   assert_true(all(file.exists(expected_files)), "Expected named PNG outputs were not created.")
+  assert_true(!file.exists(stale_plot), "Stale generated plot was not removed before rebuilding outputs.")
   assert_true(file.exists(outputs$audit_csv_path), "Expected audit CSV was not created.")
 
   audit <- outputs$audit_df

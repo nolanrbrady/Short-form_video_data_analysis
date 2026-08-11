@@ -20,9 +20,12 @@
 #
 # ROI beta construction
 #   - Per subject x ROI x chrom x condition, beta is the arithmetic mean across
-#     available (non-missing) channels in that ROI.
+#     available (non-missing) channels only when at least 2 of the ROI's 3
+#     channels are available; otherwise that condition-level ROI beta is missing.
 #   - This follows a standard ROI signal-summary approach in neuroimaging
-#     (Poldrack, 2007; see CITATIONS.md).
+#     (Poldrack, 2007), with a predeclared study-specific channel-sufficiency
+#     rule informed by fNIRS good-channel inclusion precedents (Novi et al.,
+#     2023; Pinti et al., 2024; see CITATIONS.md).
 #
 # Model (per ROI x chromophore)
 #   - Omnibus LMM: beta ~ format_c * content_c + age + education_years + (1|subject_id)
@@ -113,6 +116,14 @@ source_lmm_convergence_helpers()
 # Bates et al. (2015) motivate checking and addressing convergence/conditioning
 # issues in mixed models rather than treating every returned fit as trustworthy.
 NEURAL_LMM_RESPONSE_SCALE <- 1e6
+
+# Every inferential ROI is defined by exactly three channels. A condition-level
+# ROI beta is admissible only when at least two channels remain non-missing.
+# This 2-of-3 cutoff is a study-specific conservative rule, not a claim that a
+# universal fNIRS ROI threshold exists (Novi et al., 2023; Pinti et al., 2024;
+# see CITATIONS.md).
+ROI_CHANNEL_COUNT <- 3L
+MIN_GOOD_CHANNELS_PER_ROI_CONDITION <- 2L
 
 # Output filtering toggle (main-effects CSVs only)
 #
@@ -284,6 +295,16 @@ load_roi_definition <- function(roi_json_path) {
       stop(paste0("ROI '", roi_name, "' must map to a non-empty array of channel IDs."))
     }
     channels_norm <- normalize_channel_id(channels, paste0("roi_definition[", roi_name, "]"))
+    if (length(channels_norm) != ROI_CHANNEL_COUNT) {
+      stop(
+        paste0(
+          "ROI '", roi_name, "' must define exactly ", ROI_CHANNEL_COUNT,
+          " channels for the ", MIN_GOOD_CHANNELS_PER_ROI_CONDITION,
+          "-of-", ROI_CHANNEL_COUNT, " completeness rule; found ",
+          length(channels_norm), "."
+        )
+      )
+    }
     if (anyDuplicated(channels_norm) > 0) {
       dup <- unique(channels_norm[duplicated(channels_norm)])
       stop(
@@ -434,14 +455,19 @@ aggregate_to_roi <- function(df_long, roi_map) {
   # Collapse channel-level betas to ROI-level summaries for inference.
   #
   # Signal summary choice (mean across available channels) is a standard ROI
-  # extraction strategy in neuroimaging; see Poldrack (2007) in CITATIONS.md.
+  # extraction strategy in neuroimaging (Poldrack, 2007). The 2-of-3 minimum is
+  # the study's predeclared channel-sufficiency rule, informed by published
+  # fNIRS good-channel inclusion precedents (Novi et al., 2023; Pinti et al.,
+  # 2024; see CITATIONS.md).
   df_long %>%
     inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
     group_by(subject_id, age, education_years, roi, chrom, condition, format, content, format_c, content_c) %>%
     summarize(
       n_channels_in_roi = n_distinct(channel),
       n_channels_nonmissing = sum(!is.na(beta)),
-      beta = if (all(is.na(beta))) NA_real_ else mean(beta, na.rm = TRUE),
+      beta = if (
+        sum(!is.na(beta)) < MIN_GOOD_CHANNELS_PER_ROI_CONDITION
+      ) NA_real_ else mean(beta, na.rm = TRUE),
       .groups = "drop"
     )
 }

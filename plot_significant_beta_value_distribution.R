@@ -27,6 +27,9 @@
 #
 # Missingness / pruned channels
 #   - Pruned channels must remain explicit missing values.
+#   - ROI cells require at least 2 of 3 non-missing member channels, matching
+#     the inferential ROI analysis (Novi et al., 2023; Pinti et al., 2024;
+#     exact 2-of-3 cutoff is study-specific; see CITATIONS.md).
 #   - If the merged input contains literal beta-value zeros, the script fails
 #     hard because this project treats zero placeholders as pruned/missing
 #     stand-ins rather than true zero activation for downstream neural analyses
@@ -52,6 +55,8 @@ CONDITION_LEVELS <- c("SF_Edu", "SF_Ent", "LF_Ent", "LF_Edu")
 FORMAT_LEVELS <- c("Short", "Long")
 CONTENT_LEVELS <- c("Education", "Entertainment")
 SUPPORTED_EFFECTS <- c("format", "content", "interaction")
+ROI_CHANNEL_COUNT <- 3L
+MIN_GOOD_CHANNELS_PER_ROI_CONDITION <- 2L
 PLOT_PALETTE <- c(
   Short = "#1b4d3e",
   Long = "#c04b2c",
@@ -270,6 +275,15 @@ load_roi_definition <- function(roi_json_path) {
       stop(paste0("ROI '", roi_name, "' must map to a non-empty array of channel IDs."))
     }
     channels_norm <- normalize_channel_id(channels, paste0("roi_definition[", roi_name, "]"))
+    if (length(channels_norm) != ROI_CHANNEL_COUNT) {
+      stop(
+        paste0(
+          "ROI '", roi_name, "' must define exactly ", ROI_CHANNEL_COUNT,
+          " channels for the ", MIN_GOOD_CHANNELS_PER_ROI_CONDITION,
+          "-of-", ROI_CHANNEL_COUNT, " completeness rule."
+        )
+      )
+    }
     if (anyDuplicated(channels_norm) > 0) {
       dup <- unique(channels_norm[duplicated(channels_norm)])
       stop(
@@ -419,15 +433,18 @@ validate_roi_channels <- function(df_long, roi_map) {
 }
 
 aggregate_to_roi <- function(df_long, roi_map) {
-  # ROI beta is the arithmetic mean across available member channels, matching
-  # the ROI inferential script (Poldrack, 2007; see CITATIONS.md).
+  # ROI beta uses the same 2-of-3 channel-sufficiency rule as the inferential
+  # ROI script (Poldrack, 2007; Novi et al., 2023; Pinti et al., 2024; the exact
+  # cutoff is study-specific; see CITATIONS.md).
   df_long %>%
     inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
     group_by(subject_id, age, roi, chrom, condition, format, content) %>%
     summarize(
       n_channels_in_roi = n_distinct(channel),
       n_channels_nonmissing = sum(!is.na(beta)),
-      beta = if (all(is.na(beta))) NA_real_ else mean(beta, na.rm = TRUE),
+      beta = if (
+        sum(!is.na(beta)) < MIN_GOOD_CHANNELS_PER_ROI_CONDITION
+      ) NA_real_ else mean(beta, na.rm = TRUE),
       .groups = "drop"
     )
 }
@@ -457,6 +474,21 @@ empty_audit_df <- function() {
     beta_plot_value = numeric(),
     included_in_plot = logical()
   )
+}
+
+clear_generated_plot_outputs <- function(out_dir) {
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  generated_pngs <- list.files(
+    out_dir,
+    pattern = "^(channel|roi)_.*_beta_distribution\\.png$",
+    full.names = TRUE
+  )
+  audit_csv <- file.path(out_dir, "plotted_beta_values.csv")
+  targets <- c(generated_pngs, audit_csv[file.exists(audit_csv)])
+  if (length(targets) > 0 && any(unlink(targets, force = TRUE) != 0)) {
+    stop("Failed to clear previous generated beta-distribution outputs.")
+  }
+  invisible(targets)
 }
 
 load_significant_hits <- function(results_csv, unit_col, alpha) {
@@ -792,7 +824,9 @@ run_plotting <- function(
   alpha,
   out_dir
 ) {
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  # Rebuild this generated output set atomically enough to prevent plots for
+  # effects that no longer pass FDR from surviving a changed ROI sample rule.
+  clear_generated_plot_outputs(out_dir)
 
   display_names <- load_figure_display_names(
     figure_names_json,

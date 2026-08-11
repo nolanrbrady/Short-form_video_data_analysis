@@ -20,8 +20,9 @@
 # Missingness policy
 #   - Channel beta values of `0` and `NA` are treated as pruned/missing for
 #     this workflow.
-#   - ROI scores are built from arithmetic means across available non-missing
-#     member channels.
+#   - Every selected ROI must contain exactly three configured and available
+#     channels. A condition-level ROI score requires at least two good channels.
+#   - An ROI participant must satisfy that 2-of-3 rule in all four conditions.
 #   - A pooled mean requires both constituent condition cells for that subject.
 #   - No imputation is allowed.
 #
@@ -34,6 +35,9 @@
 #   - Searle et al. (1980): equal-weight marginal-mean logic behind the pooled
 #     main-effect means.
 #   - Poldrack (2007): ROI averaging across pre-specified channels.
+#   - Novi et al. (2023) and Pinti et al. (2024): precedent for explicit
+#     condition-level good-channel sufficiency rules; the exact 2-of-3 cutoff
+#     is a predeclared, study-specific conservative choice.
 #   - Pearson (1896): Pearson product-moment correlation.
 #   - Fisher (1921): Fisher-z confidence intervals for Pearson r.
 #   - Benjamini & Hochberg (1995): BH-FDR.
@@ -96,6 +100,12 @@ BEHAVIOR_COLUMN_MAP <- tibble::tribble(
   "retention", "diff_long_form_entertainment", "LF_Ent",
   "retention", "diff_long_form_education", "LF_Edu"
 )
+
+# M_DMPFC and M_VMPFC are no longer inferential ROI targets in the current
+# study ROI definition. Excluding them explicitly prevents stale significant
+# LMM exports from silently reintroducing those retired targets into this
+# selective follow-up workflow (Kriegeskorte et al., 2009; see CITATIONS.md).
+EXCLUDED_POOLED_ROI_TARGETS <- c("M_DMPFC", "M_VMPFC")
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
@@ -344,7 +354,13 @@ build_selected_targets <- function(beta_long, roi_map, channel_results_csv, roi_
   selected_targets <- bind_rows(
     load_significant_main_effect_targets(channel_results_csv, "channel", "channel", target_alpha),
     load_significant_main_effect_targets(roi_results_csv, "roi", "roi", target_alpha)
-  )
+  ) %>%
+    filter(
+      !(
+        .data$analysis_level == "roi" &
+          .data$unit_id %in% EXCLUDED_POOLED_ROI_TARGETS
+      )
+    )
   if (nrow(selected_targets) == 0) {
     return(selected_targets)
   }
@@ -428,7 +444,9 @@ build_channel_neural_means <- function(beta_long, targets) {
 }
 
 build_roi_neural_means <- function(beta_long, roi_map, targets) {
-  roi_targets <- targets %>% filter(.data$analysis_level == "roi") %>% distinct(.data$unit_id, .data$chrom)
+  roi_targets <- targets %>%
+    filter(.data$analysis_level == "roi") %>%
+    distinct(.data$unit_id, .data$chrom, .data$roi_member_count)
   if (nrow(roi_targets) == 0) {
     return(tibble::tibble(subject_id = integer(), analysis_level = character(), unit_id = character(), chrom = character(), pool_name = character(), neural_n_nonmissing = integer(), neural_value = double()))
   }
@@ -436,11 +454,38 @@ build_roi_neural_means <- function(beta_long, roi_map, targets) {
   if (length(missing_rois) > 0) {
     stop(paste0("Selected ROI targets are missing from the ROI definition JSON: ", paste(sort(missing_rois), collapse = ", ")))
   }
+  configured_counts <- roi_map %>%
+    semi_join(roi_targets, by = "unit_id") %>%
+    count(.data$unit_id, name = "configured_member_count")
+  invalid_rois <- roi_targets %>%
+    left_join(configured_counts, by = "unit_id") %>%
+    filter(.data$configured_member_count != 3L | .data$roi_member_count != 3L)
+  if (nrow(invalid_rois) > 0) {
+    offenders <- invalid_rois %>%
+      distinct(.data$unit_id, .data$configured_member_count, .data$roi_member_count)
+    stop(
+      paste0(
+        "Each selected pooled ROI must have exactly three configured channels and all three must be available in the beta input. Invalid targets: ",
+        paste0(
+          offenders$unit_id,
+          " (configured=", offenders$configured_member_count,
+          ", available=", offenders$roi_member_count, ")",
+          collapse = ", "
+        )
+      )
+    )
+  }
   beta_long %>%
     inner_join(roi_map, by = "channel") %>%
-    inner_join(roi_targets, by = c("unit_id", "chrom")) %>%
+    inner_join(roi_targets %>% select("unit_id", "chrom"), by = c("unit_id", "chrom")) %>%
     group_by(.data$subject_id, .data$unit_id, .data$chrom, .data$condition_label, .data$length, .data$content) %>%
-    summarize(neural_value = if (all(is.na(.data$beta))) NA_real_ else mean(.data$beta, na.rm = TRUE), .groups = "drop") %>%
+    summarize(
+      neural_value = if (sum(!is.na(.data$beta)) >= 2L) mean(.data$beta, na.rm = TRUE) else NA_real_,
+      .groups = "drop"
+    ) %>%
+    group_by(.data$subject_id, .data$unit_id, .data$chrom) %>%
+    filter(sum(!is.na(.data$neural_value)) == 4L) %>%
+    ungroup() %>%
     mutate(analysis_level = "roi") %>%
     compute_pooled_means(group_cols = c("subject_id", "analysis_level", "unit_id", "chrom"), value_col = "neural_value") %>%
     rename(neural_n_nonmissing = n_nonmissing, neural_value = pooled_value)

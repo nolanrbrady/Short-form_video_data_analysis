@@ -43,6 +43,8 @@ ROI_JSON <- file.path(ROOT, "data/config/roi_definition.json")
 CHANNEL_TIDY_CSV <- file.path(ROOT, "data/results/format_content_lmm_main_effects_tidy_r.csv")
 ROI_TIDY_CSV <- file.path(ROOT, "data/results/format_content_lmm_roi_main_effects_tidy_r.csv")
 NEURAL_LMM_RESPONSE_SCALE <- 1e6
+ROI_CHANNEL_COUNT <- 3L
+MIN_GOOD_CHANNELS_PER_ROI_CONDITION <- 2L
 TOL <- 1e-10
 
 normalize_subject_id <- function(x, column_name) {
@@ -118,6 +120,9 @@ load_roi_map <- function() {
   rows <- list()
   for (roi_name in names(roi_obj)) {
     channels <- unlist(roi_obj[[roi_name]], use.names = FALSE)
+    if (length(channels) != ROI_CHANNEL_COUNT) {
+      stop("ROI ", roi_name, " must define exactly ", ROI_CHANNEL_COUNT, " channels.")
+    }
     rows[[length(rows) + 1]] <- tibble(
       roi = roi_name,
       channel = normalize_channel_id(channels, paste0("roi_definition[", roi_name, "]"))
@@ -130,7 +135,12 @@ aggregate_roi_long <- function(channel_long, roi_map) {
   channel_long %>%
     inner_join(roi_map, by = "channel", relationship = "many-to-one") %>%
     group_by(subject_id, age, education_years, roi, chrom, condition, format_c, content_c) %>%
-    summarize(beta = if (all(is.na(beta))) NA_real_ else mean(beta, na.rm = TRUE), .groups = "drop")
+    summarize(
+      beta = if (
+        sum(!is.na(beta)) < MIN_GOOD_CHANNELS_PER_ROI_CONDITION
+      ) NA_real_ else mean(beta, na.rm = TRUE),
+      .groups = "drop"
+    )
 }
 
 complete_case_subjects <- function(sub) {

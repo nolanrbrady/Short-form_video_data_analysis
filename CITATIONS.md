@@ -102,18 +102,18 @@
   - **First Author:** Novi
   - **Year:** 2023
   - **Usage:** Subject Inclusion Criteria; Beta-table QC thresholding
-  - **Reasoning:** Precedent for excluding runs/subjects with < 50% good channels; reused for condition-level channel-sufficiency thresholding in imported Homer beta-table QC.
+  - **Reasoning:** Provides precedent for explicit good-channel sufficiency criteria. It informs the use of a declared condition-level channel-completeness rule in imported Homer beta-table QC and the ROI workflow; the ROI workflow's stricter requirement of at least 2 of 3 channels is a study-specific conservative decision rather than a threshold directly prescribed by this paper.
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC9896013/
-  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
+  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `analyze_format_content_lmm_roi.R`, `analyze_pooled_mean_correlations.R`, `plot_significant_beta_value_distribution.R`, `tests/validate_pipeline_c_roi_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Pinti et al. (2024)**
   - **Title:** Ecological functional near-infrared spectroscopy in mobile children: using short separation channels to correct for systemic contamination during naturalistic neuroimaging
   - **First Author:** Pinti
   - **Year:** 2024
   - **Usage:** Exclusion Criteria; Beta-table QC thresholding
-  - **Reasoning:** Supports the exclusion rule of < 50% good quality channels and the minimum requirement of usable blocks (trials), including downstream condition-level channel sufficiency reporting.
+  - **Reasoning:** Supports explicit good-channel and usable-block inclusion criteria, including condition-level sufficiency reporting. It provides methodological precedent for the ROI workflow's completeness guard, while the exact requirement of at least 2 of 3 ROI channels in every condition remains a study-specific conservative decision.
   - **Link:** https://pmc.ncbi.nlm.nih.gov/articles/PMC11460616/
-  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `README.md`
+  - **Source:** `fnirs_analysis/fnirs_preprocess_justifications.md`, `fnirs_analysis/homer_betas_qc.py`, `analyze_format_content_lmm_roi.R`, `analyze_pooled_mean_correlations.R`, `plot_significant_beta_value_distribution.R`, `tests/validate_pipeline_c_roi_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Dina et al. (2025)**
   - **Title:** Measuring neurodevelopment of inhibitory control in children using naturalistic virtual reality

@@ -249,11 +249,11 @@ main <- function() {
   tmp <- file.path(tempdir(), "type2_error_calibration_r")
   dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
 
-  channels <- c("S01_D01", "S01_D02", "S02_D01", "S02_D02")
+  channels <- c("S01_D01", "S01_D02", "S01_D03", "S02_D01", "S02_D02", "S02_D03")
   chroms <- c("HbO", "HbR")
   roi_map <- list(
-    VMPFC = c("S01_D01", "S01_D02"),
-    DLPFC = c("S02_D01", "S02_D02")
+    VMPFC = c("S01_D01", "S01_D02", "S01_D03"),
+    DLPFC = c("S02_D01", "S02_D02", "S02_D03")
   )
   roi_json <- file.path(tmp, "roi_definition.json")
   write_json(roi_map, roi_json, auto_unbox = TRUE, pretty = TRUE)

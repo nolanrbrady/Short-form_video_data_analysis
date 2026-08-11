@@ -41,7 +41,11 @@ bh_qvalues_manual <- function(p_values) {
 }
 
 write_roi_json <- function(path) {
-  roi_obj <- list(R_DLPFC = c("S10_D01", "S10_D02"))
+  roi_obj <- list(
+    R_DLPFC = c("S10_D01", "S10_D02", "S10_D03"),
+    M_DMPFC = c("S11_D01", "S11_D02", "S11_D03"),
+    M_VMPFC = c("S12_D01", "S12_D02", "S12_D03")
+  )
   jsonlite::write_json(roi_obj, path = path, auto_unbox = TRUE, pretty = TRUE)
 }
 
@@ -54,11 +58,11 @@ write_target_csvs <- function(channel_path, roi_path) {
     p_fdr = c(0.01, 0.02, 0.30)
   )
   roi_df <- tibble::tibble(
-    roi = c("R_DLPFC", "R_DLPFC"),
-    chrom = c("HbO", "HbR"),
-    effect = c("content", "interaction"),
-    estimate = c(6.5e-6, 1.0e-6),
-    p_fdr = c(0.03, 0.40)
+    roi = c("R_DLPFC", "R_DLPFC", "M_DMPFC", "M_VMPFC"),
+    chrom = c("HbO", "HbR", "HbO", "HbO"),
+    effect = c("content", "interaction", "format", "content"),
+    estimate = c(6.5e-6, 1.0e-6, 9.0e-6, -7.0e-6),
+    p_fdr = c(0.03, 0.40, 0.001, 0.002)
   )
   write_csv(channel_df, channel_path)
   write_csv(roi_df, roi_path)
@@ -96,11 +100,19 @@ build_input <- function() {
   add_channel("S02_D01", "HbR", 200 - (base + short_signal), 202 - (base + short_signal), 300 - (base + long_signal), 302 - (base + long_signal))
   add_channel("S10_D01", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
   add_channel("S10_D02", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
+  add_channel("S10_D03", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
+  add_channel("S11_D01", "HbO", base + short_signal, base + short_signal, base + long_signal, base + long_signal)
+  add_channel("S11_D02", "HbO", base + short_signal, base + short_signal, base + long_signal, base + long_signal)
+  add_channel("S11_D03", "HbO", base + short_signal, base + short_signal, base + long_signal, base + long_signal)
+  add_channel("S12_D01", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
+  add_channel("S12_D02", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
+  add_channel("S12_D03", "HbO", base + edu_signal, base + 100, base + 100, base + edu_signal)
   add_channel("S09_D09", "HbO", base + 1, base + 2, base + 3, base + 4)
 
   df[8, "S01_D01_Cond03_HbO"] <- 0
   df[4, "S10_D02_Cond02_HbO"] <- 0
   df[5, "S10_D01_Cond03_HbO"] <- NA_real_
+  df[6, c("S10_D01_Cond01_HbO", "S10_D02_Cond01_HbO")] <- NA_real_
   df
 }
 
@@ -146,6 +158,10 @@ main <- function() {
 
   assert_true(nrow(targets) == 2, "expected exactly two selected pooled-mean main-effect targets")
   assert_true(setequal(targets$selected_effect, c("format", "content")), "pooled targets should retain only significant main effects")
+  assert_true(
+    !any(targets$analysis_level == "roi" & targets$unit_id %in% c("M_DMPFC", "M_VMPFC")),
+    "retired midline ROIs must remain excluded even when stale significant target rows and matching beta columns are present"
+  )
   assert_true(identical(unique(results$association_method), "pearson"), "pooled-mean script should be Pearson-only")
   assert_true(setequal(unique(results$pool_name), c("short", "long", "education", "entertainment")), "unexpected pool names")
 
@@ -168,8 +184,12 @@ main <- function() {
   roi_edu <- pairs %>%
     filter(analysis_level == "roi", unit_id == "R_DLPFC", chrom == "HbO", behavior_domain == "engagement", pool_name == "education", subject_id == 4)
   assert_true(nrow(roi_edu) == 1, "missing expected ROI education row")
-  assert_true(abs(roi_edu$neural_value[[1]] - 48) < 1e-12, "ROI education mean should use available member channels when one entertainment cell is pruned")
-  assert_true(roi_edu$roi_member_count[[1]] == 2, "ROI member count metadata should reflect both ROI channels")
+  assert_true(abs(roi_edu$neural_value[[1]] - 48) < 1e-12, "ROI education mean should retain a participant when one of three channels is pruned in another condition")
+  assert_true(roi_edu$roi_member_count[[1]] == 3, "ROI member count metadata should reflect all three ROI channels")
+
+  excluded_roi_subject <- pairs %>%
+    filter(analysis_level == "roi", unit_id == "R_DLPFC", chrom == "HbO", subject_id == 6)
+  assert_true(nrow(excluded_roi_subject) == 0, "an ROI participant with fewer than two good channels in any condition must be excluded from every pooled row for that ROI")
 
   known_positive <- results %>%
     filter(analysis_level == "channel", unit_id == "S01_D01", chrom == "HbO", behavior_domain == "engagement", pool_name == "short")
@@ -208,6 +228,30 @@ main <- function() {
     assert_true(all(!is.na(plotted$plot_file)), "significant pooled-mean rows should record figure paths")
     assert_true(all(file.exists(plotted$plot_file)), "significant pooled-mean figure files were not created")
   }
+
+  # The denominator is scientifically meaningful: a two-channel ROI must fail
+  # instead of silently changing the declared 2-of-3 completeness rule.
+  invalid_roi_json <- file.path(tmp, "invalid_two_channel_roi.json")
+  jsonlite::write_json(
+    list(R_DLPFC = c("S10_D01", "S10_D02")),
+    path = invalid_roi_json,
+    auto_unbox = TRUE,
+    pretty = TRUE
+  )
+  invalid_run <- run_script(c(
+    "--input_csv", input_csv,
+    "--roi_json", invalid_roi_json,
+    "--channel_results_csv", channel_csv,
+    "--roi_results_csv", roi_csv,
+    "--exclude_subjects_json", exclude_json,
+    "--out_dir", file.path(tmp, "invalid_out"),
+    "--min_subjects", "3"
+  ))
+  assert_true(invalid_run$status != 0, "a selected two-channel ROI should fail hard")
+  assert_true(
+    any(grepl("exactly three configured channels", invalid_run$stdout, fixed = TRUE)),
+    "two-channel ROI failure should identify the violated three-channel invariant"
+  )
 
   writeLines(paste0("[OK] Pooled-mean correlation validation passed. Outputs in: ", tmp))
 }

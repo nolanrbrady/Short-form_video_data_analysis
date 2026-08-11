@@ -9,7 +9,7 @@
 #   - condition mapping + ±0.5 effect coding
 #   - age- and education-adjusted omnibus model with fail-hard covariate validation
 #   - pruned-channel policy: treat NA as missing
-#   - ROI beta aggregation as mean across available channels
+#   - ROI beta aggregation requires at least 2 of 3 available channels
 #   - complete-case within ROI×chrom (all 4 conditions required)
 #   - BH-FDR families per chrom × effect across ROIs
 #   - post-hoc gating only for interaction-FDR-significant ROI×chrom pairs
@@ -187,7 +187,11 @@ build_reference_roi_long <- function(merged, roi_channels, chrom_name, roi_name)
     cond_label <- cond_labels[[i]]
     beta_cols <- paste0(roi_channels, "_Cond", cond, "_", chrom_name)
     beta_mat <- as.matrix(merged[, beta_cols, drop = FALSE])
-    beta_mean <- apply(beta_mat, 1, function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE))
+    beta_mean <- apply(
+      beta_mat,
+      1,
+      function(x) if (sum(!is.na(x)) < 2) NA_real_ else mean(x, na.rm = TRUE)
+    )
     tibble::tibble(
       subject_id = as.integer(str_extract(merged$subject_id, "\\d+")),
       age = merged$age,
@@ -273,6 +277,7 @@ main <- function() {
   input_csv <- file.path(tmp, "homer3_betas_plus_combined_sfv_data_inner_join.csv")
   roi_json <- file.path(tmp, "roi_definition.json")
   roi_json_invalid <- file.path(tmp, "roi_definition_invalid.json")
+  roi_json_wrong_size <- file.path(tmp, "roi_definition_wrong_size.json")
   roi_json_missing_channel <- file.path(tmp, "roi_definition_missing_channel.json")
   roi_json_overlap <- file.path(tmp, "roi_definition_overlap.json")
 
@@ -284,7 +289,7 @@ main <- function() {
   writeLines("[]", exclude_none)
 
   n_subjects <- 12
-  channels <- c("S01_D01", "S01_D02", "S02_D01", "S02_D02")
+  channels <- c("S01_D01", "S01_D02", "S01_D03", "S02_D01", "S02_D02", "S02_D03")
   chroms <- c("HbO", "HbR")
   age_years <- make_age_years(n_subjects)
 
@@ -298,6 +303,10 @@ main <- function() {
       HbO = list(b0 = 0.3, bF = 0.6, bC = -0.2, bI = 2.0),
       HbR = list(b0 = -0.2, bF = -0.3, bC = 0.1, bI = -1.8)
     ),
+    S01_D03 = list(
+      HbO = list(b0 = 0.25, bF = 0.7, bC = -0.25, bI = 2.2),
+      HbR = list(b0 = -0.15, bF = -0.4, bC = 0.15, bI = -2.0)
+    ),
     S02_D01 = list(
       HbO = list(b0 = 0.0, bF = 0.1, bC = 0.0, bI = 0.0),
       HbR = list(b0 = 0.0, bF = -0.1, bC = 0.0, bI = 0.0)
@@ -305,6 +314,10 @@ main <- function() {
     S02_D02 = list(
       HbO = list(b0 = 0.0, bF = 0.0, bC = 0.1, bI = 0.0),
       HbR = list(b0 = 0.0, bF = 0.0, bC = -0.1, bI = 0.0)
+    ),
+    S02_D03 = list(
+      HbO = list(b0 = 0.0, bF = 0.05, bC = 0.05, bI = 0.0),
+      HbR = list(b0 = 0.0, bF = -0.05, bC = -0.05, bI = 0.0)
     )
   )
 
@@ -318,8 +331,9 @@ main <- function() {
   )
 
   # Pruning injections for ROI mean/complete-case checks:
-  # - subject 1 has both ROI1 channels pruned for Cond03 HbO -> ROI1/HbO complete-case drop.
-  # - subject 2 has one ROI1 channel pruned for Cond02 HbO only -> should remain included.
+  # - subject 1 has two of three ROI1 channels pruned for Cond03 HbO, leaving
+  #   only 1/3 -> ROI1/HbO complete-case drop.
+  # - subject 2 has one ROI1 channel pruned for Cond02 HbO, leaving 2/3 -> included.
   homer[["S01_D01_Cond03_HbO"]][[1]] <- NA_real_
   homer[["S01_D02_Cond03_HbO"]][[1]] <- NA_real_
   homer[["S01_D01_Cond02_HbO"]][[2]] <- NA_real_
@@ -331,8 +345,8 @@ main <- function() {
   write_csv(merged, input_csv)
 
   roi_map <- list(
-    VMPFC = c("S01_D01", "S01_D02"),
-    DLPFC = c("S02_D01", "S02_D02")
+    VMPFC = c("S01_D01", "S01_D02", "S01_D03"),
+    DLPFC = c("S02_D01", "S02_D02", "S02_D03")
   )
   write_json(roi_map, roi_json, auto_unbox = TRUE, pretty = TRUE)
 
@@ -385,13 +399,13 @@ main <- function() {
   assert_true(nrow(row_vmpfc_hbo_int) == 1, "expected one row for VMPFC HbO interaction")
   assert_true(
     row_vmpfc_hbo_int$n_subjects[[1]] == (n_subjects - 1),
-    "expected VMPFC HbO to drop exactly one subject due to all-ROI-channel pruning"
+    "expected VMPFC HbO to drop exactly one subject when only 1 of 3 channels remains"
   )
 
-  # Partial pruning should not drop an additional subject when at least one ROI channel remains.
+  # One pruned member should not drop a subject when 2 of 3 channels remain.
   assert_true(
     row_vmpfc_hbo_int$n_subjects[[1]] == (n_subjects - 1),
-    "partial ROI-channel pruning appears to be treated incorrectly (all-channels-required behavior detected)"
+    "2-of-3 ROI-channel completeness rule was not applied correctly"
   )
   row_dlpfc_hbo_int <- main_tidy %>% filter(roi == "DLPFC", chrom == "HbO", effect == "interaction")
   assert_true(nrow(row_dlpfc_hbo_int) == 1, "expected one row for DLPFC HbO interaction")
@@ -404,12 +418,12 @@ main <- function() {
   tol <- 0.30
   expected_roi <- list(
     VMPFC = list(
-      HbO = list(bF = mean(c(0.8, 0.6)), bC = mean(c(-0.3, -0.2)), bI = mean(c(2.4, 2.0))),
-      HbR = list(bF = mean(c(-0.5, -0.3)), bC = mean(c(0.2, 0.1)), bI = mean(c(-2.2, -1.8)))
+      HbO = list(bF = mean(c(0.8, 0.6, 0.7)), bC = mean(c(-0.3, -0.2, -0.25)), bI = mean(c(2.4, 2.0, 2.2))),
+      HbR = list(bF = mean(c(-0.5, -0.3, -0.4)), bC = mean(c(0.2, 0.1, 0.15)), bI = mean(c(-2.2, -1.8, -2.0)))
     ),
     DLPFC = list(
-      HbO = list(bF = mean(c(0.1, 0.0)), bC = mean(c(0.0, 0.1)), bI = mean(c(0.0, 0.0))),
-      HbR = list(bF = mean(c(-0.1, 0.0)), bC = mean(c(0.0, -0.1)), bI = mean(c(0.0, 0.0)))
+      HbO = list(bF = mean(c(0.1, 0.0, 0.05)), bC = mean(c(0.0, 0.1, 0.05)), bI = mean(c(0.0, 0.0, 0.0))),
+      HbR = list(bF = mean(c(-0.1, 0.0, -0.05)), bC = mean(c(0.0, -0.1, -0.05)), bI = mean(c(0.0, 0.0, 0.0)))
     )
   )
 
@@ -431,7 +445,7 @@ main <- function() {
   # Direct reference-model agreement for one representative ROI/chrom with age and education adjustment.
   ref_long <- build_reference_roi_long(
     merged,
-    roi_channels = c("S01_D01", "S01_D02"),
+    roi_channels = c("S01_D01", "S01_D02", "S01_D03"),
     chrom_name = "HbO",
     roi_name = "VMPFC"
   ) %>%
@@ -597,8 +611,30 @@ main <- function() {
   )
   assert_true(status_bad_json != 0, "invalid ROI JSON should fail fast")
 
+  # The inferential rule is explicitly 2 of 3, so non-three-channel ROI
+  # definitions must fail rather than silently changing the denominator.
+  roi_wrong_size <- list(
+    VMPFC = c("S01_D01", "S01_D02"),
+    DLPFC = c("S02_D01", "S02_D02", "S02_D03")
+  )
+  write_json(roi_wrong_size, roi_json_wrong_size, auto_unbox = TRUE, pretty = TRUE)
+  status_wrong_size <- run_analysis(
+    input_csv = input_csv,
+    roi_json = roi_json_wrong_size,
+    out_main = file.path(tmp, "main_wrong_size.csv"),
+    out_main_tidy = file.path(tmp, "main_tidy_wrong_size.csv"),
+    out_posthoc = file.path(tmp, "posthoc_wrong_size.csv"),
+    alpha = 0.05,
+    min_subjects = 6,
+    exclude_json = exclude_none
+  )
+  assert_true(status_wrong_size != 0, "ROI map with a non-three-channel ROI should fail fast")
+
   # ROI channels missing from data should fail hard.
-  roi_missing <- list(VMPFC = c("S01_D01"), DLPFC = c("S99_D99"))
+  roi_missing <- list(
+    VMPFC = c("S01_D01", "S01_D02", "S01_D03"),
+    DLPFC = c("S02_D01", "S02_D02", "S99_D99")
+  )
   write_json(roi_missing, roi_json_missing_channel, auto_unbox = TRUE, pretty = TRUE)
   status_missing_channel <- run_analysis(
     input_csv = input_csv,
@@ -613,7 +649,10 @@ main <- function() {
   assert_true(status_missing_channel != 0, "ROI map with missing channels should fail fast")
 
   # Overlapping ROI assignments should fail hard.
-  roi_overlap <- list(VMPFC = c("S01_D01", "S01_D02"), DLPFC = c("S01_D02", "S02_D01"))
+  roi_overlap <- list(
+    VMPFC = c("S01_D01", "S01_D02", "S01_D03"),
+    DLPFC = c("S01_D03", "S02_D01", "S02_D02")
+  )
   write_json(roi_overlap, roi_json_overlap, auto_unbox = TRUE, pretty = TRUE)
   status_overlap <- run_analysis(
     input_csv = input_csv,

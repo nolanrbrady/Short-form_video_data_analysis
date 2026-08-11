@@ -101,11 +101,12 @@ Runs `analyze_format_content_lmm_roi.R` on a synthetic dataset that:
 - Uses Homer-style subject IDs (`sub_0001`) and combined IDs (`0001`)
 - Uses varying subject ages and a non-collinear education-years pattern, then checks the age- and education-adjusted omnibus model against a direct reference fit
 - Defines ROIs from a strict JSON ROI map (`ROI -> [channels]`)
-- Verifies ROI mean aggregation over available channels with pruned values represented as `NA`
+- Verifies ROI mean aggregation requires at least 2 of 3 available channels, with pruned values represented as `NA`
 - Verifies literal `0` remains a valid observed beta rather than being treated as missing
 - Verifies the output `converged` flag is present and TRUE for the clean synthetic fits
 - Verifies the tidy output is sorted by ascending `p_unc`
-- Verifies complete-case behavior when all ROI channels are pruned for a condition
+- Verifies a participant is excluded from an ROI × chromophore when any condition has fewer than 2 of 3 available channels
+- Verifies non-three-channel ROI definitions fail hard
 - Verifies coefficient recovery for ROI-level known generating effects
 - Verifies reported SE values reconstruct the reported signed Kenward-Roger t statistics
 - Verifies explicit inferential TP/TN outcomes (known significant ROI interaction vs known null ROI interaction)
@@ -207,9 +208,12 @@ Rscript tests/validate_correlational_relationships_roi_means_r.R
 
 Runs `analyze_pooled_mean_correlations.R` on a synthetic dataset and verifies:
 - Target selection keeps only significant `format`/`content` rows from the tidy channel/ROI LMM outputs
+- Stale significant `M_DMPFC` and `M_VMPFC` ROI rows are explicitly excluded even when matching beta columns are available
 - Pool gating restricts `format` targets to `short/long` and `content` targets to `education/entertainment`
 - Channel pooled neural values recover exact known values
-- ROI condition means use available member channels when one member is pruned
+- ROI condition means require at least 2 of 3 good channels in every condition
+- Participants failing the 2-of-3 rule in any condition are excluded from every pooled row for that ROI
+- A selected ROI with anything other than exactly three configured and available channels fails hard
 - Non-significant and interaction-only targets are excluded from the exported target set
 - The exported Pearson correlations agree with independently known gated reference cases
 - Channel `0` placeholders are treated as missing rather than true beta values

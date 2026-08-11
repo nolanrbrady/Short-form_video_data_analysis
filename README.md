@@ -351,13 +351,14 @@ python plot_beta_discrepancy_dynamics.py
 What it does:
 - Reads the tidy LMM result tables and selects rows with `p_fdr < 0.05` by default.
 - Applies the shared subject-exclusion manifest so the plotted subject set matches the inferential analyses.
-- Rebuilds channel-level beta rows from the merged wide beta table and recreates ROI betas as the arithmetic mean across available non-missing member channels.
+- Rebuilds channel-level beta rows from the merged wide beta table and recreates ROI betas using the inferential analysis's 2-of-3 channel-completeness rule.
 - Uses the same complete-case rule as the LMM scripts within each plotted `channel x chrom` or `roi x chrom` unit.
 - Fails hard if literal `0` values appear in beta columns, because this project treats zero placeholders as invalid stand-ins for pruned channels rather than true zero activation.
 - For significant `format` or `content` main effects, plots subject-level marginal means collapsed across the orthogonal factor.
 - For significant `interaction` effects, plots the four raw condition beta distributions (`SF_Edu`, `SF_Ent`, `LF_Ent`, `LF_Edu`) without collapsing.
 - Uses violin density envelopes with jittered subject-level points plus mean and +/- 1 SD overlays; subject trajectories are not connected by lines.
 - Writes one PNG per significant hit plus a combined audit CSV of the raw rows and plotted values used in each figure.
+- Clears previously generated beta-distribution PNGs and the audit CSV before rebuilding them so plots for effects that no longer pass FDR cannot remain stale.
 
 Default output directory:
 - `data/results/beta_value_distribution/`
@@ -609,12 +610,15 @@ Order / dependencies:
 
 ROI definition input:
 - `data/config/roi_definition.json` (strict JSON object: `ROI -> [channel_ids]`)
+- Every inferential ROI must contain exactly 3 channels; other ROI sizes fail hard so the completeness denominator cannot change silently.
 - Channel IDs must match Homer naming (example: `S01_D01`).
 - Script fails fast on malformed JSON, overlapping channel assignments, or ROI channels absent from the data.
 
 ROI beta construction:
 - For each `subject × ROI × chrom × condition`, ROI beta is the arithmetic mean
-  across available (non-missing) channels in that ROI.
+  across available channels only when at least 2 of the ROI's 3 channels are non-missing.
+- If fewer than 2 channels are available for any condition, that condition-level ROI beta is missing; the participant is then excluded from that ROI × chromophore model because all 4 conditions are required.
+- The 2-of-3 cutoff is a study-specific conservative completeness decision informed by published fNIRS good-channel inclusion precedents, not a universal threshold.
 - In the derived FIR-to-AUC beta table, pruned channels are encoded as `NaN` and are not imputed.
 
 Model / inference:
@@ -871,6 +875,7 @@ Rscript tests/validate_correlational_relationships_roi_means_r.R
 
 Purpose:
 - Select channel and ROI targets with FDR-significant `format` or `content` main effects from the tidy LMM outputs.
+- Explicitly exclude the retired `M_DMPFC` and `M_VMPFC` ROI targets, including when they remain in a stale ROI LMM result table.
 - Gate eligible pooled follow-up tests by the selected main effect:
   - `format` targets test `short` and `long`
   - `content` targets test `education` and `entertainment`
@@ -901,12 +906,13 @@ Pool construction:
 - `long = mean(LF_Edu, LF_Ent)` when both cells are present
 - `education = mean(SF_Edu, LF_Edu)` when both cells are present
 - `entertainment = mean(SF_Ent, LF_Ent)` when both cells are present
-- ROI condition values are arithmetic means across available non-missing member channels before pooled averaging.
+- Each selected ROI must contain exactly three configured channels, all three must be present in the beta input, and a condition-level ROI mean requires at least 2 of those 3 channels to be non-missing.
+- A participant contributes pooled rows for an ROI only when the 2-of-3 rule is satisfied in all four conditions.
 
 Missingness and quality policy:
 - Channel `0` and `NA` beta values are treated as pruned/missing observations.
 - A pooled mean requires both constituent condition cells for that subject.
-- ROI condition means may use available member channels when only a subset is pruned.
+- ROI condition means may use two or three good channels; fewer than two excludes that participant from the ROI entirely.
 - No imputation is performed.
 
 Correlation outputs:

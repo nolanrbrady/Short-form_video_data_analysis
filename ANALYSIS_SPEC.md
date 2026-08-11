@@ -284,7 +284,7 @@ ROI definition input:
 - `data/config/roi_definition.json`
   - Must be strict JSON.
   - Top-level object maps ROI names to arrays of channel IDs:
-    - Example: `"VMPFC": ["S01_D01", "S01_D02"]`
+    - Example: `"VMPFC": ["S01_D01", "S01_D02", "S01_D03"]`
 
 ---
 
@@ -292,7 +292,7 @@ ROI definition input:
 
 - ROI JSON must parse without coercion/fallback.
 - ROI names must be non-empty.
-- Each ROI must contain at least one channel.
+- Each inferential ROI must contain exactly three channels.
 - Channel IDs must match Homer naming (`S##_D##` after normalization).
 - A channel cannot be assigned to multiple ROIs.
 - ROI channels not present in the input beta columns are a hard error.
@@ -306,12 +306,14 @@ Per repo policy:
 - Do not impute.
 
 ROI summary construction:
+- Every inferential ROI must contain exactly 3 channels; non-three-channel definitions fail hard.
 - For each `subject × ROI × chrom × condition`, ROI beta is the arithmetic mean over
-  available (non-missing) channels in that ROI.
-- If all channels are missing for that cell, ROI beta is missing.
+  available channels only when at least 2 of 3 channels are non-missing.
+- If fewer than 2 channels are available for that cell, ROI beta is missing.
+- The exact 2-of-3 cutoff is a predeclared study-specific conservative rule informed by published fNIRS good-channel inclusion precedents; it is not presented as a universal cutoff.
 
 Complete-case inclusion rule (within ROI/chrom):
-- Keep only subjects with non-missing ROI beta in all 4 conditions.
+- Keep only subjects satisfying the 2-of-3 channel rule in all 4 conditions.
 - `age` and `education_years` are required subject-level omnibus covariates: both must exist, be numeric, and be complete after subject exclusions or the script fails hard.
 
 ---
@@ -829,7 +831,12 @@ Pools:
 - `entertainment = mean(SF_Ent, LF_Ent)` when both cells are present
 
 ROI rule:
-- ROI condition values are arithmetic means across available non-missing member channels before pooled means are formed.
+- Each selected ROI must contain exactly three configured channels, and all three must be represented in the beta input.
+- A condition-level ROI value is the arithmetic mean when at least 2 of 3 channels are non-missing.
+- A participant contributes to a selected ROI only when that 2-of-3 rule is satisfied in all four conditions; otherwise all pooled rows for that participant and ROI are excluded.
+
+Target-scope rule:
+- `M_DMPFC` and `M_VMPFC` are excluded from pooled-mean target selection even if a stale ROI LMM result table still contains significant rows for them.
 
 ## Missingness and data integrity
 
@@ -890,9 +897,11 @@ Validation script:
 
 Must verify:
 - target selection keeps only `p_fdr < 0.05` format/content rows from the channel/ROI tidy LMM outputs
+- stale significant `M_DMPFC` and `M_VMPFC` ROI rows cannot re-enter the pooled-mean target set
+- ROI pooling requires at least 2 of 3 channels in every condition and excludes the participant from that ROI when any condition fails
 - pool gating restricts format targets to `short/long` and content targets to `education/entertainment`
 - channel pooled neural values recover exact known values
-- ROI condition means use available member channels when one member is pruned
+- ROI condition means retain exact values when one of three members is pruned
 - behavioral pooled rows join to the correct target/domain rows
 - channel `0` placeholders are treated as missing rather than as true beta values
 - non-significant and interaction-only targets are excluded from the exported target set
