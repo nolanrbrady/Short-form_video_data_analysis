@@ -29,7 +29,7 @@ HOMER_AUC_OUTLIER_AUDIT_CSV="data/results/homer_auc_outlier_audit.csv"
 HOMER_AUC_OUTLIER_SUMMARY_JSON="data/results/homer_auc_outlier_summary.json"
 
 STEP_INDEX=0
-STEP_TOTAL=8
+STEP_TOTAL=9
 
 log() {
   echo "[pipeline] $*"
@@ -59,13 +59,29 @@ run_step() {
   log "[OK] ${title}"
 }
 
+# The recall scorer resolves ../../Assessment and ../data relative to demographic/.
+# Use a subshell so subsequent preprocessing steps continue from the repo root.
+# Always regenerate scores from raw responses and the current exclusion/alias
+# manifests before merging; never reuse a stale denominator after a config edit.
+# Reproducibility: Sandve et al. (2013), doi:10.1371/journal.pcbi.1003285.
+preprocess_recall() (
+  cd "$SCRIPT_DIR/demographic"
+  python process_recall_assessment.py
+)
+
 log "Validating runtime dependencies"
 need_cmd python
 need_cmd Rscript
 
 log "Validating required input files"
 need_file "$ENGAGEMENT_INPUT_CSV"
-need_file "$RECALL_DIFFS_CSV"
+# These match the scorer's fixed input paths; recall diffs are generated outputs.
+need_file "../Assessment/pretask_assessment.csv"
+need_file "../Assessment/posttask_assessment.csv"
+need_file "../Assessment/Recall_Assessment_Key.csv"
+need_file "data/config/recall_invalid_questions.json"
+need_file "data/config/recall_question_aliases.json"
+need_file "demographic/process_recall_assessment.py"
 need_file "$QUALTRICS_INPUT_CSV"
 need_file "$HOMER_RAW_FIR_CSV"
 need_file "$PREPROCESS_SETTINGS_JSON"
@@ -74,6 +90,12 @@ log "Cleaning data/results (unconditional)"
 mkdir -p "data/results"
 find "data/results" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 mkdir -p "$GENERATED_TABULAR_DIR"
+
+run_step "Preprocess recall assessments with current question exclusions" \
+  preprocess_recall
+need_file "$RECALL_DIFFS_CSV"
+need_file "demographic/recall_assessment_audit_pre.csv"
+need_file "demographic/recall_assessment_audit_post.csv"
 
 run_step "Preprocess engagement ratings" \
   python process_engagement.py

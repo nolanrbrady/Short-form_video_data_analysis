@@ -498,7 +498,7 @@
   - **Title:** Ten Simple Rules for Reproducible Computational Research
   - **First Author:** Sandve
   - **Year:** 2013
-  - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance)
+  - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance), including automatic recall-score/audit regeneration from raw assessments and current question-exclusion/alias manifests before tabular merging.
   - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table/behavior-plot/covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints and publication figures.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
   - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `plot_behavior_score_distributions.R`, `covariate_correlation_analysis.py`, `tests/test_covariate_correlation_analysis.py`, `tests/validate_behavior_score_distribution_plot_r.R`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`

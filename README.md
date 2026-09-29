@@ -411,22 +411,34 @@ Python/R scripts.
 
 What this entry-point does (in order):
 1. Clears `data/results/` at run start.
-2. Runs `process_engagement.py`.
-3. Runs `process_sociodemographic.py`.
+2. Runs `demographic/process_recall_assessment.py` from its required `demographic/`
+   working directory. Regenerates recall differences and both question-level
+   audits using the current invalid-question and alias manifests. A scoring
+   failure stops the pipeline before any merge; an existing recall CSV is never
+   used as a fallback.
+3. Runs `process_engagement.py`.
+4. Runs `process_sociodemographic.py`.
    Fails hard on missing/duplicate study IDs in the Qualtrics-derived covariate table.
-4. Runs `generate_combined_data.py`.
+5. Runs `generate_combined_data.py`.
    Fails hard if any tabular input violates the one-row-per-subject merge contract.
-5. Runs `collapse_homer_fir_to_auc.py`.
-6. Runs `validate_homer_fir_auc_conversion.py` and fails hard if excluded FIR basis vectors are not represented as `NaN` in the derived AUC table or if the AUC provenance sidecar does not match the current raw FIR export + settings JSON.
-7. Runs `mask_homer_auc_between_subject_outliers.py` and writes a separate outlier-masked AUC table plus audit artifacts.
-8. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
-9. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
+6. Runs `collapse_homer_fir_to_auc.py`.
+7. Runs `validate_homer_fir_auc_conversion.py` and fails hard if excluded FIR basis vectors are not represented as `NaN` in the derived AUC table or if the AUC provenance sidecar does not match the current raw FIR export + settings JSON.
+8. Runs `mask_homer_auc_between_subject_outliers.py` and writes a separate outlier-masked AUC table plus audit artifacts.
+9. Runs `merge_homer3_betas_with_combined_data.R` using `data/tabular/generated_data/homer3_glm_betas_wide_auc_outliers_masked.csv`.
+10. Runs `certify_preprocess_merge_integrity.py` and fails hard if merge invariants are violated.
 
 Required inputs for this entry-point:
 - `demographic/combined_engagement_data.csv`
-- `data/tabular/generated_data/recall_assessment_score_diffs.csv`
+- `../Assessment/pretask_assessment.csv`, `../Assessment/posttask_assessment.csv`,
+  and `../Assessment/Recall_Assessment_Key.csv` (relative to the repository root)
+- `data/config/recall_invalid_questions.json` and `data/config/recall_question_aliases.json`
 - `qualtrics/final_SF_demographic_data.csv`
 - the raw FIR CSV pointed to by `HOMER_RAW_FIR_CSV` in `pipeline_preprocess_merge.sh`
+
+Required files are checked before results cleanup. A pre-existing
+`data/tabular/generated_data/recall_assessment_score_diffs.csv` is not required.
+Regeneration preserves the scoring rules; if raw responses, the answer key or the
+recall manifests change, the resulting scores and downstream analyses can change.
 
 Certification outputs:
 - `data/results/preprocess_merge_certification.json`

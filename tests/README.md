@@ -72,6 +72,22 @@ Command:
 python tests/validate_recall_assessment_processing_py.py
 ```
 
+## Preprocessing and merge orchestration (Python/Bash/R)
+
+`tests/validate_preprocess_merge_pipeline_py.py` runs the shell entry point on
+synthetic raw inputs in a temporary workspace. It verifies recall generation when
+no score CSV exists, pre/post aliases and exclusion denominators, replacement of
+stale scores after a manifest edit, propagation of the known changed score into
+the certified merge, and preservation of unrelated columns. Missing raw recall
+inputs must fail before results cleanup; scoring/configuration errors must stop
+before downstream merging. The suite also checks engagement validation,
+FIR-to-AUC missingness/provenance, outlier masking and merge integrity.
+
+```bash
+python tests/validate_preprocess_merge_pipeline_py.py
+python tests/validate_recall_assessment_processing_py.py
+```
+
 ## Pipeline C (R): synthetic end-to-end validation
 
 Runs `analyze_format_content_lmm_channelwise.R` on a synthetic dataset that:

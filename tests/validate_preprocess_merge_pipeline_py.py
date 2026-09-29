@@ -181,6 +181,46 @@ def write_recall_csv(path: Path, n_subjects: int) -> None:
     df.to_csv(path, index=False)
 
 
+def write_raw_recall_inputs(workspace: Path, n_subjects: int) -> None:
+    """Create raw pre/post exports with a known .5 improvement in every condition.
+
+    Two valid items per condition start incorrect; only the first becomes correct.
+    All invalid items become correct, so including them would change the result.
+    Pre uses Q35/Q36 and Q39 where post uses Q6/Q7 and Q22, exercising the real
+    exclusion/alias manifests. Two Qualtrics metadata rows precede participants.
+    This fixture tests orchestration and denominators without assuming eight items.
+    """
+    from demographic.process_recall_assessment import drop_columns
+
+    conditions = {
+        "Short-form Education": ["Q1", "Q2"],
+        "Short-form Entertainment": ["Q3", "Q4"],
+        "Long-form Education": ["Q21", "Q22"],
+        "Long-form Entertainment": ["Q15", "Q16"],
+    }
+    invalid = json.loads((workspace / "data/config/recall_invalid_questions.json").read_text())["invalid_questions"]
+    rows = [(q, condition, "correct") for condition, questions in conditions.items() for q in questions]
+    rows.extend((row["question_id"], row["condition"], "correct") for row in invalid)
+    key = pd.DataFrame(rows, columns=["Question ID", "Condition", "Answer"])
+    assessment_dir = workspace.parent / "Assessment"
+    assessment_dir.mkdir(exist_ok=True)
+    key.to_csv(assessment_dir / "Recall_Assessment_Key.csv", index=False)
+    correct_post = {questions[0] for questions in conditions.values()} | {row["question_id"] for row in invalid}
+    for phase in ("pre", "post"):
+        absent = {"Q6", "Q7", "Q22"} if phase == "pre" else {"Q35", "Q36"}
+        questions = [q for q in key["Question ID"] if q not in absent]
+        if phase == "pre":
+            questions.append("Q39")
+        columns = drop_columns + ["Q34"] + questions
+        records = [{col: "metadata" for col in columns} for _ in range(2)]
+        for subject in range(1, n_subjects + 1):
+            row = {col: "unused" for col in drop_columns}
+            row["Q34"] = str(subject)
+            row.update({q: "correct" if phase == "post" and q in correct_post else "zzzzzzz" for q in questions})
+            records.append(row)
+        pd.DataFrame(records, columns=columns).to_csv(assessment_dir / f"{phase}task_assessment.csv", index=False)
+
+
 def write_qualtrics_csv(path: Path, n_subjects: int) -> None:
     single_cols = [
         ("Q71", "Study ID", '{"ImportId":"QID71"}'),
@@ -240,7 +280,11 @@ def build_pipeline_workspace(tmp_path: Path) -> Path:
         "process_engagement.py",
         "process_sociodemographic.py",
         "generate_combined_data.py",
+        "demographic/process_recall_assessment.py",
+        "data/config/recall_invalid_questions.json",
+        "data/config/recall_question_aliases.json",
         "data/config/engagement_condition_map.json",
+        "data/config/education_years_encoding.json",
         "collapse_homer_fir_to_auc.py",
         "validate_homer_fir_auc_conversion.py",
         "mask_homer_auc_between_subject_outliers.py",
@@ -330,6 +374,14 @@ def test_process_engagement_fails_on_impossible_repeat_count(tmp_path: Path) -> 
 
 
 def test_pipeline_shell_entrypoint_end_to_end(tmp_path: Path) -> None:
+    """Prove fresh recall scoring reaches the certified merged data, with no cache.
+
+    Start without a generated recall CSV. Then seed stale scores and exclude the
+    sole improving Short Entertainment item: only that condition must change from
+    .5 to zero after rerunning. Also require missing raw inputs to fail before
+    cleanup, and a scorer validation error to stop before any downstream merge.
+    These checks protect against silently retaining obsolete question denominators.
+    """
     n_subjects = 11
     workspace = build_pipeline_workspace(tmp_path)
 
@@ -343,9 +395,12 @@ def test_pipeline_shell_entrypoint_end_to_end(tmp_path: Path) -> None:
     write_raw_fir_csv(raw_fir_csv, settings_path)
     write_engagement_input_csv(engagement_csv, n_subjects=n_subjects)
     write_qualtrics_csv(qualtrics_csv, n_subjects=n_subjects)
-    write_recall_csv(recall_csv, n_subjects=n_subjects)
+    write_raw_recall_inputs(workspace, n_subjects=n_subjects)
+    assert not recall_csv.exists()
 
-    run = run_command(["bash", "pipeline_preprocess_merge.sh"], cwd=workspace)
+    # Also prove invocation from outside the repo still resolves both raw exports
+    # and generated outputs via the scorer's required working directory.
+    run = run_command(["bash", str(workspace / "pipeline_preprocess_merge.sh")], cwd=tmp_path)
     assert run.returncode == 0, run.stderr or run.stdout
 
     engagement_out = pd.read_csv(workspace / "data" / "tabular" / "generated_data" / "engagement_data_processed.csv")
@@ -369,6 +424,52 @@ def test_pipeline_shell_entrypoint_end_to_end(tmp_path: Path) -> None:
     assert cert_payload["passed"] is True
     assert cert_payload["counts"]["merged_rows"] == n_subjects
     assert auc_provenance["input_csv"] == "data/tabular/homer3_glm_betas_wide_fir_pca.csv"
+
+    diff_cols = [f"diff_{condition}" for condition in (
+        "short_form_education", "short_form_entertainment", "long_form_education", "long_form_entertainment"
+    )]
+    assert np.allclose(merged_out[diff_cols], .5, rtol=0, atol=1e-12)
+    assert "[STEP 9/9]" in run.stdout
+    for phase in ("pre", "post"):
+        audit = pd.read_csv(workspace / f"demographic/recall_assessment_audit_{phase}.csv")
+        excluded = audit[audit["excluded_from_retention_score"]]
+        expected = {"Q5", "Q35", "Q36", "Q8", "Q10", "Q26", "Q28"} if phase == "pre" else {
+            "Q5", "Q6", "Q7", "Q8", "Q10", "Q26", "Q28"}
+        assert set(excluded.question_id) == expected
+        assert excluded.score.isna().all()
+
+    # A manifest edit must replace existing scores and propagate into the merge.
+    config = workspace / "data/config/recall_invalid_questions.json"
+    payload = json.loads(config.read_text())
+    payload["invalid_questions"].append({"question_id": "Q3", "condition": "Short-form Entertainment",
+                                          "reason": "Synthetic exclusion update test."})
+    config.write_text(json.dumps(payload))
+    write_recall_csv(recall_csv, n_subjects=n_subjects)
+    rerun = run_command(["bash", "pipeline_preprocess_merge.sh"], cwd=workspace)
+    assert rerun.returncode == 0, rerun.stderr or rerun.stdout
+    refreshed = pd.read_csv(workspace / "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv")
+    assert np.allclose(refreshed["diff_short_form_entertainment"], 0, rtol=0, atol=1e-12)
+    assert np.allclose(refreshed[[col for col in diff_cols if col != "diff_short_form_entertainment"]], .5, rtol=0, atol=1e-12)
+    pd.testing.assert_frame_equal(merged_out.drop(columns=diff_cols), refreshed.drop(columns=diff_cols), check_exact=True)
+
+    sentinel = workspace / "data/results/preserve_on_missing_input.txt"
+    sentinel.write_text("preserve")
+    raw_post = workspace.parent / "Assessment/posttask_assessment.csv"
+    raw_bytes = raw_post.read_bytes()
+    raw_post.unlink()
+    failure = run_command(["bash", "pipeline_preprocess_merge.sh"], cwd=workspace)
+    assert failure.returncode != 0 and "Required file not found" in failure.stderr
+    assert sentinel.read_text() == "preserve"
+    raw_post.write_bytes(raw_bytes)
+
+    merged_path = workspace / "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv"
+    before = merged_path.read_bytes()
+    payload["invalid_questions"][-1]["condition"] = "Long-form Education"
+    config.write_text(json.dumps(payload))
+    failure = run_command(["bash", "pipeline_preprocess_merge.sh"], cwd=workspace)
+    assert failure.returncode != 0 and "does not match key condition" in failure.stderr
+    assert "Build combined tabular dataset" not in failure.stdout
+    assert merged_path.read_bytes() == before
 
 
 def test_end_to_end_merge_and_certification(tmp_path: Path) -> None:
