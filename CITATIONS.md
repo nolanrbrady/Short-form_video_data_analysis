@@ -283,7 +283,7 @@
   - **First Author:** Poldrack
   - **Year:** 2007
   - **Usage:** ROI signal extraction strategy
-  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analyses.
+  - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analyses. In the standalone ROI-mean script, the supplied ROI JSON determines channel membership and which existing planned ROI/chromophore comparisons remain eligible. This configuration intersection is a study-specific implementation rule, not an anatomical mapping prescribed by the paper; undefined ROIs are disclosed and are never replaced by another region.
   - **Link:** https://doi.org/10.1093/scan/nsm006
   - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `tests/validate_pooled_mean_correlations_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
@@ -391,9 +391,9 @@
   - **First Author:** Benjamini
   - **Year:** 1995
   - **Usage:** False Discovery Rate (FDR)
-  - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing, including the global correction across all tested pairs in the standalone behavioral correlation matrix.
+  - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing, including the global correction across all tested pairs in the standalone behavioral correlation matrix. The standalone ROI-mean workflow retains its declared behavior × format × association-method families and recomputes BH-adjusted p-values over the eligible, tested ROI/chromophore comparisons after resolving the ROI configuration; retired targets are not counted as tests that were performed.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_correlational_relationships_roi_means.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_correlational_relationships_roi_means_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans

@@ -842,9 +842,13 @@ Rscript tests/validate_correlational_relationships_r.R
 Purpose:
 - Run only the pooled-format ROI-mean x behavioral-mean subset as its own standalone analysis.
 - Restrict behavioral rows to pooled `engagement` and pooled `retention`.
-- Restrict neural rows to pooled ROI means for `R_DLPFC (HbR)`, `L_DLPFC (HbO)`, `M_DMPFC (HbO)`, and `L_DMPFC (HbO)`.
+- Keep the existing planned comparisons (`R_DLPFC/HbR`, `L_DLPFC/HbO`, `M_DMPFC/HbO`, `L_DMPFC/HbO`) only when their ROI is present in the supplied `--roi_json`. Channel membership comes entirely from that JSON; adding other ROI definitions does not expand the planned comparison set.
+- With the current `data/config/roi_definition.json`, the active comparisons are `R_DLPFC/HbR`, `L_DLPFC/HbO`, and `L_DMPFC/HbO`. The script reports the active comparisons and explicitly reports skipped undefined targets, including `M_DMPFC/HbO`.
+- Fail before clearing outputs if no planned targets remain defined. Missing required beta columns for a retained target still fail rather than silently changing its channel denominator.
 - Keep the same missingness rules, Pearson metric, BH-FDR handling, and optional figure generation as the broader correlation workflow.
+- The current configuration yields 12 rows: 2 behavior runs × 2 format pools × 3 eligible ROI/chromophore targets. The four existing BH families each contain up to three tested targets; adjusted p-values are recomputed over the tests actually run. Removing a target can therefore change adjusted p-values without changing the retained targets' correlations or unadjusted p-values.
 - The script clears `data/results/correlational_relationships_roi_means/` before each run so stale CSVs and PNGs do not persist.
+- Result files created under older ROI definitions are not refreshed by a code edit; rerun the script to generate outputs matching the current scope.
 
 Example:
 

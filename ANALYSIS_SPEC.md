@@ -771,6 +771,48 @@ Must verify:
 - figures are emitted only for Pearson rows allowed by the plan
 - fail-hard behavior for malformed ROI/config JSON, duplicate IDs, missing columns, and non-numeric values
 
+# ANALYSIS_SPEC — Standalone ROI-Mean Correlations: Configuration Eligibility
+Last updated: 2026-09-29
+
+Applies specifically to `analyze_correlational_relationships_roi_means.R` and
+`data/config/correlational_analysis_plan_roi_means.json`.
+
+The planned ROI/chromophore comparisons remain `R_DLPFC/HbR`, `L_DLPFC/HbO`,
+`M_DMPFC/HbO`, and `L_DMPFC/HbO`. Only comparisons whose ROI appears in the supplied
+`--roi_json` are eligible. The JSON supplies their channel membership. Undefined
+targets are reported and omitted; they are not remapped to a different ROI.
+Additional, unplanned ROI definitions do not automatically add hypotheses or
+chromophores. This configuration rule follows the user's requested preservation
+of the existing statistical scope; ROI extraction rationale: Poldrack (2007),
+see `CITATIONS.md`.
+
+The current six-ROI definition retains three of those planned comparisons:
+`R_DLPFC/HbR`, `L_DLPFC/HbO`, and `L_DMPFC/HbO`. There are consequently 12 output
+rows for the two behavior runs and two format pools. The existing four BH-FDR
+families, grouped by analysis tier, behavior run, format pool, and association
+method, each contain up to three tested comparisons. Family membership is based
+on the tests actually performed; adjusted p-values are recomputed when targets
+change (Benjamini & Hochberg, 1995; Bender & Lange, 2001; see `CITATIONS.md`).
+
+All other statistical rules remain unchanged: Pearson correlations and Fisher-z
+confidence intervals; subject exclusions; explicit zero/NA beta missingness;
+available-channel ROI means; both condition means required within a format;
+both behavioral condition values required within a format; pairwise-complete
+correlations; and the configured figure policy. The default figure gate remains
+uncorrected `p_unc < .05`, and must not be described as an FDR-significance gate.
+
+No eligible planned targets causes failure before output cleanup. Missing beta
+columns for retained ROI/chromophore targets also cause failure. The script logs
+active and skipped target names. Generated results from an older configuration
+must be regenerated; editing source code does not refresh those outputs.
+
+Validation: `tests/validate_correlational_relationships_roi_means_r.R` checks
+eligibility without expanding planned comparisons, channel membership updates,
+preserved missingness and pooling rules, failure for missing retained channels,
+real-data target sets and BH families, and a forced-positive correlation.
+
+---
+
 # ANALYSIS_SPEC — Pooled-Mean Neural-Behavior Correlations
 Last updated: 2026-04-13
 

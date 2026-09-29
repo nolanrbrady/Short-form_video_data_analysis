@@ -7,7 +7,9 @@
 #       * engagement_long, engagement_short
 #       * retention_long, retention_short
 #   - Restrict the neural side to pooled ROI means only:
-#       * R_DLPFC (HbR), L_DLPFC (HbO), M_DMPFC (HbO), L_DMPFC (HbO)
+#       * Existing ROI/chromophore comparisons whose ROI is defined in --roi_json.
+#         The JSON supplies channel membership; adding an unrelated ROI does not
+#         expand this targeted analysis or introduce additional chromophores.
 #
 # Rationale
 #   - ROI-level summary follows standard pre-specified ROI signal extraction
@@ -54,6 +56,8 @@ CONDITION_MAP <- tibble::tribble(
   "04", "LF_Edu", "Long"
 )
 
+# Planned comparisons are distinct from the current ROI/channel definitions.
+# Resolve their intersection before analysis and report any retired targets.
 TARGET_ROI_SPECS <- tibble::tribble(
   ~neural_name, ~chrom,
   "R_DLPFC", "HbR",
@@ -433,13 +437,26 @@ collect_required_behavior_columns <- function(df_names, analysis_plan) {
   required_cols
 }
 
+active_roi_specs <- function(roi_map) {
+  # Preserve the existing target/chromophore choices, using only ROIs explicitly
+  # defined by the supplied configuration (Poldrack, 2007; see CITATIONS.md).
+  # This intersection is a study configuration rule, not an anatomical remapping.
+  active <- TARGET_ROI_SPECS %>%
+    semi_join(roi_map %>% distinct(.data$roi), by = c("neural_name" = "roi"))
+  if (nrow(active) == 0) {
+    stop("ROI definition contains none of the planned ROI/chromophore targets; no analysis can be run.")
+  }
+  active
+}
+
 target_roi_channels <- function(roi_map) {
-  roi_map %>% semi_join(TARGET_ROI_SPECS, by = c("roi" = "neural_name"))
+  # Keep JSON-defined channel membership for each eligible planned comparison.
+  roi_map %>% semi_join(active_roi_specs(roi_map), by = c("roi" = "neural_name"))
 }
 
 collect_required_target_beta_columns <- function(roi_map) {
   roi_target_map <- target_roi_channels(roi_map) %>%
-    inner_join(TARGET_ROI_SPECS, by = c("roi" = "neural_name"))
+    inner_join(active_roi_specs(roi_map), by = c("roi" = "neural_name"))
   unique(unlist(mapply(
     function(channel, chrom) {
       paste0(channel, "_Cond", CONDITION_MAP$cond, "_", chrom)
@@ -520,16 +537,8 @@ reshape_beta_long <- function(df_merged, beta_cols, analysis_plan) {
 }
 
 build_roi_condition_targets <- function(beta_long, roi_map) {
+  active_specs <- active_roi_specs(roi_map)
   roi_map_target <- target_roi_channels(roi_map)
-  missing_roi <- setdiff(TARGET_ROI_SPECS$neural_name, roi_map_target$roi)
-  if (length(missing_roi) > 0) {
-    stop(
-      paste0(
-        "Requested ROI(s) missing from ROI definition JSON: ",
-        paste(sort(unique(missing_roi)), collapse = ", ")
-      )
-    )
-  }
   available_channels <- unique(beta_long$channel)
   absent_channels <- setdiff(roi_map_target$channel, available_channels)
   if (length(absent_channels) > 0) {
@@ -544,7 +553,7 @@ build_roi_condition_targets <- function(beta_long, roi_map) {
   beta_long %>%
     inner_join(roi_map_target, by = "channel") %>%
     rename(neural_name = roi) %>%
-    inner_join(TARGET_ROI_SPECS, by = c("neural_name", "chrom")) %>%
+    inner_join(active_specs, by = c("neural_name", "chrom")) %>%
     group_by(.data$subject_id, .data$neural_name, .data$chrom, .data$cond, .data$condition_label, .data$format) %>%
     summarize(
       neural_value = if (all(is.na(.data$beta))) NA_real_ else mean(.data$beta, na.rm = TRUE),
@@ -883,11 +892,22 @@ plot_association <- function(sub_complete, row, out_fig_dir, display_names) {
 
 main <- function() {
   args <- parse_args()
+  # Validate eligibility before clearing outputs. Disclose changes in the target
+  # set because BH family sizes depend on the tests actually run (Benjamini &
+  # Hochberg, 1995; Bender & Lange, 2001; see CITATIONS.md).
+  roi_map <- load_roi_definition(args$roi_json)
+  active_specs <- active_roi_specs(roi_map)
+  skipped_specs <- anti_join(TARGET_ROI_SPECS, active_specs, by = c("neural_name", "chrom"))
+  cat("[scope] active ROI/chromophore targets:",
+      paste(paste0(active_specs$neural_name, " (", active_specs$chrom, ")"), collapse = ", "), "\n")
+  if (nrow(skipped_specs) > 0) {
+    cat("[scope] skipped planned targets absent from ROI definition:",
+        paste(paste0(skipped_specs$neural_name, " (", skipped_specs$chrom, ")"), collapse = ", "), "\n")
+  }
   cleared_output_root <- clear_output_root(args$out_csv, args$out_fig_dir)
   dir.create(dirname(args$out_csv), recursive = TRUE, showWarnings = FALSE)
   dir.create(args$out_fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-  roi_map <- load_roi_definition(args$roi_json)
   display_names <- load_figure_display_names(
     args$figure_names_json,
     required_sections = c("roi", "behavior_run", "format_pool", "chrom")
