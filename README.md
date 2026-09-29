@@ -701,6 +701,57 @@ Validation:
 Rscript tests/validate_retention_pipeline_r.R
 ```
 
+### C3b) Retention sensitivity to equal question counts
+
+`analyze_retention_sensitivity.R` reproduces the exhaustive six-question sensitivity
+check. The valid counts are 6/7/6/6 for Short Education, Short Entertainment, Long
+Education, and Long Entertainment. It fits the original baseline and all seven
+ways to retain six Short Entertainment questions, omitting the same question for
+every participant in both pre- and post-task assessments. The other conditions,
+covariates, participant exclusions, and complete-case cohort stay fixed.
+
+Run from the repository root after recall scoring and the merge pipeline:
+
+```bash
+Rscript analyze_retention_sensitivity.R
+# To preserve an earlier run, select a new output directory:
+Rscript analyze_retention_sensitivity.R --out_dir /tmp/retention_sensitivity_review
+Rscript tests/validate_retention_sensitivity_r.R
+```
+
+The script reads the scored `demographic/recall_assessment_audit_pre.csv` and
+`recall_assessment_audit_post.csv`; it does not regrade raw responses. It validates
+the invalid-question manifest, binary scores, shared item coverage, paired target
+question IDs/answer keys, and agreement of reconstructed scores with observed
+merged outcomes (absolute tolerance `1e-12`). Missing valid-item scores are errors;
+valid zeros remain valid. Changed item counts require explicit design review.
+
+The existing retention R script supplies the complete model/reporting path:
+REML with age and education covariates, Satterthwaite tests, unadjusted 95% Wald
+CIs, Holm over three effects **within each fit**, and the existing interaction-gated
+posthoc procedure. Nonconvergence or a rank-deficient design stops the sensitivity
+run; singularity is reported. Primary data/results are not overwritten.
+
+Outputs default to a new or empty `data/results/retention_sensitivity/` directory:
+
+- `main_effects.csv`: all 24 effect rows; the adjusted column is explicitly named
+  `p_holm` (the primary script's legacy `p_fdr` column also contains Holm values).
+- `summary.csv`: baseline results and the seven subsets' coefficient/p-value
+  ranges, direction/significance agreement counts, and singular-fit counts.
+- `omission_plan.csv`, `subject_scores.csv`, `diagnostics.csv`, and `posthoc.csv`:
+  retained questions/counts, participant outcomes/covariates, model diagnostics,
+  and any gated contrasts.
+- `scenarios/`: each fit's exact input and original-format main/posthoc tables.
+- `metadata.json` and `session_info.txt`: settings, cohort counts, input/code hashes,
+  interpretation limits, and R/package versions.
+
+This is an **exhaustive subset sensitivity analysis, not a permutation test**.
+Significance counts describe seven overlapping analyses, not independent
+replications or a probability of robustness. The average of all seven reduced
+scores equals the baseline score by construction. Equal item counts cannot remove
+missing-video confounding, equalize item difficulty, or establish generalization
+over stimuli (Judd et al., 2012; Winkler et al., 2014; see `CITATIONS.md`).
+
 ### C4) Engagement within-subject inference: Length, Content, and Length×Content
 
 - R: `analyze_engagement_format_content_lmm.R`

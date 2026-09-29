@@ -152,6 +152,32 @@ Command:
 Rscript tests/validate_retention_pipeline_r.R
 ```
 
+## Retention equal-question-count sensitivity (R)
+
+`tests/validate_retention_sensitivity_r.R` uses the repository's scored audits and
+merged input, with corrupted fixtures and all generated outputs confined to a
+temporary directory. It verifies all seven common-item omissions, independent
+participant/item score calculations, known positive/negative/zero item changes,
+unchanged covariates/other conditions, and a fixed complete-case cohort. It checks
+audit/manifest consistency, paired answer keys, missing/duplicate coverage,
+missing/nonbinary valid scores, stale merged outcomes, independent balanced
+factorial contrasts, manual three-effect Holm adjustment, Wald intervals, posthoc
+gating and combined reporting in both branches, convergence/rank-deficiency
+failures, and baseline agreement with saved primary results. Regression tolerances
+are `1e-10` for coefficients, `1e-3` for Satterthwaite df and `1e-7` for other
+statistics; score reconstruction uses `1e-12`.
+
+```bash
+Rscript tests/validate_retention_sensitivity_r.R
+Rscript tests/validate_retention_pipeline_r.R
+```
+
+The primary suite supplies additional synthetic true-positive/true-negative
+inference and both posthoc-gate branches. The sensitivity script reuses that
+primary analysis directly. Run from the repository root after generating current
+scored audits, merged outcomes and primary results. A changed question-count
+design requires review; tests must not silently adopt a different analysis.
+
 ## Engagement Pipeline (R): deterministic + synthetic validation
 
 Runs `analyze_engagement_format_content_lmm.R` on generated engagement datasets and verifies:

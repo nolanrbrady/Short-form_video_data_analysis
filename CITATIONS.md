@@ -449,6 +449,29 @@
   - **Link:** https://doi.org/10.3389/fpsyg.2013.00863
   - **Source:** `analyze_engagement_format_content_lmm.R`
 
+## Retention sensitivity to equal question counts
+
+- **Judd, C. M., Westfall, J., & Kenny, D. A. (2012)**
+  - **Title:** Treating stimuli as a random factor in social psychology: A new and comprehensive solution to a pervasive but largely ignored problem.
+  - **Usage:** Interpretation limits for exhaustive six-of-seven recall-item subsets.
+  - **Reasoning:** Stimulus variability limits generalization. Matching question counts tests sensitivity to a scoring/item-selection choice; it does not repair missing-video confounding or establish equivalent question difficulty. This reference motivates the limitation, not a claim that the study's aggregate-score LMM models random item effects.
+  - **Link:** https://doi.org/10.1037/a0028347
+  - **Source:** `analyze_retention_sensitivity.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Winkler, A. M., Ridgway, G. R., Webster, M. A., Smith, S. M., & Nichols, T. E. (2014)**
+  - **Title:** Permutation inference for the general linear model.
+  - **Usage:** Distinguishing the subset sensitivity analysis from null permutation inference.
+  - **Reasoning:** Permutation inference requires an appropriate exchangeability/null construction. Enumerating seven overlapping retained-item subsets does not supply a null reference distribution, and the count of significant subsets is not a permutation p-value. The script performs no permutation test.
+  - **Link:** https://doi.org/10.1016/j.neuroimage.2014.01.060
+  - **Source:** `analyze_retention_sensitivity.R`, `README.md`, `ANALYSIS_SPEC.md`
+
+- **Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015); Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. B. (2017); Holm, S. (1979)**
+  - **Titles:** Fitting Linear Mixed-Effects Models Using lme4; lmerTest Package: Tests in Linear Mixed Effects Models; A Simple Sequentially Rejective Multiple Test Procedure.
+  - **Usage:** Reuse of the existing retention REML/Satterthwaite inference and Holm correction over three effects within each sensitivity fit; model convergence diagnostics and regression validation.
+  - **Reasoning:** Holding the model, cohort, covariates and correction family constant isolates sensitivity to retaining six instead of seven questions. The seven overlapping variants are described separately; they are not treated as seven new confirmatory analyses or pooled into a different correction family. Other model/EMM/effect-size references remain those documented for the primary retention analysis above.
+  - **Links:** https://doi.org/10.18637/jss.v067.i01 ; https://doi.org/10.18637/jss.v082.i13 ; https://doi.org/10.2307/4615733
+  - **Source:** `analyze_retention_sensitivity.R`, `analyze_retention_format_content_lmm.R`, `tests/validate_retention_sensitivity_r.R`
+
 # Data Visualization
 
 - **Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015)**

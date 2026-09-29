@@ -501,6 +501,66 @@ Must verify:
 
 ---
 
+# ANALYSIS_SPEC — Retention equal-question-count sensitivity
+
+## Scope and fixed design
+
+`analyze_retention_sensitivity.R` is a supplementary robustness check of the
+retention analysis above, not a replacement primary analysis or null permutation
+test. Baseline valid question counts are 6, 7, 6, 6 in Short Education, Short
+Entertainment, Long Education, Long Entertainment order. Enumerate all seven
+six-of-seven subsets of Short Entertainment (`Q3`, `Q4`, `Q11`, `Q12`, `Q19`,
+`Q20`, `Q27` in the current audits). Each omitted item is removed for every
+participant and both phases. Compute post mean minus pre mean over six retained
+items. Preserve the other three outcomes, covariates, exclusions and primary
+complete-case cohort. No RNG, independent participant-specific omissions, or
+selection of a favorable subset is used.
+
+## Integrity and inference
+
+- Validate pre/post scored audits against `recall_invalid_questions.json`, with
+  consistent item keys/conditions and participant coverage; each phase must have
+  eight original items per condition and valid counts 6/7/6/6. The resampled
+  condition must have matching pre/post item IDs and answer keys.
+- Excluded scores must be missing; all valid scores must be binary and present.
+  Upstream valid blank responses already scored zero retain that score. No
+  regrading, imputation, or denominator changes on missing scores are performed.
+- Reconstruct all four baseline outcomes for participants remaining after shared
+  exclusions; require agreement with every observed merged outcome at absolute
+  tolerance `1e-12`. Preserve the primary complete-case rule when a merged outcome
+  is missing, and hold the resulting cohort fixed for all eight models.
+- Invoke the primary R script's analysis function for each input: same REML model,
+  coding, Satterthwaite tests, unadjusted Wald CIs, effect sizes, three-effect Holm
+  family, and interaction-gated uncorrected six-pair posthoc comparisons.
+- Do not pool the 24 p-values into a new family. Summaries are descriptive
+  sensitivity ranges, not an additional inferential test. No subset is promoted
+  to the primary result. Stop for nonconvergence, nonfinite inference, or dropped
+  fixed-effect columns; retain and flag singular fits.
+
+## Reporting and limits
+
+Write all scenario inputs and results to a separate new/empty output directory,
+with a 24-row combined effects table, three-row summary, omission plan,
+participant scores, diagnostics, gated contrasts, input/code hashes and session
+versions. Name the combined adjusted-p column `p_holm`; the original-format
+scenario tables retain the primary script's historical `p_fdr` name.
+
+Report coefficient and adjusted-p ranges, plus counts of direction/significance
+agreement. Overlapping subsets are not independent replications. Their mean
+score equals the baseline arithmetically; this is a validation identity, not
+evidence of unbiased inference. Balancing counts does not address unequal item
+difficulty, omitted-video confounding, or stimulus generalization (Judd et al.,
+2012). No exchangeability-based null permutations occur (Winkler et al., 2014).
+See the retention-sensitivity section in `CITATIONS.md`.
+
+Validate using `tests/validate_retention_sensitivity_r.R` and the existing primary
+retention validation suite. Cover independent paired-item scoring and balanced
+factorial contrasts, exhaustive enumeration, stable cohort/covariates, valid zeros,
+manual Holm agreement, saved baseline regression, fail-fast corrupt/stale input
+cases, and protection against overwriting a prior sensitivity run.
+
+---
+
 # ANALYSIS_SPEC — Engagement Length×Content (subject-level LMM)
 Last updated: 2026-03-16
 

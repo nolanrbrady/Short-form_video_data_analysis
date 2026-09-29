@@ -334,8 +334,7 @@ extract_fixed <- function(model, term) {
   )
 }
 
-main <- function() {
-  args <- parse_args()
+main <- function(args = parse_args()) {
 
   # Optional overrides for emmeans df safeguards (large-N behavior).
   if (!is.na(args$pbkrtest_limit)) {
@@ -454,6 +453,13 @@ main <- function() {
 
   cat("[write] main effects:", args$out_main_csv, "\n")
   cat("[write] posthoc:     ", args$out_posthoc_csv, ifelse(nrow(posthoc_df) == 0, " (empty)", ""), "\n", sep = "")
+
+  # Allow sensitivity analyses to reuse this exact inference/reporting path.
+  invisible(list(main = main_df, posthoc = posthoc_df, model = model,
+                 posthoc_model = if (do_posthoc) model_cond else NULL))
 }
 
-main()
+# Sourcing exposes the existing analysis without running or writing outputs.
+if (sys.nframe() == 0) {
+  main()
+}
