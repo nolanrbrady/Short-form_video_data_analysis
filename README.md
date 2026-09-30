@@ -1,5 +1,5 @@
 ## Short-form Video Study — Analysis Repo
-Last updated: 04-01-2026
+Last updated: 2026-09-29
 Updated by: Codex
 
 This repo contains two primary analysis “tracks”:
@@ -234,8 +234,17 @@ What it does:
 - Computes task-window AUC with trapezoidal integration over the configured time window.
 - Writes `data/tabular/generated_data/homer3_glm_betas_wide_auc.csv` with single-beta columns like `S01_D01_Cond01_HbO`.
 - Writes `data/tabular/generated_data/homer3_glm_betas_wide_auc.provenance.json` to lock the AUC table to the raw FIR input, settings file, and exact basis configuration used to generate it.
-- Treats both `0` and `NaN` as pruned/missing only when the entire basis vector is all-zero or all-`NaN`.
+- Treats a basis vector as pruned/missing only when it is **exactly all-zero** or all-`NaN`; individual zero coefficients and arbitrarily small finite nonzero coefficients remain valid. Pruning uses no approximate-zero amplitude tolerance.
 - Fails explicitly on partial missing basis vectors or malformed FIR schemas.
+
+This sentinel rule follows the imported-data policy in `AGENTS.md`, not a
+physiological amplitude cutoff. Transparent missingness/QC reporting follows
+Yücel et al. (2021); see `CITATIONS.md`. Regression checks include tiny nonzero
+vectors that the former `np.allclose(beta, 0.0)` check incorrectly pruned:
+
+```bash
+python tests/validate_fir_auc_adapter_py.py
+```
 
 Configured production settings:
 - Reconstruction support: `-10 s` to `130 s`

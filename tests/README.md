@@ -72,6 +72,25 @@ Command:
 python tests/validate_recall_assessment_processing_py.py
 ```
 
+## FIR pruning and AUC reconstruction (Python)
+
+`tests/validate_fir_auc_adapter_py.py` verifies exact all-zero/all-NaN pruning
+without imputation, rejection of partially missing vectors, and bitwise
+preservation of finite nonzero coefficients, including values at/below the
+former approximate-zero tolerance and subnormal values. A tiny mixed-sign
+vector is also passed through CSV parsing, HRF reconstruction, and AUC export;
+its finite nonzero AUC must match independently computed Gaussian-basis and
+trapezoid calculations, rather than passing a loose comparison against zero.
+Existing baseline/window/schema/provenance validations are retained.
+
+The sentinel definition comes from `AGENTS.md`; transparent quality handling
+is supported by Yücel et al. (2021), and the reconstruction framework by
+Ye et al. (2009); see `CITATIONS.md`.
+
+```bash
+python tests/validate_fir_auc_adapter_py.py
+```
+
 ## Preprocessing and merge orchestration (Python/Bash/R)
 
 `tests/validate_preprocess_merge_pipeline_py.py` runs the shell entry point on

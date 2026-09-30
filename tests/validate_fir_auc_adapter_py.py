@@ -27,6 +27,7 @@ from homer_fir import (
     default_auc_provenance_path,
     extract_beta_vector,
     load_preprocessing_settings,
+    normalize_excluded_channel_betas,
     parse_fir_header,
     settings_to_dict,
     trapezoid_integral,
@@ -186,6 +187,103 @@ def manual_hrf(beta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     g2 = np.exp(-((expected_t - 0.5) ** 2) / (2 * 0.5**2))
     g2 = g2 / g2.max()
     return expected_t, g1 * beta[0] + g2 * beta[1]
+
+
+# The exact sentinel comes from AGENTS.md, not a physiological cutoff.
+# Transparent quality/missingness handling: Yücel et al. (2021),
+# doi:10.1117/1.NPh.8.1.012101; reconstruction framework: Ye et al. (2009),
+# doi:10.1016/j.neuroimage.2008.08.036. See CITATIONS.md.
+def test_exact_zero_vectors_remain_pruned() -> None:
+    """Explicit all-zero sentinels, including signed zero, must stay missing.
+
+    Treating these raw exported placeholders as true zero activation would
+    introduce fabricated observations and could change complete-case cohorts.
+    The 279-weight fixture also covers the production basis-vector length.
+    """
+    for beta in (np.array([0.0, -0.0]), np.zeros(279)):
+        observed = normalize_excluded_channel_betas(beta)
+        assert observed.shape == beta.shape
+        assert np.isnan(observed).all()
+
+
+def test_all_nan_vectors_remain_pruned() -> None:
+    """An all-NaN exported pruning sentinel must not be imputed to zero."""
+    observed = normalize_excluded_channel_betas(np.full(279, np.nan))
+    assert observed.shape == (279,)
+    assert np.isnan(observed).all()
+
+
+def test_partial_nan_vectors_fail_even_with_tiny_coefficients() -> None:
+    """Incomplete basis weights must fail, not erase/impute an entire vector.
+
+    Zero and tiny finite coefficients alongside a NaN cannot reconstruct a
+    complete HRF. Both fixtures must retain the existing hard-error behavior.
+    """
+    for beta in (np.array([0.0, np.nan]), np.array([1e-9, np.nan, -2e-9])):
+        try:
+            normalize_excluded_channel_betas(beta)
+        except ValueError as exc:
+            assert "partial NaNs" in str(exc)
+        else:
+            raise AssertionError("Partial missingness was silently accepted.")
+
+
+def test_small_nonzero_vectors_are_preserved_bitwise() -> None:
+    """Preserve measured values exactly instead of using an amplitude cutoff.
+
+    The fixtures include individual zero weights, mixed signs, the former
+    1e-8 allclose boundary, ordinary nonzero values, and the smallest positive
+    representable float. Byte equality avoids a loose comparison that could
+    itself hide loss of tiny coefficients or changes to signed zero.
+    """
+    fixtures = (
+        np.array([-0.0, 1e-9, -2e-9]),
+        np.array([0.0, 1e-8]),
+        np.array([0.0, 3e-8]),
+        np.array([np.nextafter(0.0, 1.0), 0.0]),
+        np.array([1.0, -2.0, 0.0]),
+    )
+    for beta in fixtures:
+        observed = normalize_excluded_channel_betas(beta.copy())
+        assert np.isfinite(observed).all()
+        assert observed.tobytes() == beta.tobytes(), "Finite coefficients changed."
+
+
+def test_tiny_nonzero_vector_survives_auc_export(
+    input_csv: Path, output_csv: Path, settings_path: Path
+) -> None:
+    """A vector formerly erased by allclose must reach a finite correct AUC.
+
+    Exercise CSV parsing, pruning, reconstruction, baseline subtraction, and
+    export together. The reference Gaussian functions are built by manual_hrf
+    and integrated with an explicit trapezoid sum, without the production
+    pruning or integration helper. Absolute tolerance is zero: a zero or NaN
+    result cannot pass merely because the expected AUC is small.
+    """
+    beta = np.array([1e-9, -2e-9])
+    assert np.allclose(beta, 0.0) and not np.all(beta == 0.0)
+    with input_csv.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow([
+            "Subject", "S01_D01_Cond01_HbO_Basis001",
+            "S01_D01_Cond01_HbO_Basis002",
+        ])
+        writer.writerow(["sub_0001", *[f"{value:.17g}" for value in beta]])
+
+    fir_auc.collapse_homer_fir_to_auc(
+        input_csv=str(input_csv), output_csv=str(output_csv),
+        settings_json=str(settings_path),
+    )
+    time_axis, hrf = manual_hrf(beta)
+    baseline = hrf[(time_axis >= -0.5) & (time_axis <= 0.0)].mean()
+    window = (time_axis >= 0.0) & (time_axis <= 0.5)
+    times = time_axis[window]
+    values = (hrf - baseline)[window]
+    expected = np.sum(np.diff(times) * (values[:-1] + values[1:]) / 2.0)
+    observed = pd.read_csv(output_csv).loc[0, "S01_D01_Cond01_HbO"]
+    assert np.isfinite(expected) and expected != 0.0
+    assert np.isfinite(observed) and observed != 0.0
+    np.testing.assert_allclose(observed, expected, rtol=1e-13, atol=0.0)
 
 
 def test_auc_matches_manual_trapezoid(settings_path: Path) -> None:
@@ -434,6 +532,10 @@ def test_duplicate_subject_fails(
 
 
 def main() -> None:
+    test_exact_zero_vectors_remain_pruned()
+    test_all_nan_vectors_remain_pruned()
+    test_partial_nan_vectors_fail_even_with_tiny_coefficients()
+    test_small_nonzero_vectors_are_preserved_bitwise()
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
@@ -458,6 +560,7 @@ def main() -> None:
         input_csv = tmp_path / "toy_homer.csv"
         output_csv = tmp_path / "toy_auc.csv"
         write_settings(settings_path)
+        test_tiny_nonzero_vector_survives_auc_export(input_csv, output_csv, settings_path)
         write_toy_csv(input_csv)
         test_collapse_script_outputs_expected_values(input_csv, output_csv, settings_path)
         write_settings(settings_path)

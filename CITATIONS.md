@@ -32,9 +32,16 @@
   - **First Author:** Yücel
   - **Year:** 2021
   - **Usage:** Best practices for analysis/reporting, including chromophore transparency and explicit quality handling
-  - **Reasoning:** Provides peer-reviewed guidance for transparent fNIRS reporting. Used here to justify explicitly plotting both HbO and HbR and preserving pruned-channel placeholders (`0`/`NaN`) as missing values in subject-level FIR visualizations (no imputation).
+  - **Reasoning:** Provides peer-reviewed guidance for transparent fNIRS reporting. Used here to justify explicitly plotting both HbO and HbR and preserving pruned-channel placeholders as missing values without imputation. Under this project's AGENTS.md imported-data policy, only an exactly all-zero or all-NaN raw FIR basis vector is a pruning sentinel; individual zero weights and small finite nonzero vectors must remain measured data. The exact sentinel convention is project-specific, not a physiological amplitude cutoff prescribed by this paper.
   - **Link:** https://doi.org/10.1117/1.NPh.8.1.012101
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `README.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `homer_fir.py`, `plot_fir_betas_subjects.py`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `tests/validate_fir_auc_adapter_py.py`, `README.md`, `tests/README.md`
+
+- **NumPy developers — primary technical documentation (not peer-reviewed scientific guidance)**
+  - **Title:** numpy.allclose
+  - **Usage:** Exact-zero sentinel recognition versus approximate numerical comparison
+  - **Reasoning:** Documents the default `atol=1e-8` and warns that it is inappropriate for sufficiently small magnitudes. Comparing FIR coefficients to zero with that tolerance incorrectly removes valid small nonzero vectors. The implementation uses exact equality only for the documented pruning sentinel, while approximate comparisons remain appropriate for numerical reconstruction tests with explicit tolerances.
+  - **Link:** https://numpy.org/doc/stable/reference/generated/numpy.allclose.html
+  - **Source:** `homer_fir.py`, `tests/validate_fir_auc_adapter_py.py`, `README.md`
 
 - **Ye, J. C., Tak, S., Jang, K. E., Jung, J., & Jang, J. (2009)**
   - **Title:** NIRS-SPM: Statistical parametric mapping for near-infrared spectroscopy

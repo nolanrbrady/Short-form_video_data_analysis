@@ -202,7 +202,7 @@ def normalize_excluded_channel_betas(beta: np.ndarray) -> np.ndarray:
     """Convert excluded channels to all-NaN and reject partial missingness.
 
     Project data-integrity policy for imported Homer betas:
-    - excluded channels may appear as an all-zero basis-weight vector or an
+    - excluded channels may appear as an exactly all-zero basis-weight vector or an
       all-NaN basis-weight vector,
     - individual zero-valued basis weights remain valid coefficients, and
     - partial NaNs inside one basis vector are treated as a hard data error.
@@ -211,7 +211,13 @@ def normalize_excluded_channel_betas(beta: np.ndarray) -> np.ndarray:
         return np.full(beta.shape, np.nan, dtype=float)
 
     finite_mask = np.isfinite(beta)
-    if finite_mask.all() and np.allclose(beta, 0.0):
+    # Recognize an exact pruning sentinel, not a signal-amplitude threshold:
+    # allclose's default atol=1e-8 can erase finite fNIRS coefficients near 1e-9.
+    # Preserve small nonzero values and individual legitimate zero coefficients.
+    # Exact sentinel policy: AGENTS.md; transparent QC/missingness rationale:
+    # Yücel et al. (2021), doi:10.1117/1.NPh.8.1.012101; see CITATIONS.md.
+    # NOTE: np.allclose() was tested and produced the results with the same significance
+    if finite_mask.all() and np.all(beta == 0.0):
         return np.full(beta.shape, np.nan, dtype=float)
 
     if np.isnan(beta).any():
