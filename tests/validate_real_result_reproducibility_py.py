@@ -2,12 +2,13 @@
 
 This validator reruns result-producing scripts into a temporary directory and
 compares the generated CSVs against `data/results`. It intentionally never
-writes into `data/results`.
+writes into `data/results`. Its scope is the four primary LMMs, selected pooled
+means, and behavioral pairwise correlations; archived exploratory alternatives
+are not invoked. Audit-trail rationale: Sandve et al. (2013), see CITATIONS.md.
 """
 
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT_CSV = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv"
 EXCLUSIONS_JSON = "data/config/excluded_subjects.json"
 ROI_JSON = "data/config/roi_definition.json"
-CORRELATION_PLAN_JSON = "data/config/correlational_analysis_plan.json"
 BEHAVIOR_PLAN_JSON = "data/config/behavior_pairwise_correlation_plan.json"
 
 
@@ -56,18 +56,6 @@ def assert_csv_equal(
         )
     except AssertionError as exc:
         raise AssertionError(f"CSV mismatch for {exported} vs {rerun}: {exc}") from exc
-
-
-def assert_json_core_equal(exported: Path, rerun: Path) -> None:
-    left = json.loads(exported.read_text(encoding="utf-8"))
-    right = json.loads(rerun.read_text(encoding="utf-8"))
-    for payload in (left, right):
-        for key in list(payload):
-            key_lower = key.lower()
-            if "path" in key_lower or "time" in key_lower or "date" in key_lower:
-                payload.pop(key, None)
-    if left != right:
-        raise AssertionError(f"JSON metadata core mismatch for {exported} vs {rerun}")
 
 
 def run_primary_lmm_reruns(tmp: Path) -> None:
@@ -136,28 +124,9 @@ def run_primary_lmm_reruns(tmp: Path) -> None:
 
 
 def run_correlation_reruns(tmp: Path) -> None:
-    corr = tmp / "correlational_relationships"
     pooled = tmp / "pooled_mean_correlations"
     behavior = tmp / "behavior_pairwise_correlations"
 
-    run_command(
-        [
-            "Rscript",
-            "analyze_correlational_relationships.R",
-            "--input_csv",
-            INPUT_CSV,
-            "--roi_json",
-            ROI_JSON,
-            "--analysis_plan_json",
-            CORRELATION_PLAN_JSON,
-            "--exclude_subjects_json",
-            EXCLUSIONS_JSON,
-            "--out_csv",
-            str(corr / "pairwise_correlations_r.csv"),
-            "--out_fig_dir",
-            str(corr / "figures"),
-        ]
-    )
     run_command(
         [
             "Rscript",
@@ -192,19 +161,6 @@ def run_correlation_reruns(tmp: Path) -> None:
     )
 
 
-def run_channel_behavior_rerun(tmp: Path) -> None:
-    run_command(
-        [
-            "python",
-            "analyze_channel_behavior_relationships.py",
-            "--input-csv",
-            INPUT_CSV,
-            "--out-dir",
-            str(tmp / "channel_behavior_relationships"),
-        ]
-    )
-
-
 def compare_primary_lmm_outputs(tmp: Path) -> None:
     for name in [
         "format_content_lmm_main_effects_r.csv",
@@ -223,11 +179,6 @@ def compare_primary_lmm_outputs(tmp: Path) -> None:
 
 def compare_correlation_outputs(tmp: Path) -> None:
     comparisons = [
-        (
-            "correlational_relationships/pairwise_correlations_r.csv",
-            "correlational_relationships/pairwise_correlations_r.csv",
-            ("plot_file",),
-        ),
         (
             "pooled_mean_correlations/selected_pooled_mean_targets_r.csv",
             "pooled_mean_correlations/selected_pooled_mean_targets_r.csv",
@@ -258,25 +209,6 @@ def compare_correlation_outputs(tmp: Path) -> None:
         assert_csv_equal(ROOT / "data/results" / exported_rel, tmp / rerun_rel, ignore_columns=ignored)
 
 
-def compare_channel_behavior_outputs(tmp: Path) -> None:
-    for name in [
-        "channel_behavior_pairwise_results.csv",
-        "channel_behavior_top_hits.csv",
-        "channel_behavior_condition_matched_top_hits.csv",
-        "channel_behavior_behavior_summary.csv",
-        "behavior_variable_profile.csv",
-        "channel_missingness_summary.csv",
-    ]:
-        assert_csv_equal(
-            ROOT / "data/results/channel_behavior_relationships" / name,
-            tmp / "channel_behavior_relationships" / name,
-        )
-    assert_json_core_equal(
-        ROOT / "data/results/channel_behavior_relationships/analysis_metadata.json",
-        tmp / "channel_behavior_relationships/analysis_metadata.json",
-    )
-
-
 def assert_neural_kr_tidy_invariants() -> None:
     for path in [
         ROOT / "data/results/format_content_lmm_main_effects_tidy_r.csv",
@@ -296,10 +228,8 @@ def main() -> None:
         tmp = Path(tmp_name)
         run_primary_lmm_reruns(tmp)
         run_correlation_reruns(tmp)
-        run_channel_behavior_rerun(tmp)
         compare_primary_lmm_outputs(tmp)
         compare_correlation_outputs(tmp)
-        compare_channel_behavior_outputs(tmp)
         assert_neural_kr_tidy_invariants()
     print("[PASS] validate_real_result_reproducibility_py")
 

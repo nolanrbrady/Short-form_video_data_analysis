@@ -220,11 +220,6 @@ def main() -> None:
     assert_behavior_posthoc_gating(engagement, engagement_posthoc, "engagement LMM")
 
     assert_correlation_table(
-        read_csv("correlational_relationships/pairwise_correlations_r.csv"),
-        "condition-specific correlation follow-up",
-        "pearson_r",
-    )
-    assert_correlation_table(
         read_csv("pooled_mean_correlations/pooled_mean_correlations_r.csv"),
         "pooled-mean correlation follow-up",
         "association_estimate",

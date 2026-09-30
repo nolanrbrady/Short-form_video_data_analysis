@@ -8,7 +8,7 @@ This script is intentionally conservative and paper-friendly:
   artificial numeric order. Race permits multiple selections, so each selected race category is
   represented as its own indicator.
 - Computes per-participant composite totals for multi-item scales (PHQ-8, GAD, ASRS, Yang PU, Yang Motivation).
-- Outputs a clean covariate dataset (correlation diagnostics are handled in `covariate_correlation_analysis.py`).
+- Outputs a clean covariate dataset (current behavioral correlations are handled in `analyze_behavior_pairwise_correlations.R`).
 
 Input (currently):
 - qualtrics/final_SF_demographic_data.csv
@@ -660,7 +660,7 @@ def main() -> None:
     print(missingness.head(10).to_string())
 
     print(f"\nWrote outputs to: {out_dir}")
-    print("Tip: run `covariate_correlation_analysis.py` to generate Spearman correlation diagnostics + heatmap.")
+    print("Tip: run `Rscript analyze_behavior_pairwise_correlations.R` after merging to generate the current behavioral Pearson correlations + heatmap.")
 
 
 if __name__ == "__main__":

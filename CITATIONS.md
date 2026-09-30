@@ -1,5 +1,12 @@
 # Preprocessing
 
+Workflow scope: sources under `unused/` are preserved historical analyses, not
+current result producers. References to `fnirs_analysis/`,
+`plot_beta_discrepancy_dynamics.py`, or the Python channelwise LMM identify older
+implementations that were already absent before this cleanup. Their citations
+are retained for provenance, not as claims that those files run in the current
+imported-Homer/R analysis workflow.
+
 - **Scholkmann, F., & Wolf, M. (2013)**
   - **Title:** General equation for the differential pathlength factor of the frontal human head depending on wavelength and age
   - **First Author:** Scholkmann
@@ -227,9 +234,11 @@
   - **Usage:** Transparent disclosure of study-specific recall-item exclusions and exploratory recruitment-order diagnostics
   - **Reasoning:** Supports making all analysis exclusions explicit and auditable. Used here to justify storing invalid recall questions and Qualtrics ID aliases in versioned manifests, keeping excluded items visible in audit outputs, and documenting that `Q5`, `Q6`, `Q7`, `Q8`, `Q10`, `Q26`, and `Q28` are excluded from both pre-task and post-task retention denominators because they were identified as invalid assessment items across the full study, including pre-task aliases `Q35` for invalid `Q6` and `Q36` for invalid `Q7`; also documents the pre-task `Q39` to canonical `Q22` scoring alias. Also supports explicitly labeling subject-ID-derived correlations as exploratory recruitment-order diagnostics rather than primary evidence.
   - **Link:** https://doi.org/10.1177/0956797611417632
-  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `covariate_correlation_analysis.py`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `demographic/process_recall_assessment.py`, `data/config/recall_invalid_questions.json`, `unused/covariate_correlation_analysis.py`, `README.md`, `sfv_data_description.md`, `ANALYSIS_SPEC.md`
 
 # Statistical Analysis
+
+Sources under `unused/` document archived workflows, not the current result-producing analysis. Their citations are retained for methodological provenance.
 
 - **Laird, N. M., & Ware, J. H. (1982)**
   - **Title:** Random-effects models for longitudinal data
@@ -292,7 +301,7 @@
   - **Usage:** ROI signal extraction strategy
   - **Reasoning:** Provides the methodological framework for extracting a single summary signal from pre-specified ROIs; used here to justify ROI-level summary of channel betas before mixed-model inference and before the post-hoc neural format-effect association analyses. The supplied ROI JSON determines channel membership; this study-specific configuration does not imply anatomical mappings prescribed by the paper.
   - **Link:** https://doi.org/10.1093/scan/nsm006
-  - **Source:** `analyze_format_content_lmm_roi.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `tests/validate_pooled_mean_correlations_r.R`, `ANALYSIS_SPEC.md`, `README.md`
+  - **Source:** `analyze_format_content_lmm_roi.R`, `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `plot_beta_discrepancy_dynamics.py`, `plot_significant_beta_value_distribution.R`, `tests/validate_pooled_mean_correlations_r.R`, `ANALYSIS_SPEC.md`, `README.md`
 
 - **Morey, R. D. (2008)**
   - **Title:** Confidence intervals from normalized data: A correction to Cousineau (2005)
@@ -310,7 +319,7 @@
   - **Usage:** Exploratory interpretation / selective-inference caution for data-informed target selection
   - **Reasoning:** Documents that reusing the same dataset for feature selection and downstream inference can bias apparent evidence strength. Used here to justify labeling the targeted channel/ROI follow-up correlations as exploratory when the target set is selected from this dataset rather than fixed a priori.
   - **Link:** https://doi.org/10.1038/nn.2303
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`, `CITATIONS.md`
+  - **Source:** `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `unused/analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`, `CITATIONS.md`
 
 - **Spearman, C. (1904)**
   - **Title:** The Proof and Measurement of Association between Two Things
@@ -319,7 +328,7 @@
   - **Usage:** Spearman rank correlation for exploratory channel-behavior screening
   - **Reasoning:** Foundational reference for Spearman's rank correlation. Used here where continuous or ordinal-like behavioral variables are screened against channel-level beta estimates as monotonic associations.
   - **Link:** https://doi.org/10.2307/1412159
-  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`
+  - **Source:** `unused/analyze_channel_behavior_relationships.py`, `unused/tests/validate_channel_behavior_relationships_py.py`, `README.md`
 
 - **Bonett, D. G. (2020)**
   - **Title:** Point-biserial correlation: Interval estimation, hypothesis testing, meta-analysis, and sample size determination
@@ -328,7 +337,7 @@
   - **Usage:** Point-biserial correlation for binary behavioral predictors
   - **Reasoning:** Modern peer-reviewed reference for point-biserial correlation as a standardized effect size and test for dichotomous-vs-continuous associations. Used here for binary behavioral variables such as `pd_status` when screening against continuous channel betas.
   - **Link:** https://doi.org/10.1111/bmsp.12189
-  - **Source:** `analyze_channel_behavior_relationships.py`, `tests/validate_channel_behavior_relationships_py.py`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `unused/analyze_channel_behavior_relationships.py`, `unused/tests/validate_channel_behavior_relationships_py.py`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Pearson, K. (1896)**
   - **Title:** Mathematical Contributions to the Theory of Evolution. III. Regression, Heredity, and Panmixia
@@ -337,7 +346,7 @@
   - **Usage:** Pearson product-moment correlation
   - **Reasoning:** Foundational source for the product-moment correlation coefficient used in the exploratory post-hoc analysis between continuous pooled long/short neural means and the matching pooled long/short behavioral means, the supplementary raw behavioral task-cell values tested against those same pooled neural means, the standalone pairwise behavioral screening analysis, and the optional Pearson covariate-correlation diagnostics.
   - **Link:** https://doi.org/10.1098/rsta.1896.0007
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `covariate_correlation_analysis.py`, `tests/test_covariate_correlation_analysis.py`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `unused/covariate_correlation_analysis.py`, `unused/tests/test_covariate_correlation_analysis.py`, `unused/tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Fisher, R. A. (1921)**
   - **Title:** On the "Probable Error" of a Coefficient of Correlation Deduced from a Small Sample
@@ -346,7 +355,7 @@
   - **Usage:** Fisher z confidence intervals for Pearson correlation
   - **Reasoning:** Provides the variance-stabilizing transformation underlying the confidence intervals reported for Pearson correlations in the post-hoc pooled long/short analyses, the supplementary raw-behavior versus pooled-neural association analyses, and the standalone pairwise behavioral screening analysis.
   - **Link:** http://hdl.handle.net/2440/15169
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `unused/tests/validate_correlational_relationships_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Bender, R., & Lange, S. (2001)**
   - **Title:** Adjusting for multiple testing - when and how?
@@ -355,7 +364,7 @@
   - **Usage:** Multiple-testing family definition for exploratory/post-hoc association analysis
   - **Reasoning:** Summarizes how multiplicity correction should be matched to the final inferential claim rather than applied mechanically. Used here to justify defining BH families across tested neural targets within each behavior-domain x pool-name family in the selected pooled-mean follow-up, at the analysis-tier x behavior-run x grouping level in the broader exploratory follow-up, and as a single global family for the standalone behavior-pairwise diagnostic matrix.
   - **Link:** https://doi.org/10.1016/S0895-4356(00)00314-0
-  - **Source:** `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_behavior_pairwise_correlations.R`, `unused/tests/validate_correlational_relationships_r.R`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Holm, S. (1979)**
   - **Title:** A Simple Sequentially Rejective Multiple Test Procedure
@@ -400,7 +409,7 @@
   - **Usage:** False Discovery Rate (FDR)
   - **Reasoning:** Practical approach for controlling the false discovery rate in multiple testing, including the global correction across all tested pairs in the standalone behavioral correlation matrix. The selected pooled-mean follow-up applies BH across all tested channel and ROI targets within each behavior-domain × pool-name family.
   - **Link:** https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
-  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `tests/validate_correlational_relationships_r.R`, `tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
+  - **Source:** `fnirs_analysis/FNIRS_TODO.md`, `analyze_format_content_lmm_channelwise.R`, `analyze_format_content_lmm_channelwise.py`, `tests/validate_pipeline_c_r.R`, `analyze_format_content_lmm_roi.R`, `tests/validate_pipeline_c_roi_r.R`, `unused/analyze_correlational_relationships.R`, `analyze_pooled_mean_correlations.R`, `unused/analyze_channel_behavior_relationships.py`, `analyze_behavior_pairwise_correlations.R`, `unused/tests/validate_correlational_relationships_r.R`, `unused/tests/validate_channel_behavior_relationships_py.py`, `tests/validate_pooled_mean_correlations_r.R`, `tests/validate_behavior_pairwise_correlations_r.R`, `README.md`, `ANALYSIS_SPEC.md`
 
 - **Lenth, R. V. (2016)**
   - **Title:** Least-Squares Means: The R Package lsmeans
@@ -506,6 +515,6 @@
   - **First Author:** Sandve
   - **Year:** 2013
   - **Usage:** Centralized, auditable workflow controls (exclusions + orchestration + certification + derivation provenance), including automatic recall-score/audit regeneration from raw assessments and current question-exclusion/alias manifests before tabular merging.
-  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table/behavior-plot/covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints and publication figures.
+  - **Reasoning:** Supports maintaining a single, auditable source of analysis decisions and execution order (participant exclusions, pipeline orchestration, machine-readable certification artifacts, FIR-to-AUC provenance sidecars, outlier-screening audit artifacts, demographics-table/behavior-plot/covariate-correlation exclusion auditing, and fail-fast one-row-per-subject ID validation in upstream tabular preprocessing) to prevent script-specific drift across inferential endpoints and publication figures. Workflow cleanup preserves retired files byte-for-byte with a path/checksum manifest and separates archived tests from current-result validation so historical alternatives cannot silently re-enter the production workflow.
   - **Link:** https://doi.org/10.1371/journal.pcbi.1003285
-  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `plot_behavior_score_distributions.R`, `covariate_correlation_analysis.py`, `tests/test_covariate_correlation_analysis.py`, `tests/validate_behavior_score_distribution_plot_r.R`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`
+  - **Source:** `r_subject_exclusions.R`, `pipeline_preprocess_merge.sh`, `collapse_homer_fir_to_auc.py`, `mask_homer_auc_between_subject_outliers.py`, `certify_preprocess_merge_integrity.py`, `validate_homer_fir_auc_conversion.py`, `generate_combined_data.py`, `process_sociodemographic.py`, `create_demographics_table.py`, `plot_behavior_score_distributions.R`, `unused/covariate_correlation_analysis.py`, `unused/tests/test_covariate_correlation_analysis.py`, `tests/validate_behavior_score_distribution_plot_r.R`, `analyze_pooled_mean_correlations.R`, `README.md`, `analyze_format_content_lmm_roi.R`, `tests/validate_real_result_reproducibility_py.py`, `tests/test_current_workflow_layout.py`, `unused/README.md`, `unused/move_manifest.csv`, `pytest.ini`

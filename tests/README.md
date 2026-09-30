@@ -2,15 +2,29 @@
 
 This folder contains lightweight validation harnesses that aim to verify scientific/analysis integrity against `ANALYSIS_SPEC.md`.
 
+Archived workflow-specific tests live under `unused/tests/` and are excluded from ordinary pytest discovery. Historical instructions are in `unused/LEGACY_TESTS.md`.
+
+## Current workflow layout (Python): archive boundary validation
+
+`tests/test_current_workflow_layout.py` checks archive checksums and vacant
+original paths, retained production/QC entry points and helpers, absence of
+archived Python import dependencies, the six current real-data rerun commands,
+all 15 current CSV comparisons, and archive exclusion from pytest discovery.
+This guards against retiring a dependency or silently dropping a current
+result from verification (Sandve et al., 2013; see `CITATIONS.md`).
+
+```bash
+python -m pytest -q
+```
+
 ## Real Result Reproducibility (Python): no-overwrite exported-results check
 
 Runs the primary real-data result-producing scripts into a temporary directory and compares their CSV outputs to the exported files under `data/results`.
-This validator intentionally never writes to `data/results`; it only reads exported results for comparison.
+This validator intentionally never writes to `data/results`; it only reads exported results for comparison. It covers the current LMM, pooled-mean, and behavioral-pairwise results, not archived exploratory workflows.
 
 It verifies:
 - channelwise, ROI, retention, and engagement LMM CSVs reproduce from the documented real inputs
 - main exploratory/correlation CSV data reproduce, including the behavior-pairwise all-attempted and BH-FDR CSVs, ignoring only expected temp-vs-exported `plot_file` paths where those columns exist
-- channel-behavior screening CSVs and core metadata reproduce
 - neural tidy outputs satisfy `estimate / se == t` for Kenward-Roger-consistent 1-df rows
 
 Command:
@@ -232,23 +246,6 @@ Command:
 Rscript tests/validate_engagement_pipeline_r.R
 ```
 
-## Correlation Follow-up Pipeline (R): reverted predictor-by-condition validation
-
-Runs `analyze_correlational_relationships.R` on a synthetic merged dataset and verifies:
-- The old predictor-by-condition plan schema still runs cleanly against the reverted script
-- One output CSV is written with the expected predictor x target x condition rows
-- Pearson summary statistics and BH-FDR family bookkeeping are present
-- A known positive synthetic row recovers a perfect Pearson correlation
-- Families are defined across the four condition-specific rows for each predictor x neural target
-- The correlation output folder is rebuilt at run start, removing stale CSVs and PNGs
-- Fail-hard behavior for duplicate IDs and malformed required inputs
-
-Command:
-
-```bash
-Rscript tests/validate_correlational_relationships_r.R
-```
-
 ## Pooled-Mean Correlations (R): standalone pooled-target validation
 
 Runs `analyze_pooled_mean_correlations.R` on a synthetic dataset and verifies:
@@ -297,21 +294,6 @@ Command:
 Rscript tests/validate_behavior_pairwise_correlations_r.R
 ```
 
-## Beta Discrepancy Plotting (Python): channel-vs-ROI descriptive validation
-
-Runs `plot_beta_discrepancy_dynamics.py` on a synthetic merged beta table and verifies:
-- shared subject exclusions are applied before plotting
-- exact-zero betas are treated as pruned/missing when configured
-- ROI means use the available non-missing member channels rather than filling missing values
-- complete-case panel counts match the intended channel-vs-ROI comparison logic
-- the composite PNG and audit CSV are both created
-
-Command:
-
-```bash
-python tests/validate_beta_discrepancy_plot_py.py
-```
-
 ## Behavioral Score Distribution Plotting (R): engagement + retention validation
 
 Runs `plot_behavior_score_distributions.R` on a synthetic final merged dataset and verifies:
@@ -342,20 +324,7 @@ Command:
 python tests/validate_demographics_table_py.py
 ```
 
-## Covariate Correlation Diagnostics (Python): shared subject-exclusion validation
-
-Runs `covariate_correlation_analysis.py` helper functions on synthetic data and verifies:
-- manifest-listed subjects are removed before Spearman correlations are computed
-- nonempty exclusion manifests fail hard when the input lacks the configured subject ID column
-- normalized subject ID can be included as `recruitment_order_proxy` only when explicitly requested
-- the analysis fails if more than 48 subjects remain after exclusions
-Command:
-
-```bash
-pytest -q tests/test_covariate_correlation_analysis.py
-```
-
-## Type-I Error Calibration (R): Monte Carlo null simulations across all pipelines
+## Type-I Error Calibration (R): Monte Carlo null simulations across primary LMM pipelines
 
 Runs repeated null-effect synthetic datasets through all four inferential scripts:
 - `analyze_format_content_lmm_channelwise.R`
@@ -383,7 +352,7 @@ Rscript tests/calibrate_type1_error_r.R --n_reps 20 --type1_upper_bound 0.20
 Rscript tests/calibrate_type1_error_r.R --n_reps 200 --type1_upper_bound 0.10
 ```
 
-## Type-II Error Calibration (R): Monte Carlo power simulations across all pipelines
+## Type-II Error Calibration (R): Monte Carlo power simulations across primary LMM pipelines
 
 Runs repeated non-null synthetic datasets through all four inferential scripts:
 - `analyze_format_content_lmm_channelwise.R`

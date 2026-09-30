@@ -3,8 +3,8 @@
 # Exploratory pairwise behavioral correlations for the SFV study.
 #
 # Scope
-#   - Use the same merged input table consumed by
-#     `analyze_correlational_relationships.R`.
+#   - Use the merged input table consumed by the primary LMMs and the selected
+#     `analyze_pooled_mean_correlations.R` follow-up.
 #   - Restrict the analysis to an explicit behavior-only variable list declared
 #     in `data/config/behavior_pairwise_correlation_plan.json`.
 #   - Compute one Pearson correlation per unique unordered behavioral pair.
