@@ -907,47 +907,11 @@ Validation:
 Rscript tests/validate_correlational_relationships_r.R
 ```
 
-### C4c) Standalone pooled ROI-mean x behavioral-mean correlations
-
-- R: `analyze_correlational_relationships_roi_means.R`
-
-Purpose:
-- Run only the pooled-format ROI-mean x behavioral-mean subset as its own standalone analysis.
-- Restrict behavioral rows to pooled `engagement` and pooled `retention`.
-- Keep the existing planned comparisons (`R_DLPFC/HbR`, `L_DLPFC/HbO`, `M_DMPFC/HbO`, `L_DMPFC/HbO`) only when their ROI is present in the supplied `--roi_json`. Channel membership comes entirely from that JSON; adding other ROI definitions does not expand the planned comparison set.
-- With the current `data/config/roi_definition.json`, the active comparisons are `R_DLPFC/HbR`, `L_DLPFC/HbO`, and `L_DMPFC/HbO`. The script reports the active comparisons and explicitly reports skipped undefined targets, including `M_DMPFC/HbO`.
-- Fail before clearing outputs if no planned targets remain defined. Missing required beta columns for a retained target still fail rather than silently changing its channel denominator.
-- Keep the same missingness rules, Pearson metric, BH-FDR handling, and optional figure generation as the broader correlation workflow.
-- The current configuration yields 12 rows: 2 behavior runs × 2 format pools × 3 eligible ROI/chromophore targets. The four existing BH families each contain up to three tested targets; adjusted p-values are recomputed over the tests actually run. Removing a target can therefore change adjusted p-values without changing the retained targets' correlations or unadjusted p-values.
-- The script clears `data/results/correlational_relationships_roi_means/` before each run so stale CSVs and PNGs do not persist.
-- Result files created under older ROI definitions are not refreshed by a code edit; rerun the script to generate outputs matching the current scope.
-
-Example:
-
-```bash
-Rscript analyze_correlational_relationships_roi_means.R \
-  --input_csv data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inner_join.csv \
-  --roi_json data/config/roi_definition.json \
-  --analysis_plan_json data/config/correlational_analysis_plan_roi_means.json \
-  --exclude_subjects_json data/config/excluded_subjects.json \
-  --out_csv data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv \
-  --out_fig_dir data/results/correlational_relationships_roi_means/figures
-```
-
-Outputs:
-- `data/results/correlational_relationships_roi_means/pairwise_correlations_r.csv`
-- `data/results/correlational_relationships_roi_means/pairwise_correlations_r_pearson.csv`
-- `data/results/correlational_relationships_roi_means/figures/` (Pearson rows use a linear fit when `p_unc < 0.05` under the default ROI-means plan)
-
-Validation:
-
-```bash
-Rscript tests/validate_correlational_relationships_roi_means_r.R
-```
-
-### C4d) Exploratory pooled-mean neural-behavior correlations
+### C4c) Exploratory pooled-mean neural-behavior correlations
 
 - R: `analyze_pooled_mean_correlations.R`
+
+This is the selected pooled neural-behavior follow-up for the manuscript. Its target-selection, missingness, pooling, and BH-FDR rules remain unchanged.
 
 Purpose:
 - Select channel and ROI targets with FDR-significant `format` or `content` main effects from the tidy LMM outputs.
@@ -1332,7 +1296,6 @@ Methodology notes / planned improvements live in:
 - `data/config/excluded_subjects.json`: central participant-exclusion manifest consumed by inferential R analyses
 - `covariate_correlation_analysis.py`: Pearson correlation tables, p-values, and heatmaps (covariates-only or combined dataset)
 - `analyze_correlational_relationships.R`: targeted exploratory correlations for selected pooled long/short channel/ROI neural targets against pooled long/short and raw behavioral runs, with figure generation controlled by the analysis-plan config
-- `analyze_correlational_relationships_roi_means.R`: standalone pooled ROI-mean x pooled behavioral-mean correlation analysis
 - `analyze_behavior_pairwise_correlations.R`: standalone Pearson screen across declared behavioral-variable pairs in the merged SFV dataset, with global BH-FDR and a lower-triangle matrix figure
 - `plot_fir_betas_subjects.py`: plots selected-subject FIR betas for one condition with HbO/HbR overlaid (streaming/selective read; top-of-file config)
 - `plot_beta_discrepancy_dynamics.py`: plots descriptive channel-vs-ROI beta dynamics from the merged wide beta table, with optional ROI member decomposition and an audit CSV of plotted values

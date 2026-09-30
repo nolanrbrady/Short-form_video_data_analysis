@@ -5,10 +5,9 @@
 # Sourced by:
 #   - plot_behavior_score_distributions.R
 #   - plot_significant_beta_value_distribution.R
-#   - analyze_correlational_relationships_roi_means.R
 #
 # Purpose
-#   - Keep behavioral, neural, and correlation figures on a single visual
+#   - Keep behavioral and neural figures on a single visual
 #     system so they read as one coherent set in the manuscript.
 #   - Centralize the theme, the shared descriptive-overlay caption, and the
 #     figure display-name loader so a styling change is a one-file edit.

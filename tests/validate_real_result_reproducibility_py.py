@@ -21,7 +21,6 @@ INPUT_CSV = "data/tabular/generated_data/homer3_betas_plus_combined_sfv_data_inn
 EXCLUSIONS_JSON = "data/config/excluded_subjects.json"
 ROI_JSON = "data/config/roi_definition.json"
 CORRELATION_PLAN_JSON = "data/config/correlational_analysis_plan.json"
-ROI_MEANS_PLAN_JSON = "data/config/correlational_analysis_plan_roi_means.json"
 BEHAVIOR_PLAN_JSON = "data/config/behavior_pairwise_correlation_plan.json"
 
 
@@ -138,7 +137,6 @@ def run_primary_lmm_reruns(tmp: Path) -> None:
 
 def run_correlation_reruns(tmp: Path) -> None:
     corr = tmp / "correlational_relationships"
-    corr_roi = tmp / "correlational_relationships_roi_means"
     pooled = tmp / "pooled_mean_correlations"
     behavior = tmp / "behavior_pairwise_correlations"
 
@@ -158,24 +156,6 @@ def run_correlation_reruns(tmp: Path) -> None:
             str(corr / "pairwise_correlations_r.csv"),
             "--out_fig_dir",
             str(corr / "figures"),
-        ]
-    )
-    run_command(
-        [
-            "Rscript",
-            "analyze_correlational_relationships_roi_means.R",
-            "--input_csv",
-            INPUT_CSV,
-            "--roi_json",
-            ROI_JSON,
-            "--analysis_plan_json",
-            ROI_MEANS_PLAN_JSON,
-            "--exclude_subjects_json",
-            EXCLUSIONS_JSON,
-            "--out_csv",
-            str(corr_roi / "pairwise_correlations_r.csv"),
-            "--out_fig_dir",
-            str(corr_roi / "figures"),
         ]
     )
     run_command(
@@ -246,21 +226,6 @@ def compare_correlation_outputs(tmp: Path) -> None:
         (
             "correlational_relationships/pairwise_correlations_r.csv",
             "correlational_relationships/pairwise_correlations_r.csv",
-            ("plot_file",),
-        ),
-        (
-            "correlational_relationships_roi_means/pairwise_correlations_r.csv",
-            "correlational_relationships_roi_means/pairwise_correlations_r.csv",
-            ("plot_file",),
-        ),
-        (
-            "correlational_relationships_roi_means/pairwise_correlations_r_pearson.csv",
-            "correlational_relationships_roi_means/pairwise_correlations_r_pearson.csv",
-            ("plot_file",),
-        ),
-        (
-            "correlational_relationships_roi_means/pairwise_correlations_r_spearman.csv",
-            "correlational_relationships_roi_means/pairwise_correlations_r_spearman.csv",
             ("plot_file",),
         ),
         (

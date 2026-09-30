@@ -225,11 +225,6 @@ def main() -> None:
         "pearson_r",
     )
     assert_correlation_table(
-        read_csv("correlational_relationships_roi_means/pairwise_correlations_r.csv"),
-        "ROI-mean correlation follow-up",
-        "association_estimate",
-    )
-    assert_correlation_table(
         read_csv("pooled_mean_correlations/pooled_mean_correlations_r.csv"),
         "pooled-mean correlation follow-up",
         "association_estimate",

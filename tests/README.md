@@ -249,27 +249,6 @@ Command:
 Rscript tests/validate_correlational_relationships_r.R
 ```
 
-## Correlation Follow-up ROI Means (R): standalone pooled ROI subset validation
-
-Runs `analyze_correlational_relationships_roi_means.R` and verifies:
-- the standalone ROI-focused script exits cleanly on the study inputs
-- only existing planned ROI/chromophore comparisons present in the supplied ROI JSON are analyzed, and skipped undefined targets are reported
-- updated channel membership changes the corresponding ROI mean without adding unplanned ROIs or chromophores
-- hand-calculated condition and format means preserve the existing pruned-channel and missing-condition rules
-- missing beta columns for retained targets still fail; a configuration with no eligible targets fails before clearing existing outputs
-- output counts and manual BH-adjusted p-values follow the eligible target set within the unchanged families
-- it writes combined and Pearson-only CSVs, and does not write a Spearman CSV
-- it uses its dedicated ROI-means analysis plan rather than the broader correlation-plan schema
-- it contains only pooled behavioral rows and ROI neural rows
-- it clears stale ROI-means CSV and figure artifacts before rerun
-- it writes figures for uncorrected-significant Pearson rows under the default ROI-means plan
-
-Command:
-
-```bash
-Rscript tests/validate_correlational_relationships_roi_means_r.R
-```
-
 ## Pooled-Mean Correlations (R): standalone pooled-target validation
 
 Runs `analyze_pooled_mean_correlations.R` on a synthetic dataset and verifies:
